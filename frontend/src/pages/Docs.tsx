@@ -399,15 +399,6 @@ for chunk in stream:
           ))}
         </div>
       </Section>
-
-      {/* 联系支持 */}
-      <div className="card" style={{ background: 'linear-gradient(135deg, #f0f4ff, #faf5ff)', border: '1px solid #e0e7ff', textAlign: 'center', padding: 28 }}>
-        <h3 style={{ fontWeight: 700, marginBottom: 8 }}>遇到问题？</h3>
-        <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 16 }}>如果文档没有解答你的问题，欢迎联系我们的支持团队。</p>
-        <a href="mailto:admin@aitoken.homes" className="btn btn-primary" style={{ display: 'inline-flex' }}>
-          联系客服
-        </a>
-      </div>
     </div>
   )
 }
