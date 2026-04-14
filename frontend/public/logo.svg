@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 600" width="500" height="600">
+  <defs>
+    <linearGradient id="mainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a6ed8"/>
+      <stop offset="50%" stop-color="#3b5fc0"/>
+      <stop offset="100%" stop-color="#7c4dbe"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a6ed8"/>
+      <stop offset="100%" stop-color="#6b3db5"/>
+    </linearGradient>
+    <linearGradient id="globeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a6ed8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#7c4dbe" stop-opacity="0.9"/>
+    </linearGradient>
+    <linearGradient id="strokeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1a6ed8"/>
+      <stop offset="100%" stop-color="#9b59d0"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(250, 185)">
+    <ellipse cx="0" cy="0" rx="130" ry="130" fill="none" stroke="url(#strokeGrad)" stroke-width="2" opacity="0.6"/>
+    <path d="M-90,-100 Q-60,0 -90,100" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-50,-125 Q-20,0 -50,125" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M0,-130 Q30,0 0,130" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.6"/>
+    <path d="M50,-125 Q80,0 50,125" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M90,-100 Q110,0 90,100" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-110,-60 Q0,-80 110,-60" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-125,-20 Q0,-35 125,-20" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-130,0 Q0,0 130,0" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.6"/>
+    <path d="M-125,20 Q0,35 125,20" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-110,60 Q0,80 110,60" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.5"/>
+    <path d="M-70,100 Q0,110 70,100" fill="none" stroke="url(#strokeGrad)" stroke-width="1.2" opacity="0.4"/>
+    <circle cx="-90" cy="-60" r="4" fill="#1a6ed8" opacity="0.8"/>
+    <circle cx="-50" cy="-80" r="4" fill="#1a6ed8" opacity="0.8"/>
+    <circle cx="0" cy="-130" r="5" fill="#1a6ed8" opacity="0.9"/>
+    <circle cx="50" cy="-80" r="4" fill="#3b5fc0" opacity="0.8"/>
+    <circle cx="90" cy="-60" r="4" fill="#7c4dbe" opacity="0.8"/>
+    <circle cx="-110" cy="-20" r="3.5" fill="#1a6ed8" opacity="0.7"/>
+    <circle cx="-50" cy="-35" r="3.5" fill="#1a6ed8" opacity="0.7"/>
+    <circle cx="0" cy="-35" r="3.5" fill="#3b5fc0" opacity="0.7"/>
+    <circle cx="50" cy="-35" r="3.5" fill="#3b5fc0" opacity="0.7"/>
+    <circle cx="110" cy="-20" r="3.5" fill="#7c4dbe" opacity="0.7"/>
+    <circle cx="-125" cy="20" r="3" fill="#1a6ed8" opacity="0.6"/>
+    <circle cx="125" cy="20" r="3" fill="#7c4dbe" opacity="0.6"/>
+    <circle cx="-90" cy="60" r="4" fill="#1a6ed8" opacity="0.7"/>
+    <circle cx="-50" cy="80" r="4" fill="#2a62c8" opacity="0.7"/>
+    <circle cx="50" cy="80" r="4" fill="#5a48c0" opacity="0.7"/>
+    <circle cx="90" cy="60" r="4" fill="#7c4dbe" opacity="0.7"/>
+    <path d="M-60,-110 Q-10,-200 60,-150 Q90,-120 100,-80" fill="none" stroke="url(#strokeGrad)" stroke-width="2.5" opacity="0.85" stroke-linecap="round"/>
+    <circle cx="-60" cy="-110" r="5.5" fill="#1a6ed8"/>
+    <circle cx="0" cy="-130" r="5" fill="#2a62c8"/>
+    <circle cx="60" cy="-150" r="6" fill="#4a50c4"/>
+    <circle cx="100" cy="-80" r="5" fill="#7c4dbe"/>
+    <path d="M100,-80 Q130,-50 120,0 Q115,30 100,60" fill="none" stroke="url(#strokeGrad)" stroke-width="2" opacity="0.7" stroke-linecap="round"/>
+    <circle cx="100" cy="60" r="4.5" fill="#7c4dbe" opacity="0.8"/>
+    <path d="M-100,110 Q0,150 100,110" fill="none" stroke="url(#strokeGrad)" stroke-width="2.5" opacity="0.7" stroke-linecap="round"/>
+    <path d="M-60,125 Q0,160 60,125" fill="none" stroke="url(#strokeGrad)" stroke-width="1.5" opacity="0.4" stroke-linecap="round"/>
+    <path d="M-130,0 Q-150,-20 -130,-60" fill="none" stroke="#1a6ed8" stroke-width="1.5" opacity="0.5" stroke-linecap="round"/>
+    <circle cx="-130" cy="-60" r="3.5" fill="#1a6ed8" opacity="0.7"/>
+    <text x="20" y="30" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif" font-size="110" font-weight="700" fill="url(#mainGrad)" text-anchor="middle" opacity="0.92">境</text>
+  </g>
+  <text x="250" y="395" font-family="'Microsoft YaHei', 'PingFang SC', sans-serif" font-size="68" font-weight="700" fill="url(#textGrad)" text-anchor="middle" letter-spacing="4">灵境AI</text>
+  <text x="250" y="445" font-family="'Arial', sans-serif" font-size="26" font-weight="700" fill="url(#textGrad)" text-anchor="middle" letter-spacing="8">LINGJING AI</text>
+  <text x="250" y="482" font-family="'Arial', sans-serif" font-size="14" font-weight="400" fill="#5a6a9a" text-anchor="middle" letter-spacing="5">API SERVICE PROVIDER</text>
+</svg>

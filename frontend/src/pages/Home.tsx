@@ -17,9 +17,7 @@ function Navbar({ user, onLogout }: { user: UserInfo | null; onLogout: () => voi
   return (
     <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #e8eaf0', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
       <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', flexShrink: 0 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'linear-gradient(135deg, #4f6ef7, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Zap size={18} color="white" />
-        </div>
+        <img src="/favicon.svg" alt="灵境AI" style={{ width: 32, height: 32 }} />
         <span style={{ fontWeight: 700, fontSize: 16, color: '#1a1a2e' }}>灵镜AI</span>
       </Link>
 
