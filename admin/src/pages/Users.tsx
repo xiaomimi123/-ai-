@@ -91,10 +91,6 @@ export default function UsersPage() {
       toast.error('用户名和密码必填'); return
     }
     try {
-      const data = {
-        ...createForm,
-        quota: Math.round(parseFloat(createForm.quota) * 500000),
-      }
       // One API 没有管理员创建用户的接口，用注册接口
       const r = await (await fetch('/api/user/register', {
         method: 'POST',
