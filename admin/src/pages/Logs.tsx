@@ -4,7 +4,7 @@ import { logApi } from '../api'
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(0)
   const [filter, setFilter] = useState({ username: '', model_name: '' })
   const [loading, setLoading] = useState(false)
 
@@ -16,7 +16,7 @@ export default function LogsPage() {
 
   useEffect(() => { load() }, [page])
 
-  const handleSearch = () => { setPage(1); load() }
+  const handleSearch = () => { setPage(0); load() }
 
   return (
     <div>
@@ -62,7 +62,7 @@ export default function LogsPage() {
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
-        <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}><ChevronLeft size={14}/></button>
+        <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page <= 0}><ChevronLeft size={14}/></button>
         <span style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '0 8px' }}>第 {page} 页</span>
         <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={logs.length < 30}><ChevronRight size={14}/></button>
       </div>

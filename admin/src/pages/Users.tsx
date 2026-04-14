@@ -5,7 +5,7 @@ import { userApi } from '../api'
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(0)
   const [search, setSearch] = useState('')
   const [editUser, setEditUser] = useState<any>(null)
   const [editForm, setEditForm] = useState({ quota: '', group: '' })
@@ -77,10 +77,10 @@ export default function UsersPage() {
 
       {/* Pagination */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>第 {page} / {totalPages} 页，共 {total} 条</span>
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>第 {page + 1} / {totalPages} 页，共 {total} 条</span>
         <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}><ChevronLeft size={14}/> 上一页</button>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>下一页 <ChevronRight size={14}/></button>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page <= 0}><ChevronLeft size={14}/> 上一页</button>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>下一页 <ChevronRight size={14}/></button>
         </div>
       </div>
 
