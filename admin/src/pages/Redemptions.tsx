@@ -9,7 +9,7 @@ export default function RedemptionsPage() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState<number | null>(null)
 
-  const load = async () => { const r = await redemptionApi.list({ p: 1 }); if (r.data.success) setList(r.data.data || []) }
+  const load = async () => { const r = await redemptionApi.list({ p: 0 }); if (r.data.success) setList(r.data.data || []) }
   useEffect(() => { load() }, [])
 
   const handleCreate = async () => {
@@ -22,14 +22,14 @@ export default function RedemptionsPage() {
   const copyKey = (key: string, id: number) => { navigator.clipboard.writeText(key); setCopied(id); setTimeout(() => setCopied(null), 2000) }
 
   const exportAll = () => {
-    const unused = list.filter(r => r.used_count === 0)
+    const unused = list.filter(r => r.status === 1)
     const text = unused.map(r => `${r.name}\t${r.key}\t$${(r.quota / 500000).toFixed(2)}`).join('\n')
     navigator.clipboard.writeText(text)
     alert(`已复制 ${unused.length} 个未使用兑换码到剪贴板`)
   }
 
-  const usedCount = list.filter(r => r.used_count > 0).length
-  const unusedCount = list.filter(r => r.used_count === 0).length
+  const usedCount = list.filter(r => r.status !== 1).length
+  const unusedCount = list.filter(r => r.status === 1).length
 
   return (
     <div>
@@ -76,7 +76,7 @@ export default function RedemptionsPage() {
                     </div>
                   </td>
                   <td style={{ fontWeight: 600, color: 'var(--success)', fontFamily: 'monospace' }}>${(r.quota / 500000).toFixed(2)}</td>
-                  <td><span className={`badge ${r.used_count === 0 ? 'badge-green' : 'badge-red'}`}>{r.used_count === 0 ? '未使用' : '已使用'}</span></td>
+                  <td><span className={`badge ${r.status === 1 ? 'badge-green' : 'badge-red'}`}>{r.status === 1 ? '未使用' : '已使用'}</span></td>
                   <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{new Date(r.created_time * 1000).toLocaleDateString('zh-CN')}</td>
                   <td><button className="btn btn-ghost btn-icon" onClick={() => handleDelete(r.id)}><Trash2 size={14} color="var(--danger)"/></button></td>
                 </tr>

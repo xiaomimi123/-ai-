@@ -13,10 +13,10 @@ export default function OverviewPage() {
   const [refStats, setRefStats] = useState<any>(null)
 
   useEffect(() => {
-    userApi.list({ p: 1, page_size: 1 }).then(r => { if (r.data.success) setTotalUsers(r.data.total || 0) }).catch(() => {})
+    userApi.list({ p: 0, page_size: 1 }).then(r => { if (r.data.success) setTotalUsers(r.data.total || 0) }).catch(() => {})
     channelApi.list().then(r => { if (r.data.success) setChannels(r.data.data || []) }).catch(() => {})
-    logApi.list({ p: 1, page_size: 20 }).then(r => { if (r.data.success) setLogs(r.data.data || []) }).catch(() => {})
-    orderApi.list({ page: 1, page_size: 10 }).then(r => { if (r.data.success) setOrders(r.data.data || []) }).catch(() => {})
+    logApi.list({ p: 0, page_size: 20 }).then(r => { if (r.data.success) setLogs(r.data.data || []) }).catch(() => {})
+    orderApi.list({ page: 0, page_size: 10 }).then(r => { if (r.data.success) setOrders(r.data.data || []) }).catch(() => {})
     referralAdminApi.getStats().then(r => { if (r.data.success) setRefStats(r.data.data) }).catch(() => {})
   }, [])
 
