@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ScrollText } from 'lucide-react'
 import { logApi } from '../api'
+import ModelIcon from '../components/ModelIcon'
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
@@ -28,7 +29,7 @@ export default function LogsPage() {
                 <tr key={log.id}>
                   <td style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(log.created_at * 1000).toLocaleString('zh-CN')}</td>
                   <td><span className="badge badge-gray">{log.token_name}</span></td>
-                  <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{log.model_name}</code></td>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ModelIcon modelName={log.model_name} size={20} /><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{log.model_name}</code></div></td>
                   <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{log.prompt_tokens?.toLocaleString()}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{log.completion_tokens?.toLocaleString()}</td>
                   <td style={{ color: 'var(--primary)', fontWeight: 600, fontSize: 13 }}>${(log.quota / 500000).toFixed(5)}</td>

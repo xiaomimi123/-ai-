@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Zap, Shield, Globe, ChevronRight, Search, User, LogOut, CreditCard, Gift, FileText, Settings, BarChart2, Key, BookOpen } from 'lucide-react'
+import ModelIcon from '../components/ModelIcon'
 
 // ─── 类型 ───────────────────────────────────────────────
 interface Plan { id: number; name: string; price: number; quota: number; bonus_quota: number; description: string }
@@ -228,9 +229,7 @@ export default function HomePage() {
             {filteredModels.map(m => (
               <div key={m.model_name} style={{ background: 'white', borderRadius: 14, padding: 20, border: '1px solid #f0f0f0', transition: 'box-shadow .2s', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: providerColor(m.provider) + '18', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-                    {m.provider === 'Anthropic' ? '🤖' : m.provider === 'OpenAI' ? '🧠' : m.provider === 'DeepSeek' ? '🔍' : '⚡'}
-                  </div>
+                  <ModelIcon modelName={m.model_name} size={36} />
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14, color: '#1a1a2e' }}>{m.model_name}</div>
                     <div style={{ fontSize: 11, color: providerColor(m.provider), fontWeight: 500 }}>by {m.provider}</div>

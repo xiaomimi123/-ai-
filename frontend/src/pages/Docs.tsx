@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Copy, Check, ChevronDown, ChevronRight, Zap, Code, BookOpen, Monitor, Smartphone, Globe } from 'lucide-react'
+import ModelIcon from '../components/ModelIcon'
 
 const BASE_URL = 'https://aitoken.homes/v1'
 
@@ -228,7 +229,7 @@ for chunk in stream:
             <tbody>
               {models.map(m => (
                 <tr key={m.name}>
-                  <td><code style={{ fontSize: 12, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{m.name}</code></td>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ModelIcon modelName={m.name} size={22} /><code style={{ fontSize: 12, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{m.name}</code></div></td>
                   <td style={{ color: 'var(--muted)', fontSize: 13 }}>{m.provider}</td>
                   <td style={{ fontSize: 13 }}>{m.desc}</td>
                   <td>

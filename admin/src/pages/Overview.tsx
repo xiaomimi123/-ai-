@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Users, Radio, Zap, TrendingUp, CreditCard, Activity } from 'lucide-react'
 import { userApi, channelApi, logApi, orderApi, referralAdminApi } from '../api'
+import ModelIcon from '../components/ModelIcon'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 
 const COLORS = ['#6366f1', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#ec4899']
@@ -104,7 +105,7 @@ export default function OverviewPage() {
                 <tr key={l.id}>
                   <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{new Date(l.created_at * 1000).toLocaleString('zh-CN')}</td>
                   <td><strong style={{ fontSize: 13 }}>{l.username}</strong></td>
-                  <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{l.model_name}</code></td>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ModelIcon modelName={l.model_name} size={18} /><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{l.model_name}</code></div></td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{((l.prompt_tokens || 0) + (l.completion_tokens || 0)).toLocaleString()}</td>
                   <td><span className="badge badge-gray">#{l.channel_id}</span></td>
                 </tr>

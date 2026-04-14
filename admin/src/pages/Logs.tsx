@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
 import { logApi } from '../api'
+import ModelIcon from '../components/ModelIcon'
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
@@ -49,7 +50,7 @@ export default function LogsPage() {
                   <td style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{new Date(log.created_at * 1000).toLocaleString('zh-CN')}</td>
                   <td><strong style={{ fontSize: 13 }}>{log.username}</strong></td>
                   <td><span className="badge badge-gray" style={{ fontSize: 11 }}>{log.token_name}</span></td>
-                  <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{log.model_name}</code></td>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><ModelIcon modelName={log.model_name} size={18} /><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{log.model_name}</code></div></td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{log.prompt_tokens?.toLocaleString()}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{log.completion_tokens?.toLocaleString()}</td>
                   <td><span className="badge badge-blue">#{log.channel_id}</span></td>
