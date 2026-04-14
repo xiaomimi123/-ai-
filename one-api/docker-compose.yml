@@ -1,6 +1,6 @@
 services:
   one-api:
-    image: justsong/one-api:latest
+    image: lingjing-api:latest
     container_name: one-api
     restart: always
     ports:
