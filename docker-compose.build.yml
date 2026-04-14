@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  build-frontend:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm install --silent && npm run build"
+
+  build-admin:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - ./admin:/app
+    command: sh -c "npm install --silent && npm run build"
