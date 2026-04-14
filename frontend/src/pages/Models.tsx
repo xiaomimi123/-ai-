@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Search, Sparkles, Loader2 } from 'lucide-react'
-import ProviderIcon from '../components/ProviderIcon'
+import ModelIcon from '../components/ModelIcon'
 import { publicApi } from '../api'
 
 interface ModelPrice {
@@ -77,7 +77,7 @@ export default function ModelsPage() {
               {filtered.filter(m => (m.category || 'chat') === cat).map(m => (
                 <div key={m.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <ProviderIcon name={m.provider} size={36} />
+                    <ModelIcon modelName={m.model_name} size={36} />
                     <div>
                       <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, wordBreak: 'break-all' }}>{m.model_name}</div>
                       <div style={{ display: 'flex', gap: 6 }}>
