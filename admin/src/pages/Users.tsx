@@ -29,7 +29,7 @@ export default function UsersPage() {
   const load = async (p = page) => {
     try {
       const r = await userApi.list({ p, page_size: PAGE_SIZE })
-      if (r.data.success) { setUsers(r.data.data || []); setTotal(r.data.total || 0) }
+      if (r.data.success) { setUsers(r.data.data || []); setTotal(r.data.total || r.data.data?.length || 0) }
     } catch {}
   }
   useEffect(() => { load() }, [page])
