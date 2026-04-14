@@ -24,7 +24,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-        <Route path="/" element={<><Navbar /><div style={{ paddingTop: 'var(--nav-height)' }}><HomePage /></div></>} />
+        <Route path="/" element={<HomePage />} />
         <Route path="/dashboard" element={<PageWrap><DashboardPage /></PageWrap>} />
         <Route path="/tokens" element={<PageWrap><TokensPage /></PageWrap>} />
         <Route path="/logs" element={<PageWrap><LogsPage /></PageWrap>} />
