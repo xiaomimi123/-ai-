@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  one-api:
+    image: justsong/one-api:latest
+    container_name: one-api
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - SQL_DSN=root:${MYSQL_PASSWORD}@tcp(mysql:3306)/oneapi
+      - REDIS_CONN_STRING=redis://redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - api-net
+
+  mysql:
+    image: mysql:8.0
+    container_name: one-api-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: oneapi
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    volumes:
+      - ./mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: one-api-redis
+    restart: always
+    command: redis-server --appendonly yes
+    volumes:
+      - ./redis-data:/data
+    networks:
+      - api-net
+
+networks:
+  api-net:
+    driver: bridge

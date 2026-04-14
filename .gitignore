@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+dist/
+
+# Environment
+.env
+*.env.local
+
+# Build artifacts
+backend/lingjing-api
+backend/one-api.db
+backend/data/
+
+# Docker data
+one-api/data/
+one-api/mysql-data/
+one-api/redis-data/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+__pycache__/
+.vscode/
+.idea/
