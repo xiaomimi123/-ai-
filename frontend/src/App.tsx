@@ -13,6 +13,7 @@ import DocsPage from './pages/Docs'
 import SettingsPage from './pages/Settings'
 import OrdersPage from './pages/Orders'
 import ReferralPage from './pages/Referral'
+import ModelDetailPage from './pages/ModelDetail'
 
 const PageWrap = ({ children }: { children: React.ReactNode }) => (
   <><Navbar /><div style={{ paddingTop: 'var(--nav-height)' }}><div className="container" style={{ padding: '32px 24px' }}>{children}</div></div></>
@@ -30,6 +31,7 @@ function App() {
         <Route path="/logs" element={<PageWrap><LogsPage /></PageWrap>} />
         <Route path="/topup" element={<PageWrap><TopupPage /></PageWrap>} />
         <Route path="/models" element={<PageWrap><ModelsPage /></PageWrap>} />
+        <Route path="/model/:modelName" element={<PageWrap><ModelDetailPage /></PageWrap>} />
         <Route path="/docs" element={<PageWrap><DocsPage /></PageWrap>} />
         <Route path="/settings" element={<PageWrap><SettingsPage /></PageWrap>} />
         <Route path="/orders" element={<PageWrap><OrdersPage /></PageWrap>} />

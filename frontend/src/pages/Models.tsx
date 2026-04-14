@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Search, Sparkles, Loader2 } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 import { publicApi } from '../api'
@@ -15,6 +16,7 @@ interface ModelPrice {
 }
 
 export default function ModelsPage() {
+  const navigate = useNavigate()
   const [models, setModels] = useState<ModelPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -75,7 +77,7 @@ export default function ModelsPage() {
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, marginBottom: 32 }}>
               {filtered.filter(m => (m.category || 'chat') === cat).map(m => (
-                <div key={m.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div key={m.id} className="card" onClick={() => navigate(`/model/${encodeURIComponent(m.model_name)}`)} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'pointer', transition: 'box-shadow .2s' }}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <ModelIcon modelName={m.model_name} size={36} />
                     <div>
