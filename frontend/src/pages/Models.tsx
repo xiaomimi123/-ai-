@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, Sparkles, Loader2 } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 import { publicApi } from '../api'
@@ -17,9 +17,10 @@ interface ModelPrice {
 
 export default function ModelsPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [models, setModels] = useState<ModelPrice[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(searchParams.get('q') || '')
   const [provider, setProvider] = useState('全部')
 
   useEffect(() => {

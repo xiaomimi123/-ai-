@@ -13,6 +13,8 @@ interface UserInfo { id: number; username: string; display_name: string; quota: 
 function Navbar({ user, onLogout }: { user: UserInfo | null; onLogout: () => void }) {
   const [dropOpen, setDropOpen] = useState(false)
   const [search, setSearch] = useState('')
+  const navNavigate = useNavigate()
+  const handleSearch = () => { if (search.trim()) navNavigate(`/models?q=${encodeURIComponent(search.trim())}`) }
 
   return (
     <nav style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(12px)', borderBottom: '1px solid #e8eaf0', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -23,7 +25,7 @@ function Navbar({ user, onLogout }: { user: UserInfo | null; onLogout: () => voi
 
       <div style={{ flex: 1, maxWidth: 360, position: 'relative' }} className="desktop-only">
         <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="搜索模型"
+        <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSearch()} placeholder="搜索模型"
           style={{ width: '100%', paddingLeft: 36, paddingRight: 16, height: 36, border: '1.5px solid #e5e7eb', borderRadius: 20, fontSize: 13, background: '#f9fafb', outline: 'none', boxSizing: 'border-box' }} />
       </div>
 
