@@ -207,20 +207,33 @@ export default function TopupPage() {
           <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 16 }}>
             如果您有充值码，可在此直接兑换为额度
           </p>
-          <div className="form-group">
-            <label className="form-label">充值码</label>
-            <input placeholder="请输入充值码" value={code} onChange={e => setCode(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleRedeem()} />
-            <p className="form-hint">充值码由管理员发放，每码仅限使用一次</p>
-          </div>
-          {redeemMsg && (
-            <div style={{ background: redeemMsg.ok ? '#dcfce7' : '#fee2e2', color: redeemMsg.ok ? '#166534' : '#991b1b', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
-              {redeemMsg.text}
+          {redeemMsg?.ok ? (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                <Gift size={22} color="#16a34a" />
+              </div>
+              <h3 style={{ color: 'var(--success)', fontWeight: 600, marginBottom: 6 }}>兑换成功！</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{redeemMsg.text}</p>
+              <button className="btn btn-outline" onClick={() => setRedeemMsg(null)} style={{ marginTop: 16 }}>继续兑换</button>
             </div>
+          ) : (
+            <>
+              <div className="form-group">
+                <label className="form-label">充值码</label>
+                <input placeholder="请输入充值码" value={code} onChange={e => setCode(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleRedeem()} />
+                <p className="form-hint">充值码由管理员发放，每码仅限使用一次</p>
+              </div>
+              {redeemMsg && !redeemMsg.ok && (
+                <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                  {redeemMsg.text}
+                </div>
+              )}
+              <button className="btn btn-primary" onClick={handleRedeem} disabled={redeemLoading || !code.trim()} style={{ width: '100%', padding: 12 }}>
+                {redeemLoading ? '兑换中...' : '立即兑换'}
+              </button>
+            </>
           )}
-          <button className="btn btn-primary" onClick={handleRedeem} disabled={redeemLoading || !code.trim()} style={{ width: '100%', padding: 12 }}>
-            {redeemLoading ? '兑换中...' : '立即兑换'}
-          </button>
         </div>
       </div>
 
