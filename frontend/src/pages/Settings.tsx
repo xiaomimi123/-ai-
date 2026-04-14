@@ -22,11 +22,10 @@ export default function SettingsPage() {
     }
     setLoading(true); setMsg(null)
     try {
-      const token = localStorage.getItem('access_token')
       const res = await axios.put('/api/user/self', {
         old_password: passwordForm.old_password,
         new_password: passwordForm.new_password,
-      }, { headers: { Authorization: `Bearer ${token}` } })
+      }, { withCredentials: true })
       if (res.data.success) {
         setMsg({ ok: true, text: '密码修改成功' })
         setPasswordForm({ old_password: '', new_password: '', confirm: '' })

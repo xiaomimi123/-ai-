@@ -2,17 +2,10 @@ import axios from 'axios'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
 http.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      localStorage.removeItem('access_token')
       window.location.href = '/login'
     }
     return Promise.reject(err)
@@ -30,10 +23,10 @@ export const authApi = {
 }
 
 export const tokenApi = {
-  list: () => http.get('/api/token'),
+  list: () => http.get('/api/token/'),
   create: (data: { name: string; quota?: number; expired_time?: number }) =>
-    http.post('/api/token', data),
-  delete: (id: number) => http.delete(`/api/token/${id}`),
+    http.post('/api/token/', data),
+  delete: (id: number) => http.delete(`/api/token/${id}/`),
 }
 
 export const logApi = {

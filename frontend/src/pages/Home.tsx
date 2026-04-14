@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Zap, Shield, Globe, Code, ChevronRight, Copy } from 'lucide-react'
-import { publicApi } from '../api'
+import { publicApi, authApi } from '../api'
 
 export default function HomePage() {
   const [models, setModels] = useState<any[]>([])
   const [notices, setNotices] = useState<any[]>([])
   const [copied, setCopied] = useState(false)
+  const [isLoggedIn, setIsLoggedIn] = useState(false)
 
   useEffect(() => {
     publicApi.getModelPrices().then(r => { if (r.data.success) setModels(r.data.data || []) }).catch(() => {})
     publicApi.getNotices().then(r => { if (r.data.success) setNotices(r.data.data || []) }).catch(() => {})
+    authApi.getSelf().then(r => { if (r.data.success) setIsLoggedIn(true) }).catch(() => {})
   }, [])
 
   const baseUrl = window.location.origin + '/v1'
@@ -20,8 +22,6 @@ export default function HomePage() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const isLoggedIn = !!localStorage.getItem('access_token')
 
   return (
     <div style={{ background: '#0a0a14', color: '#f1f5f9', minHeight: 'calc(100vh - var(--nav-height))' }}>

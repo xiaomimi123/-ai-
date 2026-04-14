@@ -13,20 +13,16 @@ export default function Navbar() {
   const isHome = location.pathname === '/'
 
   useEffect(() => {
-    const token = localStorage.getItem('access_token')
-    if (token) {
-      authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
-    }
+    authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
   }, [])
 
   const handleLogout = async () => {
     await authApi.logout().catch(() => {})
-    localStorage.removeItem('access_token')
     setUser(null)
     navigate('/login')
   }
 
-  const isLoggedIn = !!localStorage.getItem('access_token')
+  const isLoggedIn = !!user
 
   const navLinks = [
     { to: '/', label: '首页' },

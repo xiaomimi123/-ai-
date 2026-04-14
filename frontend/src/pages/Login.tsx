@@ -14,7 +14,6 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(form.username, form.password)
       if (res.data.success) {
-        localStorage.setItem('access_token', res.data.data)
         navigate('/dashboard')
       } else setError(res.data.message || '登录失败')
     } catch { setError('网络错误') } finally { setLoading(false) }
