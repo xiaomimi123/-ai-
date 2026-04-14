@@ -2,14 +2,9 @@ import axios from 'axios'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
-http.interceptors.request.use((config) => {
-  const token = localStorage.getItem('admin_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
+// 不再用 Bearer token，改用 cookie session（One API 原生认证方式）
 http.interceptors.response.use(res => res, err => {
-  if (err.response?.status === 401) { localStorage.removeItem('admin_token'); window.location.href = '/login' }
+  if (err.response?.status === 401) { window.location.href = '/login' }
   return Promise.reject(err)
 })
 
@@ -19,32 +14,32 @@ export const authApi = {
 }
 
 export const userApi = {
-  list: (params: { p?: number; page_size?: number }) => http.get('/api/user', { params }),
+  list: (params: { p?: number; page_size?: number }) => http.get('/api/user/', { params }),
   update: (id: number, data: object) => http.put(`/api/user/${id}`, data),
   delete: (id: number) => http.delete(`/api/user/${id}`),
 }
 
 export const channelApi = {
-  list: () => http.get('/api/channel'),
-  create: (data: object) => http.post('/api/channel', data),
+  list: () => http.get('/api/channel/'),
+  create: (data: object) => http.post('/api/channel/', data),
   update: (id: number, data: object) => http.put(`/api/channel/${id}`, data),
   delete: (id: number) => http.delete(`/api/channel/${id}`),
   test: (id: number) => http.get(`/api/channel/test/${id}`),
 }
 
 export const tokenApi = {
-  list: (params?: { p?: number; page_size?: number }) => http.get('/api/token', { params }),
+  list: (params?: { p?: number; page_size?: number }) => http.get('/api/token/', { params }),
 }
 
 export const redemptionApi = {
-  list: (params: { p?: number }) => http.get('/api/redemption', { params }),
-  create: (data: { name: string; quota: number; count: number }) => http.post('/api/redemption', data),
+  list: (params: { p?: number }) => http.get('/api/redemption/', { params }),
+  create: (data: { name: string; quota: number; count: number }) => http.post('/api/redemption/', data),
   delete: (id: number) => http.delete(`/api/redemption/${id}`),
 }
 
 export const logApi = {
   list: (params: { p?: number; page_size?: number; username?: string; model_name?: string }) =>
-    http.get('/api/log', { params }),
+    http.get('/api/log/', { params }),
 }
 
 // 灵镜AI 扩展接口

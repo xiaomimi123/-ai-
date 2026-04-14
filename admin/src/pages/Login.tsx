@@ -13,7 +13,7 @@ export default function LoginPage() {
     e.preventDefault(); setLoading(true); setError('')
     try {
       const res = await authApi.login(form.username, form.password)
-      if (res.data.success) { localStorage.setItem('admin_token', res.data.data); navigate('/overview') }
+      if (res.data.success) { navigate('/overview') }
       else setError(res.data.message || '登录失败')
     } catch { setError('无法连接服务器') } finally { setLoading(false) }
   }

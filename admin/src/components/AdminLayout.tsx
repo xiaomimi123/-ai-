@@ -80,7 +80,7 @@ export default function AdminLayout() {
         </nav>
 
         <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,.06)', flexShrink: 0 }}>
-          <button onClick={() => { localStorage.removeItem('admin_token'); navigate('/login') }} style={{
+          <button onClick={() => { navigate('/login') }} style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8,
             width: '100%', color: 'rgba(255,255,255,.3)', background: 'transparent', fontSize: 13,
           }}>
