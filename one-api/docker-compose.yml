@@ -1,8 +1,9 @@
-version: '3.8'
-
 services:
   one-api:
-    image: justsong/one-api:latest
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: lingjing-api:latest
     container_name: one-api
     restart: always
     ports:
