@@ -14,6 +14,9 @@ func SetLingjingRouter(router *gin.Engine) {
 		public.GET("/notices", controller.GetNotices)
 		public.GET("/model-prices", controller.GetModelPrices)
 
+		// 平台配置（公开）
+		public.GET("/config", controller.GetLingjingConfig)
+
 		// 支付回调
 		public.POST("/epay/notify", controller.EpayNotify)
 		public.GET("/epay/notify", controller.EpayNotify)
@@ -64,5 +67,8 @@ func SetLingjingRouter(router *gin.Engine) {
 		// 分销管理
 		admin.GET("/referral/stats", controller.AdminGetReferralStats)
 		admin.PUT("/referral/config", controller.AdminUpdateReferralConfig)
+
+		// 平台配置
+		admin.PUT("/config", controller.UpdateLingjingConfig)
 	}
 }

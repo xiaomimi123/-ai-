@@ -72,6 +72,11 @@ export const optionApi = {
   update: (data: Record<string, string>) => http.put('/api/option/', data),
 }
 
+export const lingjingConfigApi = {
+  get: () => http.get('/api/lingjing/config'),
+  update: (data: Record<string, string>) => http.put('/api/admin/lingjing/config', data),
+}
+
 export const planApi = {
   list: () => http.get('/api/admin/lingjing/plans'),
   create: (data: object) => http.post('/api/admin/lingjing/plans', data),

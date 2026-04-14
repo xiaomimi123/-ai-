@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import CustomerService from './components/CustomerService'
 import HomePage from './pages/Home'
 import LoginPage from './pages/Login'
 import RegisterPage from './pages/Register'
@@ -34,6 +35,7 @@ function App() {
         <Route path="/orders" element={<PageWrap><OrdersPage /></PageWrap>} />
         <Route path="/referral" element={<PageWrap><ReferralPage /></PageWrap>} />
       </Routes>
+      <CustomerService />
     </BrowserRouter>
   )
 }

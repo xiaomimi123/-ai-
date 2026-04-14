@@ -1,10 +1,16 @@
 import { useEffect, useState } from 'react'
-import { Save, Globe, UserPlus, Shield, Mail, Loader2 } from 'lucide-react'
-import { optionApi } from '../api'
+import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle } from 'lucide-react'
+import { optionApi, lingjingConfigApi } from '../api'
 import toast from 'react-hot-toast'
 
 export default function SettingsPage() {
   const [opts, setOpts] = useState<Record<string, string>>({})
+  const [csConfig, setCsConfig] = useState({
+    customer_service_enabled: 'false',
+    customer_service_wechat: '',
+    customer_service_qrcode: '',
+    customer_service_text: '添加微信，获取帮助',
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
@@ -12,6 +18,17 @@ export default function SettingsPage() {
     optionApi.get().then(r => {
       if (r.data.success) setOpts(r.data.data || {})
     }).catch(() => toast.error('加载配置失败')).finally(() => setLoading(false))
+    lingjingConfigApi.get().then(r => {
+      if (r.data.success) {
+        const d = r.data.data
+        setCsConfig({
+          customer_service_enabled: d.customer_service_enabled ? 'true' : 'false',
+          customer_service_wechat: d.customer_service_wechat || '',
+          customer_service_qrcode: d.customer_service_qrcode || '',
+          customer_service_text: d.customer_service_text || '添加微信，获取帮助',
+        })
+      }
+    }).catch(() => {})
   }, [])
 
   const saveOption = async (key: string, value: string) => {
@@ -39,6 +56,12 @@ export default function SettingsPage() {
         if (!ok) allOk = false
       }
     }
+    // 保存客服配置
+    try {
+      const csRes = await lingjingConfigApi.update(csConfig)
+      if (!csRes.data.success) allOk = false
+    } catch { allOk = false }
+
     if (allOk) toast.success('所有设置已保存')
     setSaving(false)
   }
@@ -169,6 +192,31 @@ export default function SettingsPage() {
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">发件人地址</label>
             <input value={opts.SMTPFrom || ''} onChange={e => setOpt('SMTPFrom', e.target.value)} placeholder="noreply@aitoken.homes" />
+          </div>
+        </div>
+
+        {/* 客服设置 */}
+        <div className="card">
+          <div className="card-header"><span className="card-title"><MessageCircle size={16} color="#07c160"/>客服设置</span></div>
+          <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', marginBottom: 16 }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>显示客服浮动按钮</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>在用户前台右下角显示微信客服入口</div>
+            </div>
+            <input type="checkbox" checked={csConfig.customer_service_enabled === 'true'} onChange={e => setCsConfig(p => ({ ...p, customer_service_enabled: e.target.checked ? 'true' : 'false' }))} style={{ width: 'auto', accentColor: '#07c160' }} />
+          </label>
+          <div className="form-group">
+            <label className="form-label">微信号</label>
+            <input value={csConfig.customer_service_wechat} onChange={e => setCsConfig(p => ({ ...p, customer_service_wechat: e.target.value }))} placeholder="企业微信号" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">二维码图片 URL</label>
+            <input value={csConfig.customer_service_qrcode} onChange={e => setCsConfig(p => ({ ...p, customer_service_qrcode: e.target.value }))} placeholder="https://图床地址/qrcode.png" />
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>上传二维码到图床后填入 URL，用户可扫码添加</div>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label">提示文字</label>
+            <input value={csConfig.customer_service_text} onChange={e => setCsConfig(p => ({ ...p, customer_service_text: e.target.value }))} placeholder="添加微信，获取帮助" />
           </div>
         </div>
 
