@@ -55,7 +55,6 @@ func CreatePayOrder(c *gin.Context) {
 
 	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, time.Now().Nanosecond()%10000)
 
-	now := time.Now()
 	order := &model.Order{
 		OrderNo:       orderNo,
 		UserId:        userId,
@@ -64,7 +63,7 @@ func CreatePayOrder(c *gin.Context) {
 		Quota:         quota,
 		Status:        0,
 		PaymentMethod: "alipay",
-		CreatedAt:     now,
+		CreatedAt:     time.Now().Unix(),
 	}
 	if err := model.DB.Create(order).Error; err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "创建订单失败"})
@@ -176,12 +175,11 @@ func AlipayNotify(c *gin.Context) {
 	}
 
 	// 事务：更新订单 + 增加额度
-	now := time.Now()
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":   1,
 			"trade_no": tradeNo,
-			"paid_at":  &now,
+			"paid_at":  time.Now().Unix(),
 		}).Error; err != nil {
 			return err
 		}
@@ -219,7 +217,7 @@ func AdminManualTopup(c *gin.Context) {
 
 	quota := int64(req.Amount * 500000)
 	orderNo := fmt.Sprintf("MANUAL%d%d", time.Now().Unix(), req.UserId)
-	now := time.Now()
+	nowUnix := time.Now().Unix()
 
 	model.DB.Create(&model.Order{
 		OrderNo:       orderNo,
@@ -229,8 +227,8 @@ func AdminManualTopup(c *gin.Context) {
 		Status:        1,
 		PaymentMethod: "manual",
 		Remark:        req.Remark,
-		PaidAt:        &now,
-		CreatedAt:     now,
+		PaidAt:        nowUnix,
+		CreatedAt:     nowUnix,
 	})
 
 	model.DB.Model(&model.User{}).Where("id = ?", req.UserId).
