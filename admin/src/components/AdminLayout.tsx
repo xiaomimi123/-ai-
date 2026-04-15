@@ -23,6 +23,7 @@ const navSections = [
       { to: '/orders', icon: CreditCard, label: '订单管理' },
       { to: '/redemptions', icon: Gift, label: '兑换码' },
       { to: '/referrals', icon: Share2, label: '分销管理' },
+      { to: '/plans', icon: CreditCard, label: '套餐管理' },
       { to: '/payment', icon: CreditCard, label: '支付配置' },
     ],
   },

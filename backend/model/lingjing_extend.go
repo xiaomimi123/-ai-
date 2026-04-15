@@ -46,15 +46,16 @@ type Commission struct {
 
 // Plan 套餐定价表
 type Plan struct {
-	Id          int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	Name        string    `json:"name" gorm:"size:100;not null"`
-	Price       float64   `json:"price" gorm:"type:decimal(10,2);not null"`
-	Quota       int       `json:"quota" gorm:"not null"`
-	BonusQuota  int       `json:"bonus_quota" gorm:"default:0"`
-	SortOrder   int       `json:"sort_order" gorm:"default:0"`
-	IsActive    int       `json:"is_active" gorm:"default:1"`
-	Description string    `json:"description" gorm:"size:500"`
-	CreatedAt   time.Time `json:"created_at"`
+	Id          int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	Name        string  `json:"name" gorm:"size:100;not null"`
+	Description string  `json:"description" gorm:"size:500"`
+	Price       float64 `json:"price" gorm:"type:decimal(10,2);not null"`
+	Quota       int64   `json:"quota" gorm:"not null"`
+	BonusQuota  int64   `json:"bonus_quota" gorm:"default:0"`
+	IsAvailable bool    `json:"is_available" gorm:"default:true"`
+	SortOrder   int     `json:"sort_order" gorm:"default:0"`
+	CreatedAt   int64   `json:"created_at"`
+	UpdatedAt   int64   `json:"updated_at"`
 }
 
 // Notice 公告表
@@ -139,7 +140,7 @@ func UpdateOrderStatus(orderNo string, status int, tradeNo string) error {
 
 func GetActivePlans() ([]Plan, error) {
 	var plans []Plan
-	err := DB.Where("is_active = 1").Order("sort_order ASC, price ASC").Find(&plans).Error
+	err := DB.Where("is_available = ?", true).Order("sort_order ASC, id ASC").Find(&plans).Error
 	return plans, err
 }
 
@@ -223,11 +224,12 @@ func SeedDefaultPlans() {
 		return
 	}
 	logger.SysLog("Seeding default plans...")
+	now := time.Now().Unix()
 	plans := []Plan{
-		{Name: "体验包", Price: 9.9, Quota: 5000000, BonusQuota: 0, SortOrder: 1, IsActive: 1, Description: "适合初次体验"},
-		{Name: "入门包", Price: 30, Quota: 20000000, BonusQuota: 2000000, SortOrder: 2, IsActive: 1, Description: "适合个人用户"},
-		{Name: "标准包", Price: 100, Quota: 80000000, BonusQuota: 10000000, SortOrder: 3, IsActive: 1, Description: "适合开发者"},
-		{Name: "专业包", Price: 300, Quota: 300000000, BonusQuota: 50000000, SortOrder: 4, IsActive: 1, Description: "适合团队使用"},
+		{Name: "入门", Price: 10, Quota: 5000000, BonusQuota: 0, SortOrder: 1, IsAvailable: true, Description: "适合个人开发者体验", CreatedAt: now, UpdatedAt: now},
+		{Name: "标准", Price: 30, Quota: 15000000, BonusQuota: 1000000, SortOrder: 2, IsAvailable: true, Description: "适合小型项目使用", CreatedAt: now, UpdatedAt: now},
+		{Name: "专业", Price: 100, Quota: 50000000, BonusQuota: 5000000, SortOrder: 3, IsAvailable: true, Description: "适合中型项目和团队", CreatedAt: now, UpdatedAt: now},
+		{Name: "企业", Price: 300, Quota: 150000000, BonusQuota: 30000000, SortOrder: 4, IsAvailable: true, Description: "适合大型项目和企业", CreatedAt: now, UpdatedAt: now},
 	}
 	for _, plan := range plans {
 		DB.Create(&plan)

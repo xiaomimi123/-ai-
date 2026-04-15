@@ -49,6 +49,7 @@ func SetLingjingRouter(router *gin.Engine) {
 		admin.POST("/plans", controller.AdminCreatePlan)
 		admin.PUT("/plans/:id", controller.AdminUpdatePlan)
 		admin.DELETE("/plans/:id", controller.AdminDeletePlan)
+		admin.PUT("/plans/:id/toggle", controller.AdminTogglePlan)
 
 		admin.POST("/notices", controller.AdminCreateNotice)
 		admin.DELETE("/notices/:id", controller.AdminDeleteNotice)
