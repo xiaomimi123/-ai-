@@ -1,52 +1,40 @@
 import { useEffect, useState } from 'react'
 import { Save, CreditCard, AlertCircle, CheckCircle } from 'lucide-react'
-import { optionApi } from '../api'
 import toast from 'react-hot-toast'
+import axios from 'axios'
+
+const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
 export default function PaymentSettingsPage() {
-  const [form, setForm] = useState({
-    EpayAddress: '',
-    EpayId: '',
-    EpayKey: '',
-    EpayPrice: '7.3',
-    EpayMinTopUp: '1',
+  const [payConfig, setPayConfig] = useState({
+    alipay_enabled: false,
+    alipay_app_id: '',
+    alipay_private_key: '',
+    alipay_public_key: '',
+    redeem_enabled: true,
   })
   const [saving, setSaving] = useState(false)
-  const [, setLoaded] = useState(false)
 
   useEffect(() => {
-    optionApi.get().then(r => {
-      if (r.data.success) {
-        const opts = r.data.data as Record<string, string>
-        setForm({
-          EpayAddress: opts.EpayAddress || '',
-          EpayId: opts.EpayId || '',
-          EpayKey: opts.EpayKey || '',
-          EpayPrice: opts.EpayPrice || '7.3',
-          EpayMinTopUp: opts.EpayMinTopUp || '1',
-        })
-        setLoaded(true)
-      }
+    http.get('/api/admin/lingjing/pay/config').then(r => {
+      if (r.data.success) setPayConfig(r.data.data)
     }).catch(() => toast.error('加载配置失败'))
   }, [])
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      // 逐个保存（One API 的 option API 每次更新一个 key）
-      for (const [key, value] of Object.entries(form)) {
-        const r = await optionApi.update({ key, value })
-        if (!r.data.success) {
-          toast.error(`保存 ${key} 失败: ${r.data.message}`)
-          setSaving(false)
-          return
-        }
-      }
-      toast.success('支付配置已保存，立即生效')
+      const res = await http.put('/api/admin/lingjing/pay/config', {
+        alipay_enabled: payConfig.alipay_enabled,
+        alipay_app_id: payConfig.alipay_app_id,
+        alipay_private_key: payConfig.alipay_private_key || '',
+        alipay_public_key: payConfig.alipay_public_key || '',
+        redeem_enabled: payConfig.redeem_enabled,
+      })
+      if (res.data.success) toast.success('支付配置已保存')
+      else toast.error(res.data.message || '保存失败')
     } catch { toast.error('网络错误') } finally { setSaving(false) }
   }
-
-  const isConfigured = form.EpayAddress && form.EpayId && form.EpayKey
 
   return (
     <div>
@@ -54,127 +42,69 @@ export default function PaymentSettingsPage() {
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <CreditCard size={22} color="var(--primary)" />支付配置
         </h1>
-        <p className="page-desc">配置在线支付网关，支持易支付（聚合支付宝/微信）</p>
+        <p className="page-desc">配置在线支付方式和充值码开关</p>
       </div>
 
-      {/* Status Banner */}
+      {/* 状态提示 */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
         borderRadius: 10, marginBottom: 24,
-        background: isConfigured ? '#dcfce7' : '#fef3c7',
-        border: `1px solid ${isConfigured ? '#86efac' : '#fcd34d'}`,
+        background: payConfig.alipay_enabled ? '#dcfce7' : '#fef3c7',
+        border: `1px solid ${payConfig.alipay_enabled ? '#86efac' : '#fcd34d'}`,
       }}>
-        {isConfigured ? <CheckCircle size={18} color="#16a34a" /> : <AlertCircle size={18} color="#d97706" />}
-        <span style={{ fontSize: 14, color: isConfigured ? '#166534' : '#92400e' }}>
-          {isConfigured ? '支付已配置，用户可以在线充值' : '支付未配置，用户只能使用充值码兑换额度'}
+        {payConfig.alipay_enabled ? <CheckCircle size={18} color="#16a34a" /> : <AlertCircle size={18} color="#d97706" />}
+        <span style={{ fontSize: 14, color: payConfig.alipay_enabled ? '#166534' : '#92400e' }}>
+          {payConfig.alipay_enabled ? '支付宝已开启，用户可以在线充值' : '支付宝未开启，用户只能使用充值码兑换额度'}
         </span>
       </div>
 
       <div style={{ maxWidth: 640 }}>
-        {/* 易支付配置 */}
         <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header">
-            <span className="card-title">易支付 (Epay) 配置</span>
-          </div>
+          <h3 style={{ fontWeight: 700, marginBottom: 20, fontSize: 16 }}>支付方式</h3>
 
-          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--text-secondary)' }}>
-            易支付是聚合支付网关，支持支付宝、微信、QQ钱包等多种支付方式。<br />
-            需先在易支付平台注册商户并获取配置信息。
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">支付网关地址</label>
-            <input
-              placeholder="https://pay.example.com"
-              value={form.EpayAddress}
-              onChange={e => setForm(p => ({ ...p, EpayAddress: e.target.value }))}
-            />
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>易支付服务商提供的 API 地址</div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">商户 ID</label>
-              <input
-                placeholder="10001"
-                value={form.EpayId}
-                onChange={e => setForm(p => ({ ...p, EpayId: e.target.value }))}
-              />
+          {/* 充值码开关 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', marginBottom: 12 }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>充值码兑换</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>允许用户使用充值码兑换额度</div>
             </div>
-            <div className="form-group">
-              <label className="form-label">商户密钥</label>
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.EpayKey}
-                onChange={e => setForm(p => ({ ...p, EpayKey: e.target.value }))}
-              />
+            <input type="checkbox" checked={payConfig.redeem_enabled} onChange={e => setPayConfig(p => ({ ...p, redeem_enabled: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
+          </div>
+
+          {/* 支付宝开关 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', marginBottom: payConfig.alipay_enabled ? 20 : 0 }}>
+            <div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>支付宝电脑网站支付</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>用户通过支付宝扫码或登录支付</div>
             </div>
-          </div>
-        </div>
-
-        {/* 计费设置 */}
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div className="card-header">
-            <span className="card-title">计费设置</span>
+            <input type="checkbox" checked={payConfig.alipay_enabled} onChange={e => setPayConfig(p => ({ ...p, alipay_enabled: e.target.checked }))} style={{ width: 'auto', accentColor: '#1677ff' }} />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">汇率 (1 USD = ? CNY)</label>
-              <input
-                type="number"
-                step="0.1"
-                placeholder="7.3"
-                value={form.EpayPrice}
-                onChange={e => setForm(p => ({ ...p, EpayPrice: e.target.value }))}
-              />
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                用户充值 $1 需支付 ¥{form.EpayPrice || '7.3'}
+          {/* 支付宝密钥配置 */}
+          {payConfig.alipay_enabled && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">App ID</label>
+                <input value={payConfig.alipay_app_id} onChange={e => setPayConfig(p => ({ ...p, alipay_app_id: e.target.value }))} placeholder="2021006146617774" />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">应用私钥（RSA2）<span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 4 }}>已配置则留空不修改</span></label>
+                <textarea rows={3} value={payConfig.alipay_private_key} onChange={e => setPayConfig(p => ({ ...p, alipay_private_key: e.target.value }))} placeholder="粘贴应用私钥，留空则不修改已保存的密钥" style={{ resize: 'vertical' }} />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">支付宝公钥 <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 4 }}>已配置则留空不修改</span></label>
+                <textarea rows={3} value={payConfig.alipay_public_key} onChange={e => setPayConfig(p => ({ ...p, alipay_public_key: e.target.value }))} placeholder="粘贴支付宝公钥，留空则不修改" style={{ resize: 'vertical' }} />
+              </div>
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1e40af' }}>
+                回调地址：<code style={{ background: '#dbeafe', padding: '2px 6px', borderRadius: 4 }}>https://aitoken.homes/api/lingjing/pay/notify/alipay</code>
+                <br />请在支付宝开放平台配置此回调地址
               </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">最低充值 (USD)</label>
-              <input
-                type="number"
-                min="1"
-                placeholder="1"
-                value={form.EpayMinTopUp}
-                onChange={e => setForm(p => ({ ...p, EpayMinTopUp: e.target.value }))}
-              />
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-                最低 ${form.EpayMinTopUp || '1'}，即 ¥{(parseFloat(form.EpayMinTopUp || '1') * parseFloat(form.EpayPrice || '7.3')).toFixed(2)}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 费用预览 */}
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="card-header">
-            <span className="card-title">充值金额预览</span>
-          </div>
-          <div className="table-wrap" style={{ border: 'none' }}>
-            <table>
-              <thead><tr><th>额度 (USD)</th><th>用户支付 (CNY)</th><th>获得额度</th></tr></thead>
-              <tbody>
-                {[1, 5, 10, 50, 100, 500].map(amount => {
-                  const price = parseFloat(form.EpayPrice || '7.3')
-                  return (
-                    <tr key={amount}>
-                      <td style={{ fontWeight: 600 }}>${amount}</td>
-                      <td style={{ color: 'var(--primary)', fontWeight: 600 }}>¥{(amount * price).toFixed(2)}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{(amount * 500000).toLocaleString()} 额度</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          )}
         </div>
 
         <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ padding: '12px 32px' }}>
-          <Save size={16}/>{saving ? '保存中...' : '保存配置'}
+          <Save size={16}/>{saving ? '保存中...' : '保存支付配置'}
         </button>
       </div>
     </div>
