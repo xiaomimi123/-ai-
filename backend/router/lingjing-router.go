@@ -17,9 +17,10 @@ func SetLingjingRouter(router *gin.Engine) {
 		// 平台配置（公开）
 		public.GET("/config", controller.GetLingjingConfig)
 
-		// 支付回调
+		// 支付回调（公开）
 		public.POST("/epay/notify", controller.EpayNotify)
 		public.GET("/epay/notify", controller.EpayNotify)
+		public.POST("/pay/notify/alipay", controller.AlipayNotify)
 	}
 
 	// ===== 用户接口（需登录）=====
@@ -39,6 +40,11 @@ func SetLingjingRouter(router *gin.Engine) {
 
 		// 用户统计
 		user.GET("/stats/dashboard", controller.GetUserDashboardStats)
+
+		// 支付宝支付
+		user.GET("/pay/info", controller.GetPayInfo)
+		user.POST("/pay/create", controller.CreatePayOrder)
+		user.GET("/pay/order/:orderNo", controller.GetPayOrderStatus)
 	}
 
 	// ===== 管理员接口 =====
@@ -73,6 +79,9 @@ func SetLingjingRouter(router *gin.Engine) {
 
 		// 平台配置
 		admin.PUT("/config", controller.UpdateLingjingConfig)
+
+		// 管理员手动补单
+		admin.POST("/pay/manual-topup", controller.AdminManualTopup)
 
 		// 速率限制
 		admin.PUT("/token/:id/rate-limit", controller.SetTokenRateLimit)

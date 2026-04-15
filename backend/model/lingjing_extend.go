@@ -12,11 +12,13 @@ type Order struct {
 	Id            int            `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId        int            `json:"user_id" gorm:"index;not null"`
 	OrderNo       string         `json:"order_no" gorm:"uniqueIndex;size:64;not null"`
+	PlanId        int            `json:"plan_id" gorm:"default:0"`
 	Amount        float64        `json:"amount" gorm:"type:decimal(10,2);not null"`
-	Quota         int            `json:"quota" gorm:"not null"`
+	Quota         int64          `json:"quota" gorm:"not null"`
 	Status        int            `json:"status" gorm:"default:0"` // 0待支付 1已支付 2已取消 3已退款
 	PaymentMethod string         `json:"payment_method" gorm:"size:20"`
 	TradeNo       string         `json:"trade_no" gorm:"size:128"`
+	Remark        string         `json:"remark" gorm:"size:255"`
 	CreatedAt     time.Time      `json:"created_at"`
 	PaidAt        *time.Time     `json:"paid_at"`
 	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
