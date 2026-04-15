@@ -239,9 +239,8 @@ func updateOptionMap(key string, value string) (err error) {
 		config.QuotaPerUnit, _ = strconv.ParseFloat(value, 64)
 	case "Theme":
 		config.Theme = value
-	// 灵镜AI 支付配置热更新
-	case "EpayAddress", "EpayId", "EpayKey", "EpayPrice", "EpayMinTopUp":
-		// 写入 OptionMap 即可，controller 读取时会从 OptionMap 获取
+	// 灵镜AI 配置热更新
+	case "AlipayEnabled", "AlipayAppID", "AlipayPrivateKey", "AlipayPublicKey", "RedeemEnabled":
 		config.OptionMapRWMutex.Lock()
 		config.OptionMap[key] = value
 		config.OptionMapRWMutex.Unlock()

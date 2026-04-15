@@ -82,7 +82,6 @@ type ModelPrice struct {
 // InitLingjingTables 初始化灵镜AI扩展表
 func InitLingjingTables() error {
 	err := DB.AutoMigrate(
-		&TopUp{},
 		&Order{},
 		&Referral{},
 		&Commission{},
@@ -255,4 +254,23 @@ func SeedDefaultModelPrices() {
 	for _, price := range prices {
 		DB.Create(&price)
 	}
+}
+
+// GetOptionValue 从 option 表读取配置
+func GetOptionValue(key string) string {
+	var option Option
+	if err := DB.Where("`key` = ?", key).First(&option).Error; err != nil {
+		return ""
+	}
+	return option.Value
+}
+
+// SaveOption 保存配置到 option 表
+func SaveOption(key, value string) error {
+	var option Option
+	result := DB.Where("`key` = ?", key).First(&option)
+	if result.Error != nil {
+		return DB.Create(&Option{Key: key, Value: value}).Error
+	}
+	return DB.Model(&option).Update("value", value).Error
 }

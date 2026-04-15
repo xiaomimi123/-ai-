@@ -2,55 +2,71 @@ package payment
 
 import (
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/go-pay/gopay/alipay"
+	"github.com/songquanpeng/one-api/model"
 )
 
 var (
 	alipayClient *alipay.Client
-	alipayOnce   sync.Once
-	alipayErr    error
+	alipayMu     sync.RWMutex
 )
 
-const (
-	AlipayAppID = "2021006146617774"
-	NotifyURL   = "https://aitoken.homes/api/lingjing/pay/notify/alipay"
-	ReturnURL   = "https://aitoken.homes/topup?pay=success"
-)
-
-func GetAlipayClient() (*alipay.Client, error) {
-	alipayOnce.Do(func() {
-		privateKey := os.Getenv("ALIPAY_PRIVATE_KEY")
-		if privateKey == "" {
-			alipayErr = fmt.Errorf("ALIPAY_PRIVATE_KEY 未配置")
-			return
-		}
-
-		// isProd=true 正式环境
-		client, err := alipay.NewClient(AlipayAppID, privateKey, true)
-		if err != nil {
-			alipayErr = fmt.Errorf("支付宝客户端初始化失败: %v", err)
-			return
-		}
-
-		// 设置支付宝公钥
-		if pubKey := os.Getenv("ALIPAY_PUBLIC_KEY"); pubKey != "" {
-			client.SetCertSnByContent(nil, nil, nil) // 非证书模式
-		}
-
-		client.SetCharset("utf-8").
-			SetSignType(alipay.RSA2).
-			SetReturnUrl(ReturnURL).
-			SetNotifyUrl(NotifyURL)
-
-		alipayClient = client
-	})
-	return alipayClient, alipayErr
+func ResetAlipayClient() {
+	alipayMu.Lock()
+	defer alipayMu.Unlock()
+	alipayClient = nil
 }
 
-// IsAlipayConfigured 检查支付宝是否已配置
+func GetAlipayClient() (*alipay.Client, error) {
+	alipayMu.RLock()
+	if alipayClient != nil {
+		defer alipayMu.RUnlock()
+		return alipayClient, nil
+	}
+	alipayMu.RUnlock()
+
+	alipayMu.Lock()
+	defer alipayMu.Unlock()
+
+	if alipayClient != nil {
+		return alipayClient, nil
+	}
+
+	enabled := model.GetOptionValue("AlipayEnabled")
+	if enabled != "true" {
+		return nil, fmt.Errorf("支付宝未启用")
+	}
+
+	appID := model.GetOptionValue("AlipayAppID")
+	privateKey := model.GetOptionValue("AlipayPrivateKey")
+
+	if appID == "" || privateKey == "" {
+		return nil, fmt.Errorf("支付宝配置不完整")
+	}
+
+	client, err := alipay.NewClient(appID, privateKey, true)
+	if err != nil {
+		return nil, fmt.Errorf("初始化失败: %v", err)
+	}
+
+	// 设置公钥用于验签
+	if pubKey := model.GetOptionValue("AlipayPublicKey"); pubKey != "" {
+		client.AutoVerifySign([]byte(pubKey))
+	}
+
+	client.ReturnUrl = "https://aitoken.homes/topup?pay=success"
+	client.NotifyUrl = "https://aitoken.homes/api/lingjing/pay/notify/alipay"
+	client.Charset = "utf-8"
+	client.SignType = alipay.RSA2
+
+	alipayClient = client
+	return alipayClient, nil
+}
+
 func IsAlipayConfigured() bool {
-	return os.Getenv("ALIPAY_PRIVATE_KEY") != ""
+	return model.GetOptionValue("AlipayEnabled") == "true" &&
+		model.GetOptionValue("AlipayAppID") != "" &&
+		model.GetOptionValue("AlipayPrivateKey") != ""
 }

@@ -46,13 +46,12 @@ export const publicApi = {
 }
 
 export const payApi = {
-  getInfo: () => http.get('/api/lingjing/topup/info'),
-  pay: (data: { amount: number; payment_method: string }) =>
-    http.post('/api/lingjing/topup/pay', data),
-  getAmount: (amount: number) =>
-    http.post('/api/lingjing/topup/amount', { amount }),
-  getOrders: (params?: { page?: number; page_size?: number }) =>
-    http.get('/api/lingjing/topup/self', { params }),
+  getConfig: () => http.get('/api/lingjing/pay/config'),
+  getInfo: () => http.get('/api/lingjing/pay/info'),
+  createOrder: (data: { plan_id?: number; amount?: number; pay_type: string }) =>
+    http.post('/api/lingjing/pay/create', data),
+  getOrderStatus: (orderNo: string) =>
+    http.get(`/api/lingjing/pay/order/${orderNo}`),
 }
 
 export const referralApi = {
