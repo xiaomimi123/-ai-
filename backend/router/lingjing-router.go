@@ -70,5 +70,25 @@ func SetLingjingRouter(router *gin.Engine) {
 
 		// 平台配置
 		admin.PUT("/config", controller.UpdateLingjingConfig)
+
+		// 速率限制
+		admin.PUT("/token/:id/rate-limit", controller.SetTokenRateLimit)
+	}
+
+	// ===== 分组管理 =====
+	groupAdmin := router.Group("/api/admin/group")
+	groupAdmin.Use(middleware.AdminAuth())
+	{
+		groupAdmin.GET("/list", controller.GetGroupList)
+		groupAdmin.PUT("/user", controller.UpdateUserGroup)
+		groupAdmin.PUT("/user/batch", controller.BatchUpdateUserGroup)
+		groupAdmin.GET("/stats", controller.GetGroupStats)
+	}
+
+	// ===== 用户分组查询 =====
+	userGroup := router.Group("/api/lingjing")
+	userGroup.Use(middleware.UserAuth())
+	{
+		userGroup.GET("/group/my", controller.GetMyGroup)
 	}
 }

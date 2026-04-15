@@ -77,6 +77,17 @@ export const lingjingConfigApi = {
   update: (data: Record<string, string>) => http.put('/api/admin/lingjing/config', data),
 }
 
+export const groupApi = {
+  list: () => http.get('/api/admin/group/list'),
+  updateUser: (data: { user_id: number; group: string }) => http.put('/api/admin/group/user', data),
+  stats: () => http.get('/api/admin/group/stats'),
+}
+
+export const rateLimitApi = {
+  setToken: (tokenId: number, data: { rpm: number; tpm: number }) =>
+    http.put(`/api/admin/lingjing/token/${tokenId}/rate-limit`, data),
+}
+
 export const planApi = {
   list: () => http.get('/api/admin/lingjing/plans'),
   create: (data: object) => http.post('/api/admin/lingjing/plans', data),

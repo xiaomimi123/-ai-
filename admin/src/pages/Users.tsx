@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Search, ChevronLeft, ChevronRight, Edit2, UserX, UserCheck, Trash2, Plus } from 'lucide-react'
-import { userApi } from '../api'
+import { userApi, groupApi } from '../api'
 import toast from 'react-hot-toast'
 
 const ROLES = [
@@ -146,7 +146,19 @@ export default function UsersPage() {
                     <td><strong>{u.username}</strong></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.display_name || '-'}</td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.email || '-'}</td>
-                    <td><span className="badge badge-blue">{u.group || 'default'}</span></td>
+                    <td>
+                      <select value={u.group || 'default'} onChange={async e => {
+                        try {
+                          const r = await groupApi.updateUser({ user_id: u.id, group: e.target.value })
+                          if (r.data.success) { toast.success('用户组已更新'); load() }
+                          else toast.error(r.data.message)
+                        } catch { toast.error('更新失败') }
+                      }} style={{ fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', background: u.group === 'vip' ? '#fef3c7' : u.group === 'pro' ? '#ede9fe' : '#f3f4f6' }}>
+                        <option value="default">普通用户</option>
+                        <option value="vip">VIP</option>
+                        <option value="pro">专业</option>
+                      </select>
+                    </td>
                     <td><span className={`badge ${role.cls}`}>{role.label}</span></td>
                     <td><span className={`badge ${u.status === 1 ? 'badge-green' : 'badge-red'}`}>{u.status === 1 ? '正常' : '禁用'}</span></td>
                     <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary)' }}>${toUsd(u.quota - u.used_quota)}</td>

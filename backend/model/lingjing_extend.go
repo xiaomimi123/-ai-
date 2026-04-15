@@ -91,7 +91,10 @@ func InitLingjingTables() error {
 	if err != nil {
 		return err
 	}
-	// 不插入默认数据，套餐和模型定价由管理员在后台配置
+	// 扩展 Token 表添加速率限制字段
+	DB.Exec("ALTER TABLE tokens ADD COLUMN IF NOT EXISTS rpm BIGINT DEFAULT 0")
+	DB.Exec("ALTER TABLE tokens ADD COLUMN IF NOT EXISTS tpm BIGINT DEFAULT 0")
+
 	return nil
 }
 
