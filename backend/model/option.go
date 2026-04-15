@@ -239,11 +239,11 @@ func updateOptionMap(key string, value string) (err error) {
 		config.QuotaPerUnit, _ = strconv.ParseFloat(value, 64)
 	case "Theme":
 		config.Theme = value
-	// 灵镜AI 配置热更新
-	case "AlipayEnabled", "AlipayAppID", "AlipayPrivateKey", "AlipayPublicKey", "RedeemEnabled":
-		config.OptionMapRWMutex.Lock()
-		config.OptionMap[key] = value
-		config.OptionMapRWMutex.Unlock()
+	// 灵镜AI 配置（不加锁，由调用方控制）
+	case "AlipayEnabled", "AlipayAppID", "AlipayPrivateKey", "AlipayPublicKey", "RedeemEnabled",
+		"customer_service_enabled", "customer_service_wechat", "customer_service_qrcode", "customer_service_text",
+		"site_name", "site_description":
+		// 值已通过 updateOptionMap 的上层写入 OptionMap，无需重复加锁
 	}
 	return err
 }
