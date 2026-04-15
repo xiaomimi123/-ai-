@@ -100,6 +100,19 @@ func CreatePayOrder(c *gin.Context) {
 	})
 }
 
+// GetUserOrders 用户订单列表
+func GetUserOrders(c *gin.Context) {
+	userId := c.GetInt("id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 { page = 1 }
+	var orders []model.Order
+	var total int64
+	model.DB.Model(&model.Order{}).Where("user_id = ?", userId).Count(&total)
+	model.DB.Where("user_id = ?", userId).Order("created_at DESC").Offset((page-1)*pageSize).Limit(pageSize).Find(&orders)
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": orders, "total": total})
+}
+
 // GetPayOrderStatus 查询订单状态
 func GetPayOrderStatus(c *gin.Context) {
 	userId := c.GetInt("id")

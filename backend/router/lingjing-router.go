@@ -28,6 +28,7 @@ func SetLingjingRouter(router *gin.Engine) {
 		user.GET("/pay/info", controller.GetPayInfo)
 		user.POST("/pay/create", controller.CreatePayOrder)
 		user.GET("/pay/order/:orderNo", controller.GetPayOrderStatus)
+		user.GET("/pay/orders", controller.GetUserOrders)
 
 		// 分销
 		user.GET("/referral", controller.GetReferralInfo)

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Receipt, ChevronLeft, ChevronRight } from 'lucide-react'
-import { payApi } from '../api'
+import axios from 'axios'
+const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
 interface Order {
   id: number; user_id: number; amount: number; money: number; trade_no: string
@@ -25,7 +26,7 @@ export default function OrdersPage() {
   const pageSize = 15
 
   useEffect(() => {
-    payApi.getOrders({ page, page_size: pageSize }).then(r => {
+    http.get('/api/lingjing/pay/orders', { params: { page, page_size: pageSize } }).then((r: any) => {
       if (r.data.success) {
         setOrders(r.data.data || [])
         setTotal(r.data.total || 0)
@@ -54,13 +55,13 @@ export default function OrdersPage() {
                 const st = statusMap[o.status] || { label: o.status, cls: 'badge-gray' }
                 return (
                   <tr key={o.id}>
-                    <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.trade_no}</code></td>
-                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>${o.amount}</td>
-                    <td style={{ fontFamily: 'monospace' }}>¥{o.money?.toFixed(2)}</td>
-                    <td>{methodMap[o.payment_method] || o.payment_method}</td>
+                    <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
+                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>¥{o.amount?.toFixed(2)}</td>
+                    <td style={{ fontFamily: 'monospace' }}>{(o.quota / 500000).toFixed(2)} 元额度</td>
+                    <td>{methodMap[o.payment_method] || o.payment_method || '-'}</td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-                      {o.create_time ? new Date(o.create_time * 1000).toLocaleString('zh-CN') : '-'}
+                      {o.created_at ? new Date(o.created_at).toLocaleString('zh-CN') : '-'}
                     </td>
                   </tr>
                 )
