@@ -91,9 +91,9 @@ func InitLingjingTables() error {
 	if err != nil {
 		return err
 	}
-	// 扩展 Token 表添加速率限制字段
-	DB.Exec("ALTER TABLE tokens ADD COLUMN IF NOT EXISTS rpm BIGINT DEFAULT 0")
-	DB.Exec("ALTER TABLE tokens ADD COLUMN IF NOT EXISTS tpm BIGINT DEFAULT 0")
+	// 扩展 Token 表添加速率限制字段（忽略已存在的错误）
+	DB.Exec("ALTER TABLE tokens ADD COLUMN rpm BIGINT DEFAULT 0")
+	DB.Exec("ALTER TABLE tokens ADD COLUMN tpm BIGINT DEFAULT 0")
 
 	return nil
 }
