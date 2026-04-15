@@ -108,16 +108,17 @@ export default function ChannelsPage() {
                       </button>
                     </td>
                     <td>
-                      {ch.balance != null && ch.balance > 0 ? (
-                        <div>
-                          <div style={{ fontWeight: 600, color: 'var(--success)', fontSize: 13 }}>${ch.balance.toFixed(2)}</div>
-                          {ch.balance_updated_time > 0 && (
-                            <div style={{ fontSize: 11, color: 'var(--muted)' }}>{new Date(ch.balance_updated_time * 1000).toLocaleString('zh-CN')}</div>
-                          )}
+                      <div>
+                        <div style={{ fontWeight: 600, color: ch.balance > 0 ? 'var(--success)' : 'var(--muted)', fontSize: 13 }}>
+                          ${(ch.balance || 0).toFixed(2)}
                         </div>
-                      ) : (
-                        <span style={{ color: 'var(--muted)', fontSize: 12 }}>-</span>
-                      )}
+                        {ch.balance_updated_time > 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>{new Date(ch.balance_updated_time * 1000).toLocaleString('zh-CN')}</div>
+                        )}
+                        {ch.balance === 0 && ch.balance_updated_time === 0 && (
+                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>未查询</div>
+                        )}
+                      </div>
                     </td>
                     <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{ch.priority || 0}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{ch.response_time ? `${(ch.response_time/1000).toFixed(2)}s` : '-'}</td>
