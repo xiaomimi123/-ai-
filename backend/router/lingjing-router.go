@@ -36,6 +36,9 @@ func SetLingjingRouter(router *gin.Engine) {
 		user.GET("/referral", controller.GetReferralInfo)
 		user.GET("/referral/commissions", controller.GetCommissionList)
 		user.POST("/referral/withdraw", controller.WithdrawCommission)
+
+		// 用户统计
+		user.GET("/stats/dashboard", controller.GetUserDashboardStats)
 	}
 
 	// ===== 管理员接口 =====
@@ -90,5 +93,13 @@ func SetLingjingRouter(router *gin.Engine) {
 	userGroup.Use(middleware.UserAuth())
 	{
 		userGroup.GET("/group/my", controller.GetMyGroup)
+	}
+
+	// ===== 管理员统计 =====
+	adminStats := router.Group("/api/admin/stats")
+	adminStats.Use(middleware.AdminAuth())
+	{
+		adminStats.GET("/dashboard", controller.GetAdminDashboardStats)
+		adminStats.GET("/realtime", controller.GetAdminRealtimeStats)
 	}
 }
