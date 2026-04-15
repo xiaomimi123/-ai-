@@ -84,7 +84,7 @@ export default function OverviewPage() {
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0"/><XAxis dataKey="date" tick={{ fontSize: 11, fill: '#9ca3af' }} interval={timeRange === 30 ? 4 : 0}/>
             <YAxis yAxisId="rev" tick={{ fontSize: 11, fill: '#9ca3af' }} tickFormatter={(v: number) => `¥${v.toFixed(0)}`}/>
             <YAxis yAxisId="cnt" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }}/>
-            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any, name: string) => [name.includes('收入') ? `¥${Number(v).toFixed(2)}` : v, name]}/>
+            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(v: any, name: any) => [String(name).includes('收入') ? `¥${Number(v).toFixed(2)}` : v, name]}/>
             <Legend wrapperStyle={{ fontSize: 12 }}/>
             <Area yAxisId="rev" type="monotone" dataKey="revenue" name="收入(元)" stroke="#4f6ef7" fill="url(#rg)" strokeWidth={2}/>
             <Area yAxisId="cnt" type="monotone" dataKey="count" name="调用次数" stroke="#10b981" fill="url(#clg)" strokeWidth={2}/>
