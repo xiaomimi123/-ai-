@@ -4,19 +4,27 @@ import axios from 'axios'
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
 interface Order {
-  id: number; user_id: number; amount: number; money: number; trade_no: string
-  payment_method: string; create_time: number; complete_time: number; status: string
+  id: number
+  order_no: string
+  amount: number
+  quota: number
+  status: number
+  payment_method: string
+  trade_no: string
+  remark: string
+  created_at: string
+  paid_at: string
 }
 
-const statusMap: Record<string, { label: string; cls: string }> = {
-  pending: { label: '待支付', cls: 'badge-yellow' },
-  success: { label: '已完成', cls: 'badge-green' },
-  failed:  { label: '失败', cls: 'badge-red' },
-  expired: { label: '已过期', cls: 'badge-gray' },
+const statusMap: Record<number, { label: string; cls: string }> = {
+  0: { label: '待支付', cls: 'badge-yellow' },
+  1: { label: '已完成', cls: 'badge-green' },
+  2: { label: '已取消', cls: 'badge-gray' },
+  3: { label: '已退款', cls: 'badge-red' },
 }
 
 const methodMap: Record<string, string> = {
-  alipay: '支付宝', wxpay: '微信支付', wechat: '微信支付', stripe: 'Stripe',
+  alipay: '支付宝', manual: '管理员补单', wxpay: '微信支付',
 }
 
 export default function OrdersPage() {
@@ -47,17 +55,17 @@ export default function OrdersPage() {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>订单号</th><th>充值额度</th><th>支付金额</th><th>支付方式</th><th>状态</th><th>时间</th></tr></thead>
+          <thead><tr><th>订单号</th><th>支付金额</th><th>获得额度</th><th>支付方式</th><th>状态</th><th>时间</th></tr></thead>
           <tbody>
             {orders.length === 0
               ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无充值记录</td></tr>
               : orders.map(o => {
-                const st = statusMap[o.status] || { label: o.status, cls: 'badge-gray' }
+                const st = statusMap[o.status] || { label: `状态${o.status}`, cls: 'badge-gray' }
                 return (
                   <tr key={o.id}>
                     <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
                     <td style={{ fontWeight: 600, color: 'var(--primary)' }}>¥{o.amount?.toFixed(2)}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{(o.quota / 500000).toFixed(2)} 元额度</td>
+                    <td style={{ fontFamily: 'monospace' }}>{o.quota ? (o.quota / 500000).toFixed(2) : '-'} 元</td>
                     <td>{methodMap[o.payment_method] || o.payment_method || '-'}</td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
