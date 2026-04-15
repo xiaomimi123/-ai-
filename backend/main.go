@@ -91,7 +91,11 @@ func main() {
 	if config.EnableMetric {
 		logger.SysLog("metric enabled, will disable channel if too much request failed")
 	}
-	openai.InitTokenEncoders()
+	go func() {
+		logger.SysLog("initializing token encoders in background...")
+		openai.InitTokenEncoders()
+		logger.SysLog("token encoders initialized")
+	}()
 	client.Init()
 
 	// Initialize i18n
