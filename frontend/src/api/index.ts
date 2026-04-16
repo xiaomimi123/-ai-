@@ -24,9 +24,15 @@ export const authApi = {
 
 export const tokenApi = {
   list: () => http.get('/api/token/'),
-  create: (data: { name: string; quota?: number; expired_time?: number }) =>
-    http.post('/api/token/', data),
-  delete: (id: number) => http.delete(`/api/token/${id}/`),
+  // 注意：后端字段名是 remain_quota / unlimited_quota / expired_time（不是 quota）
+  // unlimited_quota=true 时 remain_quota 值不影响鉴权；默认建议无限额度
+  create: (data: {
+    name: string
+    remain_quota?: number
+    unlimited_quota?: boolean
+    expired_time?: number
+  }) => http.post('/api/token/', data),
+  delete: (id: number) => http.delete(`/api/token/${id}`),
 }
 
 export const logApi = {

@@ -15,7 +15,9 @@ export default function TokensPage() {
 
   const handleCreate = async () => {
     if (!newName.trim()) return
-    await tokenApi.create({ name: newName, quota: -1 })
+    // 默认创建无限额度令牌：unlimited_quota=true 让后端 ValidateUserToken 跳过
+    // 余额检查；否则后端默认 RemainQuota=0 会让令牌一用就被置为「已耗尽」
+    await tokenApi.create({ name: newName, unlimited_quota: true, remain_quota: -1 })
     setNewName(''); setShowCreate(false); load()
   }
 
