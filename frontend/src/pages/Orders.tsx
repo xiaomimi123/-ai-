@@ -12,8 +12,9 @@ interface Order {
   payment_method: string
   trade_no: string
   remark: string
-  created_at: string
-  paid_at: string
+  // 后端 Order.CreatedAt/PaidAt 是 int64 Unix 秒（不是 ISO 字符串）
+  created_at: number
+  paid_at: number
 }
 
 const statusMap: Record<number, { label: string; cls: string }> = {
@@ -69,7 +70,7 @@ export default function OrdersPage() {
                     <td>{methodMap[o.payment_method] || o.payment_method || '-'}</td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     <td style={{ color: 'var(--muted)', fontSize: 13 }}>
-                      {o.created_at ? new Date(o.created_at).toLocaleString('zh-CN') : '-'}
+                      {o.created_at ? new Date(o.created_at * 1000).toLocaleString('zh-CN') : '-'}
                     </td>
                   </tr>
                 )
