@@ -143,7 +143,8 @@ func AlipayNotify(c *gin.Context) {
 
 	// ⚠️ 安全关键：验证支付宝 RSA2 签名，防止伪造回调刷余额
 	// out_trade_no 规则可枚举，没有验签任何公网主机都能 POST 假 notify 把用户余额刷满
-	alipayPublicKey := model.GetOptionValue("AlipayPublicKey")
+	// NormalizePublicKeyPEM：支付宝后台拷的公钥是裸 base64，必须包成 PEM 格式
+	alipayPublicKey := payment.NormalizePublicKeyPEM(model.GetOptionValue("AlipayPublicKey"))
 	if alipayPublicKey == "" {
 		logger.SysError("alipay notify: AlipayPublicKey not configured, rejecting for safety")
 		c.String(http.StatusOK, "fail")
@@ -157,7 +158,14 @@ func AlipayNotify(c *gin.Context) {
 
 	signOK, signErr := alipay.VerifySign(alipayPublicKey, notifyReq)
 	if signErr != nil || !signOK {
-		logger.SysError(fmt.Sprintf("alipay notify: signature verify failed, order=%s err=%v", outTradeNo, signErr))
+		// 验签失败时把回调原文 + trade_no 暂存到对应订单 Remark 里，方便管理员手动补单核对
+		logger.SysError(fmt.Sprintf("alipay notify: signature verify failed, order=%s trade_no=%s amount=%s err=%v",
+			outTradeNo, tradeNo, totalAmount, signErr))
+		if outTradeNo != "" {
+			model.DB.Model(&model.Order{}).Where("order_no = ? AND status = 0", outTradeNo).
+				Update("remark", gorm.Expr("CONCAT(IFNULL(remark, ''), ?)",
+					fmt.Sprintf(" | [验签失败 %s] trade_no=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalAmount)))
+		}
 		c.String(http.StatusOK, "fail")
 		return
 	}

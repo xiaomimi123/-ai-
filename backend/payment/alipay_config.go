@@ -40,7 +40,7 @@ func GetAlipayClient() (*alipay.Client, error) {
 	}
 
 	appID := model.GetOptionValue("AlipayAppID")
-	privateKey := model.GetOptionValue("AlipayPrivateKey")
+	privateKey := NormalizePrivateKeyPEM(model.GetOptionValue("AlipayPrivateKey"))
 
 	if appID == "" || privateKey == "" {
 		return nil, fmt.Errorf("支付宝配置不完整")
@@ -51,8 +51,8 @@ func GetAlipayClient() (*alipay.Client, error) {
 		return nil, fmt.Errorf("初始化失败: %v", err)
 	}
 
-	// 设置公钥用于验签
-	if pubKey := model.GetOptionValue("AlipayPublicKey"); pubKey != "" {
+	// 设置公钥用于验签（规范化裸 base64 → PEM，否则 pem.Decode 失败导致验签全挂）
+	if pubKey := NormalizePublicKeyPEM(model.GetOptionValue("AlipayPublicKey")); pubKey != "" {
 		client.AutoVerifySign([]byte(pubKey))
 	}
 
