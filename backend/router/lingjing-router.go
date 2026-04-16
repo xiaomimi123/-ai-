@@ -71,6 +71,7 @@ func SetLingjingRouter(router *gin.Engine) {
 
 		admin.GET("/models", controller.AdminGetAllModels)
 		admin.PUT("/models", controller.AdminUpdateModel)
+		admin.DELETE("/models", controller.AdminDeleteModel) // ?model_name=xxx
 
 		admin.GET("/referral/stats", controller.AdminGetReferralStats)
 		admin.PUT("/referral/config", controller.AdminUpdateReferralConfig)

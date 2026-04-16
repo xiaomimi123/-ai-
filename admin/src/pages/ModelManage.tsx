@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Save, Eye, EyeOff, Radio, Sliders } from 'lucide-react'
+import { Search, Save, Eye, EyeOff, Radio, Sliders, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 
@@ -45,6 +45,19 @@ export default function ModelManagePage() {
         load()
       } else toast.error(r.data.message)
     } catch { toast.error('保存失败') } finally { setSaving(false) }
+  }
+
+  const handleRemove = async (m: ModelInfo) => {
+    if (!confirm(`确认从列表移除「${m.model_name}」？\n将清除其定价配置和残留的 ability 记录。\n此操作仅对渠道数=0 的「僵尸模型」有效，不影响正在使用的渠道。`)) return
+    try {
+      const r = await http.delete(`/api/admin/lingjing/models?model_name=${encodeURIComponent(m.model_name)}`)
+      if (r.data.success) {
+        toast.success(r.data.message || '已移除')
+        load()
+      } else {
+        toast.error(r.data.message || '移除失败')
+      }
+    } catch { toast.error('移除失败') }
   }
 
   const filtered = search
@@ -97,6 +110,9 @@ export default function ModelManagePage() {
       {/* Info */}
       <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#0369a1' }}>
         <strong>流程：</strong>添加渠道（填写模型）→ 模型自动出现在此列表 → 点击模型配置倍率和定价 → 设置前台可见
+        <div style={{ marginTop: 6, color: '#0c4a6e' }}>
+          <strong>说明：</strong>「渠道数」=0 的行（底色偏黄）是渠道被删后残留的定价记录；点右侧 <Trash2 size={11} style={{ display: 'inline', verticalAlign: 'middle' }}/> 按钮可清除。
+        </div>
       </div>
 
       {/* Table */}
@@ -147,9 +163,21 @@ export default function ModelManagePage() {
                   )}
                 </td>
                 <td>
-                  <button className="btn btn-primary btn-sm" onClick={() => setEditModel({ ...m })}>
-                    配置
-                  </button>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-primary btn-sm" onClick={() => setEditModel({ ...m })}>
+                      配置
+                    </button>
+                    {m.channel_count === 0 && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => handleRemove(m)}
+                        title="无渠道的僵尸条目，点击清除残留配置"
+                        style={{ color: 'var(--danger)', borderColor: 'var(--danger)', padding: '4px 10px' }}
+                      >
+                        <Trash2 size={12}/>
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

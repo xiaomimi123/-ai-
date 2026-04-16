@@ -1,9 +1,11 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
 	billingratio "github.com/songquanpeng/one-api/relay/billing/ratio"
 )
@@ -149,4 +151,44 @@ func AdminUpdateModel(c *gin.Context) {
 	model.UpsertModelPrice(price)
 
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "模型配置已更新"})
+}
+
+// AdminDeleteModel 从「模型管理」列表移除一个模型
+//
+// 背景：AdminGetAllModels 是 abilities 和 model_prices 两表的 UNION。
+// 删除渠道时 One API 会自动清 abilities，但 model_prices 是灵镜扩展表不会联动，
+// 导致列表里残留 channel_count=0 的「僵尸模型」。此 handler 清理这类残留。
+//
+// 行为：
+//   1. 删 model_prices 定价记录（前台模型广场也会同步消失）
+//   2. 兜底删 abilities 里指向已不存在 channel 的残留行
+//   3. 不动 ModelRatio/CompletionRatio（倍率 map 全局共用，可能被别的同名模型引用）
+func AdminDeleteModel(c *gin.Context) {
+	modelName := c.Query("model_name")
+	if modelName == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "model_name 必填"})
+		return
+	}
+
+	// 1. 删 model_prices
+	priceRes := model.DB.Where("model_name = ?", modelName).Delete(&model.ModelPrice{})
+	if priceRes.Error != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": priceRes.Error.Error()})
+		return
+	}
+
+	// 2. 兜底清理 abilities 残留：该 model 名下但 channel_id 已不存在于 channels 表
+	abilityRes := model.DB.Exec(
+		"DELETE FROM abilities WHERE model = ? AND channel_id NOT IN (SELECT id FROM channels)",
+		modelName,
+	)
+
+	logger.SysLog(fmt.Sprintf("admin removed model: name=%s deleted_prices=%d deleted_abilities=%d",
+		modelName, priceRes.RowsAffected, abilityRes.RowsAffected))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("已移除模型 %s（清除 %d 条定价 + %d 条残留 ability）",
+			modelName, priceRes.RowsAffected, abilityRes.RowsAffected),
+	})
 }
