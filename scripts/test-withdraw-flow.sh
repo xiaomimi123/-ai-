@@ -105,10 +105,11 @@ else
 fi
 
 # ===== 3. 给测试用户造一笔已结算佣金 =====
-step "3. 造测试数据（1 笔 ¥25 已结算佣金）"
+# 数额要够大，给后续 5b 幂等测试留 headroom（available 必须 > 5b 申请额）
+step "3. 造测试数据（1 笔 ¥100 已结算佣金）"
 $MYSQL_CMD -e "
 INSERT INTO commissions (user_id, from_user_id, order_id, amount, status, created_at)
-VALUES ($TEST_UID, 0, 0, 25.00, 1, NOW());
+VALUES ($TEST_UID, 0, 0, 100.00, 1, NOW());
 " 2>/dev/null
 pass "插入成功"
 
@@ -121,6 +122,11 @@ if [ "$PENDING_BEFORE" != "0" ]; then
   warn "用户 $TEST_UID 有 $PENDING_BEFORE 笔待审核申请，清理掉以便测试"
   $MYSQL_CMD -e "DELETE FROM withdraw_requests WHERE user_id=$TEST_UID AND status=0;" 2>/dev/null
 fi
+
+# 提示：本脚本会往用户的 commissions 里持续累加测试数据（多次跑后余额会虚高）。
+# 要完全重置，跑脚本前先手动执行：
+#   DELETE FROM withdraw_requests WHERE user_id=$TEST_UID;
+#   DELETE FROM commissions WHERE user_id=$TEST_UID;
 
 # ===== 4. 查询可提现余额（用户 API）=====
 if [ "${TEST_USER_API:-1}" = "1" ]; then
@@ -238,8 +244,10 @@ if [ "$ADMIN_OK" = "1" ]; then
   fi
 
   # ===== 11. 拒绝场景：再造一笔，拒绝它 =====
+  # INSERT 必须带 --default-character-set=utf8mb4，不然 docker exec 的 shell 路径
+  # 会走 latin1 通道，中文被重新编码成 mojibake
   step "11. 拒绝流程：再造一笔 → reject"
-  $MYSQL_CMD -e "
+  $MYSQL_CMD --default-character-set=utf8mb4 -e "
 INSERT INTO withdraw_requests (user_id, amount, alipay_account, real_name, status, created_at)
 VALUES ($TEST_UID, 10.00, 'reject@test.com', '被拒用户', 0, UNIX_TIMESTAMP());
 " 2>/dev/null
