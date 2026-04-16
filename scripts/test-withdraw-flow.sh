@@ -148,13 +148,17 @@ if [ "${TEST_USER_API:-1}" = "1" ]; then
     exit 1
   fi
 
-  # ===== 5b. 重复申请应被拒（有待审核）=====
-  step "5b. 重复申请应被拦"
+  # ===== 5b. 重复申请应被拒（幂等保护：有待审核时不能再提）=====
+  # 注意 amount 必须 >= 最低值，否则会先被金额校验拦下，测不到幂等分支
+  step "5b. 重复申请应被拦（幂等保护）"
   R=$(curl -sS -b "$COOKIE_USER" -H 'Content-Type: application/json' \
-    -d '{"amount":5,"alipay_account":"x@y.com","real_name":"x"}' \
+    -d '{"amount":12,"alipay_account":"x@y.com","real_name":"x"}' \
     "$API/api/lingjing/withdraw")
-  if echo "$R" | grep -q '"success":false'; then
-    pass "幂等保护生效：$(echo $R | sed -E 's/.*"message":"([^"]*)".*/\1/')"
+  MSG=$(echo "$R" | sed -E 's/.*"message":"([^"]*)".*/\1/')
+  if echo "$R" | grep -q '"success":false' && echo "$MSG" | grep -q "待审核"; then
+    pass "幂等保护生效：$MSG"
+  elif echo "$R" | grep -q '"success":false'; then
+    fail "被拒了但不是幂等原因: $MSG（应该是「您有待审核的提现申请...」）"
   else
     fail "预期被拦但通过了: $R"
   fi
@@ -265,9 +269,29 @@ VALUES ($TEST_UID, 10.00, 'reject@test.com', '被拒用户', 0, UNIX_TIMESTAMP()
   pass "DB 最终: id=$REJECT_ID status/reason = $STATUS"
 fi
 
+# ===== 11b. 字符集检查：API 写入的中文是否没丢 =====
+if [ "${TEST_USER_API:-1}" = "1" ] && [ -n "${WITHDRAW_ID:-}" ]; then
+  step "11b. 中文字符集检查"
+  # 确保客户端用 utf8mb4 读取，避免客户端侧的 ???
+  REAL_NAME=$($MYSQL_CMD --default-character-set=utf8mb4 -sN -e \
+    "SELECT real_name FROM withdraw_requests WHERE id=$WITHDRAW_ID;" 2>/dev/null)
+  echo "  id=$WITHDRAW_ID real_name: [$REAL_NAME]"
+  # 期望是「测试用户」，如果是「????」说明 API → DB 通路中文丢了
+  if [ "$REAL_NAME" = "测试用户" ]; then
+    pass "API 写入中文完好"
+  elif echo "$REAL_NAME" | grep -q "?"; then
+    fail "API 写入中文变 ？？？ —— SQL_DSN 可能缺 charset=utf8mb4 参数"
+    echo "  诊断命令："
+    echo "    grep SQL_DSN /root/lingjing-ai/one-api/.env"
+    echo "    $MYSQL_CMD -e \"SHOW CREATE TABLE withdraw_requests\\\\G\" | grep -E 'CHARSET|COLLATE'"
+  else
+    warn "读到非预期值：[$REAL_NAME]"
+  fi
+fi
+
 # ===== 12. 最终 DB 状态 =====
 step "12. 最终快照（user_id=$TEST_UID 最近 5 条）"
-$MYSQL_CMD -e "
+$MYSQL_CMD --default-character-set=utf8mb4 -e "
 SELECT id, amount, LEFT(alipay_account, 20) AS alipay, real_name, status,
        FROM_UNIXTIME(created_at) AS created, FROM_UNIXTIME(processed_at) AS processed
 FROM withdraw_requests WHERE user_id=$TEST_UID
