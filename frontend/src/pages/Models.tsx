@@ -43,7 +43,7 @@ export default function ModelsPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Sparkles size={24} color="var(--primary)" />模型广场
+          <Sparkles size={22} color="var(--accent)" />模型广场
         </h1>
         <p className="page-desc">浏览所有可用模型及定价（价格单位：$/百万 Token）</p>
       </div>
@@ -55,7 +55,7 @@ export default function ModelsPage() {
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {providers.map(p => (
-            <button key={p} onClick={() => setProvider(p)} className={`btn btn-sm ${provider === p ? 'btn-primary' : 'btn-outline'}`}>
+            <button key={p} onClick={() => setProvider(p)} className={`btn btn-sm ${provider === p ? 'btn-accent' : 'btn-outline'}`}>
               {p}
             </button>
           ))}
@@ -73,27 +73,34 @@ export default function ModelsPage() {
       ) : (
         categories.map(cat => (
           <div key={cat}>
-            <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16, marginTop: 8, textTransform: 'capitalize', color: 'var(--text-secondary)' }}>
+            <h3 style={{ fontSize: 14, fontWeight: 500, marginBottom: 14, marginTop: 8, textTransform: 'uppercase', letterSpacing: '.05em', color: 'var(--muted)' }}>
               {cat === 'chat' ? '对话模型' : cat === 'embedding' ? '向量模型' : cat === 'image' ? '图像模型' : cat}
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16, marginBottom: 32 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14, marginBottom: 32 }}>
               {filtered.filter(m => (m.category || 'chat') === cat).map(m => (
-                <div key={m.id} className="card" onClick={() => navigate(`/model/${encodeURIComponent(m.model_name)}`)} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'pointer', transition: 'box-shadow .2s' }}>
+                <div
+                  key={m.id}
+                  className="card"
+                  onClick={() => navigate(`/model/${encodeURIComponent(m.model_name)}`)}
+                  style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12, cursor: 'pointer', transition: 'border-color .15s, box-shadow .15s' }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)' }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}
+                >
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                     <ModelIcon modelName={m.model_name} size={36} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4, wordBreak: 'break-all' }}>{m.model_name}</div>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4, wordBreak: 'break-all' }}>{m.model_name}</div>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <span className="badge badge-blue">{m.provider}</span>
                         <span className="badge badge-gray">{m.category || 'chat'}</span>
                       </div>
                     </div>
                   </div>
-                  {m.description && <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>{m.description}</p>}
-                  <div style={{ display: 'flex', gap: 20, marginTop: 'auto', paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                  {m.description && <p style={{ color: 'var(--muted)', fontSize: 13, lineHeight: 1.5 }}>{m.description}</p>}
+                  <div style={{ display: 'flex', gap: 20, marginTop: 'auto', paddingTop: 10, borderTop: '0.5px solid var(--border)' }}>
                     <div>
                       <div style={{ fontSize: 11, color: 'var(--muted)' }}>输入</div>
-                      <div style={{ fontWeight: 600, color: 'var(--success)', fontSize: 14 }}>${m.input_price}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: 14 }}>${m.input_price}</div>
                     </div>
                     {m.output_price > 0 && (
                       <div>

@@ -5,7 +5,6 @@ import { UserPlus } from 'lucide-react'
 
 export default function RegisterPage() {
   const [searchParams] = useSearchParams()
-  // 从 URL ?ref=xxx 静默读取邀请码，用户无感知
   const refCode = searchParams.get('ref') || searchParams.get('aff') || ''
   const [form, setForm] = useState({ username: '', password: '', email: '' })
   const [loading, setLoading] = useState(false)
@@ -16,7 +15,6 @@ export default function RegisterPage() {
     e.preventDefault()
     setLoading(true); setError('')
     try {
-      // 静默携带邀请码
       const res = await authApi.register({ ...form, aff_code: refCode })
       if (res.data.success) navigate('/login')
       else setError(res.data.message || '注册失败')
@@ -24,29 +22,72 @@ export default function RegisterPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #eff6ff 0%, #faf5ff 50%, #f0fdf4 100%)' }}>
-      <div style={{ width: '100%', maxWidth: 400, padding: '0 20px' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'var(--bg)',
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        position: 'absolute',
+        top: -160, right: -160,
+        width: 360, height: 360,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, var(--accent-light) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      <div style={{
+        position: 'absolute',
+        bottom: -140, left: -140,
+        width: 320, height: 320,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle, var(--accent-light) 0%, transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+
+      <div style={{ width: '100%', maxWidth: 400, padding: '0 20px', position: 'relative', zIndex: 1 }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 16 }}>AI</div>
-            <span style={{ fontWeight: 700, fontSize: 20 }}>灵镜AI</span>
+            <div className="brand-logo" style={{ width: 36, height: 36, fontSize: 16, borderRadius: 9 }}>境</div>
+            <span style={{ fontWeight: 600, fontSize: 20 }}>灵镜 AI</span>
           </Link>
-          <h1 style={{ fontSize: 24, fontWeight: 700 }}>创建账号</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 600 }}>创建账号</h1>
           {refCode && (
-            <p style={{ color: 'var(--success)', fontSize: 13, marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-              <UserPlus size={14} />好友邀请您加入灵镜AI
+            <p style={{
+              color: 'var(--primary)',
+              fontSize: 13,
+              marginTop: 10,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'var(--accent-light)',
+              padding: '4px 10px',
+              borderRadius: 20,
+            }}>
+              <UserPlus size={13} color="var(--accent)" />好友邀请您加入灵镜 AI
             </p>
           )}
         </div>
-        <div className="card" style={{ padding: 32 }}>
+        <div className="card" style={{ padding: 28 }}>
           <form onSubmit={handleSubmit}>
             <div className="form-group"><label className="form-label">用户名</label><input placeholder="用户名" value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} required /></div>
             <div className="form-group"><label className="form-label">邮箱</label><input type="email" placeholder="your@email.com" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} required /></div>
-            <div className="form-group"><label className="form-label">密码</label><input type="password" placeholder="至少8位" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required /></div>
-            {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{error}</div>}
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: 12 }} disabled={loading}>{loading ? '注册中...' : '免费注册'}</button>
+            <div className="form-group"><label className="form-label">密码</label><input type="password" placeholder="至少 8 位" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} required /></div>
+            {error && (
+              <div style={{ background: 'var(--danger-bg)', color: 'var(--danger)', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>
+                {error}
+              </div>
+            )}
+            <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '12px', fontSize: 15 }} disabled={loading}>
+              {loading ? '注册中...' : '免费注册'}
+            </button>
           </form>
-          <p style={{ textAlign: 'center', marginTop: 20, color: 'var(--text-secondary)', fontSize: 14 }}>已有账号？<Link to="/login" style={{ color: 'var(--primary)', fontWeight: 500 }}> 登录</Link></p>
+          <p style={{ textAlign: 'center', marginTop: 20, color: 'var(--muted)', fontSize: 14 }}>
+            已有账号？<Link to="/login" style={{ color: 'var(--accent)', fontWeight: 500 }}> 登录</Link>
+          </p>
         </div>
       </div>
     </div>

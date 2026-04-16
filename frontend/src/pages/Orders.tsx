@@ -48,7 +48,7 @@ export default function OrdersPage() {
     <div>
       <div className="page-header">
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Receipt size={22} color="var(--primary)" />充值记录
+          <Receipt size={22} color="var(--accent)" />充值记录
         </h1>
         <p className="page-desc">您的充值订单历史</p>
       </div>
@@ -63,12 +63,12 @@ export default function OrdersPage() {
                 const st = statusMap[o.status] || { label: `状态${o.status}`, cls: 'badge-gray' }
                 return (
                   <tr key={o.id}>
-                    <td><code style={{ fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
-                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>¥{o.amount?.toFixed(2)}</td>
-                    <td style={{ fontFamily: 'monospace' }}>{o.quota ? (o.quota / 500000).toFixed(2) : '-'} 元</td>
+                    <td><code style={{ fontSize: 12, background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--text)' }}>{o.order_no}</code></td>
+                    <td style={{ fontWeight: 600, color: 'var(--accent)' }}>¥{o.amount?.toFixed(2)}</td>
+                    <td style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{o.quota ? (o.quota / 500000).toFixed(2) : '-'} 元</td>
                     <td>{methodMap[o.payment_method] || o.payment_method || '-'}</td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                    <td style={{ color: 'var(--muted)', fontSize: 13 }}>
                       {o.created_at ? new Date(o.created_at).toLocaleString('zh-CN') : '-'}
                     </td>
                   </tr>
@@ -80,7 +80,7 @@ export default function OrdersPage() {
 
       {total > pageSize && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>第 {page} / {totalPages} 页</span>
+          <span style={{ color: 'var(--muted)', fontSize: 13 }}>第 {page} / {totalPages} 页</span>
           <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}><ChevronLeft size={14}/></button>
           <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}><ChevronRight size={14}/></button>
         </div>

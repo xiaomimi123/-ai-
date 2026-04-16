@@ -13,11 +13,11 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
   }
   return (
     <div style={{ position: 'relative', marginBottom: 16 }}>
-      <div style={{ background: '#0f172a', borderRadius: 10, padding: '16px 20px', fontFamily: 'monospace', fontSize: 13, color: '#e2e8f0', lineHeight: 1.7, overflowX: 'auto' }}>
-        <div style={{ color: '#64748b', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{language}</div>
+      <div style={{ background: 'var(--primary)', borderRadius: 10, padding: '16px 20px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: 'var(--accent)', lineHeight: 1.7, overflowX: 'auto' }}>
+        <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{language}</div>
         <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{code}</pre>
       </div>
-      <button onClick={copy} style={{ position: 'absolute', top: 12, right: 12, background: copied ? '#10b981' : 'rgba(255,255,255,.1)', border: 'none', borderRadius: 6, padding: '4px 10px', color: 'white', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, transition: 'all .2s' }}>
+      <button onClick={copy} style={{ position: 'absolute', top: 12, right: 12, background: copied ? 'var(--accent)' : 'rgba(234,247,239,.15)', border: 'none', borderRadius: 6, padding: '4px 10px', color: copied ? 'var(--primary)' : 'var(--accent)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, transition: 'all .2s' }}>
         {copied ? <><Check size={12} /> 已复制</> : <><Copy size={12} /> 复制</>}
       </button>
     </div>
@@ -27,15 +27,15 @@ function CodeBlock({ code, language = 'bash' }: { code: string; language?: strin
 function Section({ title, icon: Icon, children, defaultOpen = false }: any) {
   const [open, setOpen] = useState(defaultOpen)
   return (
-    <div style={{ marginBottom: 16, border: '1.5px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
-      <button onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', background: open ? 'var(--primary-light)' : 'var(--surface)', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+    <div style={{ marginBottom: 14, border: '0.5px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
+      <button onClick={() => setOpen(!open)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: open ? 'var(--accent-light)' : 'var(--surface)', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, color: open ? 'var(--primary)' : 'var(--text)' }}>
-          <Icon size={18} color={open ? 'var(--primary)' : 'var(--muted)'} />
+          <Icon size={18} color={open ? 'var(--accent)' : 'var(--muted)'} />
           {title}
         </div>
         {open ? <ChevronDown size={16} color="var(--muted)" /> : <ChevronRight size={16} color="var(--muted)" />}
       </button>
-      {open && <div style={{ padding: '20px', borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>{children}</div>}
+      {open && <div style={{ padding: '20px', borderTop: '0.5px solid var(--border)', background: 'var(--surface)' }}>{children}</div>}
     </div>
   )
 }
@@ -43,7 +43,7 @@ function Section({ title, icon: Icon, children, defaultOpen = false }: any) {
 function Step({ num, title, children }: any) {
   return (
     <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-      <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>{num}</div>
+      <div style={{ flexShrink: 0, width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14 }}>{num}</div>
       <div style={{ flex: 1 }}>
         <div style={{ fontWeight: 600, marginBottom: 8 }}>{title}</div>
         {children}
@@ -54,7 +54,7 @@ function Step({ num, title, children }: any) {
 
 function Tip({ children }: any) {
   return (
-    <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#1e40af', marginBottom: 12 }}>
+    <div style={{ background: 'var(--accent-light)', borderLeft: '3px solid var(--accent)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: 'var(--primary)', marginBottom: 12 }}>
       💡 {children}
     </div>
   )
@@ -62,7 +62,7 @@ function Tip({ children }: any) {
 
 function Warn({ children }: any) {
   return (
-    <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', marginBottom: 12 }}>
+    <div style={{ background: '#fffbeb', borderLeft: '3px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#92400e', marginBottom: 12 }}>
       ⚠️ {children}
     </div>
   )
@@ -147,15 +147,15 @@ for chunk in stream:
   return (
     <div style={{ maxWidth: 860 }}>
       {/* 头部 */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <BookOpen size={18} color="white" />
+          <div className="brand-logo" style={{ width: 32, height: 32, fontSize: 14, borderRadius: 8 }}>
+            <BookOpen size={16} color="var(--accent)" />
           </div>
-          <h2 style={{ fontSize: 22, fontWeight: 700 }}>接入文档</h2>
+          <h2 className="page-title">接入文档</h2>
         </div>
-        <p style={{ color: 'var(--muted)', lineHeight: 1.8 }}>
-          灵镜AI 完全兼容 OpenAI 接口格式，只需将 <code style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: 4 }}>base_url</code> 替换为我们的地址，即可无缝切换所有支持的 AI 模型。
+        <p className="page-desc">
+          灵镜 AI 完全兼容 OpenAI 接口格式，只需将 <code style={{ background: 'var(--bg)', padding: '2px 6px', borderRadius: 4, color: 'var(--accent)' }}>base_url</code> 替换为我们的地址，即可无缝切换所有支持的 AI 模型。
         </p>
       </div>
 
@@ -167,17 +167,17 @@ for chunk in stream:
           { label: '认证方式', value: 'Bearer Token', mono: false },
           { label: '当前可用模型', value: 'DeepSeek 系列', mono: false },
         ].map(item => (
-          <div key={item.label} className="card" style={{ padding: 16 }}>
+          <div key={item.label} className="card" style={{ padding: 14, borderLeft: '3px solid var(--accent)' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{item.label}</div>
-            <div style={{ fontWeight: 600, fontSize: 13, fontFamily: item.mono ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>{item.value}</div>
+            <div style={{ fontWeight: 600, fontSize: 13, fontFamily: item.mono ? 'ui-monospace, SFMono-Regular, monospace' : 'inherit', wordBreak: 'break-all', color: item.mono ? 'var(--accent)' : 'var(--text)' }}>{item.value}</div>
           </div>
         ))}
       </div>
 
       {/* 快速开始 */}
-      <div className="card" style={{ marginBottom: 20, borderLeft: '4px solid var(--primary)' }}>
-        <h3 style={{ fontWeight: 700, marginBottom: 20, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Zap size={18} color="var(--primary)" /> 快速开始（3步接入）
+      <div className="card" style={{ marginBottom: 20, borderLeft: '3px solid var(--accent)' }}>
+        <h3 style={{ fontWeight: 600, marginBottom: 20, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Zap size={18} color="var(--accent)" /> 快速开始（3 步接入）
         </h3>
 
         <Step num={1} title="注册账号并获取 API 令牌">
@@ -203,7 +203,7 @@ for chunk in stream:
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`btn btn-sm ${activeTab === tab.key ? 'btn-primary' : 'btn-outline'}`}
+                className={`btn btn-sm ${activeTab === tab.key ? 'btn-accent' : 'btn-outline'}`}
               >
                 {tab.label}
               </button>
@@ -229,7 +229,7 @@ for chunk in stream:
             <tbody>
               {models.map(m => (
                 <tr key={m.name}>
-                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ModelIcon modelName={m.name} size={22} /><code style={{ fontSize: 12, background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{m.name}</code></div></td>
+                  <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><ModelIcon modelName={m.name} size={22} /><code style={{ fontSize: 12, background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--text)' }}>{m.name}</code></div></td>
                   <td style={{ color: 'var(--muted)', fontSize: 13 }}>{m.provider}</td>
                   <td style={{ fontSize: 13 }}>{m.desc}</td>
                   <td>
@@ -254,7 +254,7 @@ for chunk in stream:
             <Monitor size={16} /> ChatBox（桌面客户端，推荐新手）
           </h4>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>ChatBox 是一款支持多平台的 AI 桌面客户端，界面美观，适合日常对话使用。</p>
-          <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 16, fontSize: 13, border: '0.5px solid var(--border)' }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>配置步骤：</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -280,7 +280,7 @@ for chunk in stream:
             <Monitor size={16} /> Cherry Studio
           </h4>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>Cherry Studio 支持多模型管理，适合需要频繁切换模型的用户。</p>
-          <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 16, fontSize: 13, border: '0.5px solid var(--border)' }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>配置步骤：</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -307,7 +307,7 @@ for chunk in stream:
             <Code size={16} /> Cursor 编辑器（开发者专用）
           </h4>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>Cursor 是 AI 驱动的代码编辑器，接入灵镜AI后可使用 DeepSeek 等模型辅助编程。</p>
-          <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 16, fontSize: 13, border: '0.5px solid var(--border)' }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>配置步骤：</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -332,7 +332,7 @@ for chunk in stream:
             <Globe size={16} /> 沉浸式翻译（浏览器插件）
           </h4>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>沉浸式翻译是一款网页双语翻译插件，接入灵镜AI后翻译质量更高。</p>
-          <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 16, fontSize: 13, border: '0.5px solid var(--border)' }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>配置步骤：</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
@@ -358,7 +358,7 @@ for chunk in stream:
             <Smartphone size={16} /> OpenCat（手机端）
           </h4>
           <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 12 }}>OpenCat 是 iOS/macOS 上的 AI 客户端，支持自定义 API 接入。</p>
-          <div style={{ background: '#f8fafc', borderRadius: 8, padding: 16, fontSize: 13 }}>
+          <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 16, fontSize: 13, border: '0.5px solid var(--border)' }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>配置步骤：</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[

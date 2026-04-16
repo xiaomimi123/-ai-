@@ -43,7 +43,7 @@ export default function SettingsPage() {
       {/* Profile Info */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <User size={18} color="var(--primary)" />
+          <User size={18} color="var(--accent)" />
           <h3 style={{ fontWeight: 600 }}>账号信息</h3>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -69,7 +69,7 @@ export default function SettingsPage() {
       {/* Change Password */}
       <div className="card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <Lock size={18} color="var(--warning)" />
+          <Lock size={18} color="var(--accent)" />
           <h3 style={{ fontWeight: 600 }}>修改密码</h3>
         </div>
         <div className="form-group">
@@ -84,7 +84,7 @@ export default function SettingsPage() {
           <label className="form-label">确认新密码</label>
           <input type="password" placeholder="再次输入新密码" value={passwordForm.confirm} onChange={e => setPasswordForm(p => ({ ...p, confirm: e.target.value }))} />
         </div>
-        {msg && <div style={{ background: msg.ok ? '#dcfce7' : '#fee2e2', color: msg.ok ? '#166534' : '#991b1b', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{msg.text}</div>}
+        {msg && <div style={{ background: msg.ok ? 'var(--accent-light)' : 'var(--danger-bg)', color: msg.ok ? 'var(--primary)' : 'var(--danger)', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{msg.text}</div>}
         <button className="btn btn-primary" onClick={handlePassword} disabled={loading}>
           <Save size={16} />{loading ? '保存中...' : '保存修改'}
         </button>

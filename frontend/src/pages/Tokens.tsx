@@ -34,7 +34,7 @@ export default function TokensPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
           <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Key size={22} color="var(--primary)" />API 令牌
+            <Key size={22} color="var(--accent)" />API 令牌
           </h1>
           <p className="page-desc">管理您的 API 密钥</p>
         </div>
@@ -65,7 +65,7 @@ export default function TokensPage() {
                   <td><strong>{t.name}</strong></td>
                   <td>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <code style={{ background: '#f3f4f6', padding: '3px 8px', borderRadius: 6, fontSize: 12, fontFamily: 'monospace' }}>{t.key.slice(0, 8)}...{t.key.slice(-6)}</code>
+                      <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 6, fontSize: 12, fontFamily: 'ui-monospace, SFMono-Regular, monospace', color: 'var(--text)' }}>{t.key.slice(0, 8)}...{t.key.slice(-6)}</code>
                       <button className="btn btn-ghost btn-sm" onClick={() => copyKey(t.key, t.id)} style={{ padding: '4px 8px', color: copied === t.id ? 'var(--success)' : 'var(--muted)' }}>
                         {copied === t.id ? '✓' : <Copy size={13}/>}
                       </button>

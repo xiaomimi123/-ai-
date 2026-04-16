@@ -10,11 +10,11 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const copy = () => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   return (
     <div style={{ position: 'relative', marginBottom: 4 }}>
-      <div style={{ background: '#0f172a', borderRadius: 10, padding: '16px 20px', fontFamily: 'monospace', fontSize: 13, color: '#e2e8f0', lineHeight: 1.7, overflowX: 'auto' }}>
-        <div style={{ color: '#64748b', fontSize: 11, marginBottom: 8, textTransform: 'uppercase' }}>{lang}</div>
+      <div style={{ background: 'var(--primary)', borderRadius: 10, padding: '16px 20px', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 13, color: 'var(--accent)', lineHeight: 1.7, overflowX: 'auto' }}>
+        <div style={{ color: 'var(--muted)', fontSize: 11, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>{lang}</div>
         <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{code}</pre>
       </div>
-      <button onClick={copy} style={{ position: 'absolute', top: 10, right: 10, background: copied ? '#10b981' : 'rgba(255,255,255,.1)', border: 'none', borderRadius: 6, padding: '4px 10px', color: 'white', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, transition: 'all .2s' }}>
+      <button onClick={copy} style={{ position: 'absolute', top: 10, right: 10, background: copied ? 'var(--accent)' : 'rgba(234,247,239,.15)', border: 'none', borderRadius: 6, padding: '4px 10px', color: copied ? 'var(--primary)' : 'var(--accent)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, transition: 'all .2s' }}>
         {copied ? <><Check size={12} />已复制</> : <><Copy size={12} />复制</>}
       </button>
     </div>
@@ -71,32 +71,32 @@ export default function ModelDetailPage() {
         {model.description && <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.8 }}>{model.description}</p>}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>输入价格</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--success)' }}>¥{model.input_price}</div>
+      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+        <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输入价格</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{model.input_price}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
         </div>
-        <div className="card" style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>输出价格</div>
-          <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--primary)' }}>¥{model.output_price}</div>
+        <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--primary)' }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输出价格</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>¥{model.output_price}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
         </div>
       </div>
 
       <div className="card">
-        <h3 style={{ fontWeight: 700, marginBottom: 16 }}>API 调用示例</h3>
+        <h3 style={{ fontWeight: 600, marginBottom: 16 }}>API 调用示例</h3>
         <div style={{ marginBottom: 20, fontSize: 13, color: 'var(--muted)' }}>
-          Base URL：<code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{BASE_URL}</code>
-          &nbsp;&nbsp;模型：<code style={{ background: '#f1f5f9', padding: '2px 8px', borderRadius: 4 }}>{model.model_name}</code>
+          Base URL：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--accent)' }}>{BASE_URL}</code>
+          &nbsp;&nbsp;模型：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>{model.model_name}</code>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {[{ key: 'python', label: 'Python' }, { key: 'nodejs', label: 'Node.js' }, { key: 'curl', label: 'cURL' }, { key: 'stream', label: '流式输出' }].map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`btn btn-sm ${activeTab === tab.key ? 'btn-primary' : 'btn-outline'}`}>{tab.label}</button>
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`btn btn-sm ${activeTab === tab.key ? 'btn-accent' : 'btn-outline'}`}>{tab.label}</button>
           ))}
         </div>
         <CodeBlock code={codes[activeTab]} lang={activeTab === 'curl' ? 'bash' : activeTab === 'stream' ? 'python' : activeTab} />
-        <div style={{ marginTop: 16, padding: '12px 16px', background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#1e40af' }}>
+        <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--accent-light)', borderRadius: 8, fontSize: 13, color: 'var(--primary)', borderLeft: '3px solid var(--accent)' }}>
           💡 将 <code>sk-你的令牌</code> 替换为你的实际令牌。Python: <code>pip install openai</code>，Node.js: <code>npm install openai</code>
         </div>
       </div>

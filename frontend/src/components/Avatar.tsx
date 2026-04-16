@@ -9,14 +9,14 @@ function hashCode(str: string): number {
 }
 
 const palettes = [
-  ['#3b82f6', '#60a5fa', '#93c5fd', '#dbeafe'],
-  ['#8b5cf6', '#a78bfa', '#c4b5fd', '#ede9fe'],
-  ['#10b981', '#34d399', '#6ee7b7', '#d1fae5'],
-  ['#f59e0b', '#fbbf24', '#fcd34d', '#fef3c7'],
-  ['#ef4444', '#f87171', '#fca5a5', '#fee2e2'],
-  ['#ec4899', '#f472b6', '#f9a8d4', '#fce7f3'],
-  ['#06b6d4', '#22d3ee', '#67e8f9', '#cffafe'],
-  ['#6366f1', '#818cf8', '#a5b4fc', '#e0e7ff'],
+  ['#0D1F14', '#2ECC71', '#7FD99F', '#EAF7EF'],
+  ['#14532d', '#22c55e', '#86efac', '#dcfce7'],
+  ['#064e3b', '#10b981', '#6ee7b7', '#d1fae5'],
+  ['#365314', '#84cc16', '#bef264', '#ecfccb'],
+  ['#134e4a', '#14b8a6', '#5eead4', '#ccfbf1'],
+  ['#1a2e05', '#65a30d', '#bef264', '#f7fee7'],
+  ['#052e16', '#16a34a', '#4ade80', '#dcfce7'],
+  ['#0f766e', '#2dd4bf', '#99f6e4', '#ccfbf1'],
 ]
 
 export default function Avatar({ name, size = 32 }: { name: string; size?: number }) {
