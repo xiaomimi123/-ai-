@@ -6,16 +6,26 @@ import axios from 'axios'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 30000 })
 
+// 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
+// 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
 const TYPES: Record<number, { name: string; color: string }> = {
   1:  { name: 'OpenAI',       color: '#10a37f' },
-  14: { name: 'Anthropic',    color: '#d4a27f' },
   3:  { name: 'Azure',        color: '#0078d4' },
-  24: { name: 'Gemini',       color: '#4285f4' },
+  14: { name: 'Anthropic',    color: '#d4a27f' },
   15: { name: 'Baidu',        color: '#2932e1' },
   16: { name: 'Zhipu',        color: '#3366ff' },
   17: { name: 'Ali',          color: '#ff6a00' },
   18: { name: 'Xunfei',       color: '#1a73e8' },
-  33: { name: 'DeepSeek',     color: '#4D6BFE' },
+  24: { name: 'Gemini',       color: '#4285f4' },
+  25: { name: 'Moonshot',     color: '#000000' },
+  28: { name: 'Mistral',      color: '#ff7000' },
+  29: { name: 'Groq',         color: '#f55036' },
+  33: { name: 'AwsClaude',    color: '#ff9900' },
+  36: { name: 'DeepSeek',     color: '#4D6BFE' },
+  40: { name: 'Doubao',       color: '#1e40af' },
+  44: { name: 'SiliconFlow',  color: '#5e72e4' },
+  45: { name: 'xAI',          color: '#000000' },
+  50: { name: 'OpenAICompatible', color: '#6b7280' },
 }
 
 export default function ChannelsPage() {
