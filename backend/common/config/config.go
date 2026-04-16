@@ -95,7 +95,10 @@ var QuotaForInvitee int64 = 0
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false
-var QuotaRemindThreshold int64 = 1000
+// QuotaRemindThreshold 低余额提醒阈值（扣费后余额跌破此值时触发邮件+站内通知）
+// 单位：quota（1 元 = 500000 quota）；默认 5000000 = ¥10
+// 可在 admin「系统设置」里覆盖；老数据库若 options 表已有此 key 则以 DB 值为准
+var QuotaRemindThreshold int64 = 5000000
 var PreConsumedQuota int64 = 500
 var ApproximateTokenEnabled = false
 var RetryTimes = 0

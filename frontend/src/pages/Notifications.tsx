@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Bell, CheckCheck, Megaphone, CreditCard, TrendingDown, CheckCircle, XCircle } from 'lucide-react'
+import { Bell, CheckCheck, Megaphone, CreditCard, TrendingDown, CheckCircle, XCircle, AlertTriangle, AlertCircle } from 'lucide-react'
 import { notificationApi } from '../api'
 
 interface PersonalNotification {
@@ -21,11 +21,13 @@ interface SystemNotice {
 }
 
 const TYPE_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  withdraw_approved: { label: '提现审核通过', icon: CheckCircle, color: '#16a34a', bg: '#dcfce7' },
-  withdraw_rejected: { label: '提现被拒绝',   icon: XCircle,     color: '#dc2626', bg: '#fee2e2' },
-  withdraw_paid:     { label: '提现已打款',   icon: TrendingDown, color: '#0D1F14', bg: 'var(--accent-light)' },
-  topup_success:     { label: '充值成功',     icon: CreditCard,  color: '#16a34a', bg: '#dcfce7' },
-  system:            { label: '系统消息',     icon: Bell,        color: '#7A8A7E', bg: '#f3f4f6' },
+  withdraw_approved: { label: '提现审核通过', icon: CheckCircle,   color: '#16a34a', bg: '#dcfce7' },
+  withdraw_rejected: { label: '提现被拒绝',   icon: XCircle,       color: '#dc2626', bg: '#fee2e2' },
+  withdraw_paid:     { label: '提现已打款',   icon: TrendingDown,  color: '#0D1F14', bg: 'var(--accent-light)' },
+  topup_success:     { label: '充值成功',     icon: CreditCard,    color: '#16a34a', bg: '#dcfce7' },
+  quota_low:         { label: '余额不足',     icon: AlertTriangle, color: '#ca8a04', bg: '#fef9c3' },
+  quota_exhausted:   { label: '余额已用尽',   icon: AlertCircle,   color: '#dc2626', bg: '#fee2e2' },
+  system:            { label: '系统消息',     icon: Bell,          color: '#7A8A7E', bg: '#f3f4f6' },
 }
 
 // 兼容两种时间格式：personal 用 Unix 秒（number），notice 用 ISO 字符串

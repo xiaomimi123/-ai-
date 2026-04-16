@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Activity, TrendingUp, CreditCard, Key, Zap, ArrowRight } from 'lucide-react'
+import { Activity, TrendingUp, CreditCard, Key, Zap, ArrowRight, AlertTriangle, AlertCircle } from 'lucide-react'
 import { authApi } from '../api'
 import axios from 'axios'
 
@@ -26,8 +26,12 @@ export default function DashboardPage() {
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: 'var(--muted)' }}>加载中...</div>
 
-  const balance = ((user?.quota || 0) / 500000).toFixed(2)
+  const balanceNum = (user?.quota || 0) / 500000
+  const balance = balanceNum.toFixed(2)
   const usedBalance = ((user?.used_quota || 0) / 500000).toFixed(2)
+  // 低余额阈值：<=0 红色（已耗尽）/ <10 黄色（不足提醒）
+  const balanceExhausted = user && balanceNum <= 0
+  const balanceLow       = user && balanceNum > 0 && balanceNum < 10
   const pieData = (stats?.model_usage || []).map((m: any) => ({
     name: m.model?.length > 18 ? m.model.substring(0, 18) + '..' : m.model,
     value: m.count,
@@ -47,6 +51,46 @@ export default function DashboardPage() {
         <h1 className="page-title">控制台</h1>
         <p className="page-desc">欢迎回来，{user?.display_name || user?.username}</p>
       </div>
+
+      {/* 低余额提醒 Banner */}
+      {balanceExhausted && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          background: 'var(--danger-bg)', color: 'var(--danger)',
+          borderLeft: '3px solid var(--danger)', borderRadius: 8,
+          padding: '14px 18px', marginBottom: 20,
+        }}>
+          <AlertCircle size={20} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>账户余额已用尽</div>
+            <div style={{ fontSize: 13, opacity: .85 }}>
+              API 调用将被拒绝，请尽快充值恢复服务
+            </div>
+          </div>
+          <Link to="/topup" className="btn btn-primary" style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
+            立即充值 <ArrowRight size={14} />
+          </Link>
+        </div>
+      )}
+      {balanceLow && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          background: '#fef9c3', color: '#854d0e',
+          borderLeft: '3px solid #ca8a04', borderRadius: 8,
+          padding: '14px 18px', marginBottom: 20,
+        }}>
+          <AlertTriangle size={20} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>余额不足 ¥10</div>
+            <div style={{ fontSize: 13, opacity: .85 }}>
+              当前余额 ¥{balance}，建议及时充值避免中断服务
+            </div>
+          </div>
+          <Link to="/topup" className="btn btn-accent" style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
+            充值 <ArrowRight size={14} />
+          </Link>
+        </div>
+      )}
 
       {/* 顶部统计卡片 */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 20 }}>

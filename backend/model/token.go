@@ -235,8 +235,25 @@ func PreConsumeTokenQuota(tokenId int, quota int64) (err error) {
 	quotaTooLow := userQuota >= config.QuotaRemindThreshold && userQuota-quota < config.QuotaRemindThreshold
 	noMoreQuota := userQuota-quota <= 0
 	if quotaTooLow || noMoreQuota {
+		// 捕获值避免 goroutine 内闭包读到被修改的 quota 变量
+		userIdCopy := token.UserId
+		remainAfter := userQuota - quota
 		go func() {
-			email, err := GetUserEmail(token.UserId)
+			// 1) 站内通知（不依赖 SMTP，一定发得出）
+			if noMoreQuota {
+				CreateUserNotification(userIdCopy,
+					"余额已用尽",
+					"您的账户余额为 0，无法继续调用 API。请前往「充值」页面补充额度以恢复使用。",
+					"quota_exhausted")
+			} else {
+				CreateUserNotification(userIdCopy,
+					"余额不足提醒",
+					fmt.Sprintf("您的账户余额仅剩 ¥%.2f，建议及时充值避免影响 API 调用。", float64(remainAfter)/500000.0),
+					"quota_low")
+			}
+
+			// 2) 邮件提醒（依赖用户填过 email + 配了 SMTP）
+			email, err := GetUserEmail(userIdCopy)
 			if err != nil {
 				logger.SysError("failed to fetch user email: " + err.Error())
 			}
