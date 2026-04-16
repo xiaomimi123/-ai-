@@ -54,6 +54,12 @@ export const payApi = {
     http.get(`/api/lingjing/pay/order/${orderNo}`),
 }
 
+export const notificationApi = {
+  list: (params?: { page?: number }) => http.get('/api/lingjing/notifications', { params }),
+  unreadCount: () => http.get('/api/lingjing/notifications/unread'),
+  markRead: (id: number | 'all') => http.put(`/api/lingjing/notifications/${id}/read`),
+}
+
 export const referralApi = {
   getInfo: () => http.get('/api/lingjing/referral'),
   getCommissions: () => http.get('/api/lingjing/referral/commissions'),

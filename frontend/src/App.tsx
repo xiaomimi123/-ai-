@@ -14,6 +14,7 @@ import DocsPage from './pages/Docs'
 import SettingsPage from './pages/Settings'
 import OrdersPage from './pages/Orders'
 import ReferralPage from './pages/Referral'
+import NotificationsPage from './pages/Notifications'
 
 const App = () => (
   <BrowserRouter>
@@ -31,6 +32,7 @@ const App = () => (
       <Route path="/settings"         element={<Layout><SettingsPage /></Layout>} />
       <Route path="/orders"           element={<Layout><OrdersPage /></Layout>} />
       <Route path="/referral"         element={<Layout><ReferralPage /></Layout>} />
+      <Route path="/notifications"    element={<Layout><NotificationsPage /></Layout>} />
     </Routes>
     <CustomerService />
   </BrowserRouter>

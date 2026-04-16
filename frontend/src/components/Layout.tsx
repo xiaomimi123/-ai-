@@ -2,20 +2,21 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Key, CreditCard, Receipt, ScrollText,
-  Cpu, BookOpen, Gift, Settings, LogOut, User,
+  Cpu, BookOpen, Gift, Settings, LogOut, User, Bell,
 } from 'lucide-react'
-import { authApi } from '../api'
+import { authApi, notificationApi } from '../api'
 import Avatar from './Avatar'
 
 const navItems = [
   { icon: LayoutDashboard, label: '控制台',   to: '/dashboard' },
+  { icon: Bell,            label: '通知中心', to: '/notifications' },
   { icon: Key,             label: 'API 令牌', to: '/tokens' },
   { icon: CreditCard,      label: '充值',     to: '/topup' },
   { icon: Receipt,         label: '订单记录', to: '/orders' },
   { icon: ScrollText,      label: '用量日志', to: '/logs' },
   { icon: Cpu,             label: '模型广场', to: '/models' },
   { icon: BookOpen,        label: '接入文档', to: '/docs' },
-  { icon: Gift,             label: '邀请返利', to: '/referral' },
+  { icon: Gift,            label: '邀请返利', to: '/referral' },
   { icon: Settings,        label: '个人设置', to: '/settings' },
 ]
 
@@ -30,12 +31,21 @@ const mobileTabs = [
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<any>(null)
+  const [unread, setUnread] = useState<number>(0)
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
     authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
   }, [])
+
+  // 路由变化时刷新未读数（登录后、从通知页返回等场景都能更新）
+  useEffect(() => {
+    if (!user) return
+    notificationApi.unreadCount().then(r => {
+      if (r.data.success) setUnread(r.data.data || 0)
+    }).catch(() => {})
+  }, [user, location.pathname])
 
   const handleLogout = async () => {
     await authApi.logout().catch(() => {})
@@ -60,6 +70,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
         <nav className="sidebar-nav">
           {navItems.map(item => {
             const active = location.pathname === item.to
+            const showBadge = item.to === '/notifications' && unread > 0
             return (
               <NavLink
                 key={item.to}
@@ -67,7 +78,16 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 className={`sidebar-item ${active ? 'active' : ''}`}
               >
                 <item.icon size={16} className="sb-icon" />
-                {item.label}
+                <span style={{ flex: 1 }}>{item.label}</span>
+                {showBadge && (
+                  <span style={{
+                    background: 'var(--accent)', color: 'var(--primary)',
+                    fontSize: 10, fontWeight: 700, padding: '1px 6px',
+                    borderRadius: 10, lineHeight: 1.4, minWidth: 16, textAlign: 'center',
+                  }}>
+                    {unread > 99 ? '99+' : unread}
+                  </span>
+                )}
               </NavLink>
             )
           })}

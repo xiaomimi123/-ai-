@@ -199,6 +199,14 @@ func AlipayNotify(c *gin.Context) {
 	// 异步处理分销佣金
 	go DistributeCommission(order.UserId, float64(order.Amount), order.Id)
 
+	// 充值成功通知
+	model.CreateUserNotification(
+		order.UserId,
+		"充值成功",
+		fmt.Sprintf("¥%.2f 已到账，获得 %.2f 元额度。感谢使用灵镜 AI！", order.Amount, float64(order.Quota)/500000.0),
+		"topup_success",
+	)
+
 	logger.SysLog(fmt.Sprintf("alipay payment success: user=%d order=%s amount=%.2f quota=%d", order.UserId, outTradeNo, order.Amount, order.Quota))
 	c.String(http.StatusOK, "success")
 }

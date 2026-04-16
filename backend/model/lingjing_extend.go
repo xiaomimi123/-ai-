@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/songquanpeng/one-api/common/logger"
@@ -40,6 +41,18 @@ type Commission struct {
 	Amount     float64   `json:"amount" gorm:"type:decimal(10,2);not null"`
 	Status     int       `json:"status" gorm:"default:0"` // 0待结算 1已结算
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+// UserNotification 个人通知表
+// type: withdraw_approved / withdraw_rejected / withdraw_paid / topup_success / system
+type UserNotification struct {
+	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId    int    `json:"user_id" gorm:"index;not null"`
+	Title     string `json:"title" gorm:"size:128"`
+	Content   string `json:"content" gorm:"size:512"`
+	Type      string `json:"type" gorm:"size:32;index"`
+	IsRead    bool   `json:"is_read" gorm:"default:false;index"`
+	CreatedAt int64  `json:"created_at" gorm:"autoCreateTime"`
 }
 
 // WithdrawRequest 提现申请表
@@ -104,6 +117,7 @@ func InitLingjingTables() error {
 		&Notice{},
 		&ModelPrice{},
 		&WithdrawRequest{},
+		&UserNotification{},
 	)
 	if err != nil {
 		return err
@@ -290,4 +304,19 @@ func SaveOption(key, value string) error {
 		return DB.Create(&Option{Key: key, Value: value}).Error
 	}
 	return DB.Model(&option).Update("value", value).Error
+}
+
+// ===== UserNotification =====
+
+// CreateUserNotification 写一条个人通知。失败不阻断调用方业务，仅打 log。
+func CreateUserNotification(userId int, title, content, nType string) {
+	n := UserNotification{
+		UserId:  userId,
+		Title:   title,
+		Content: content,
+		Type:    nType,
+	}
+	if err := DB.Create(&n).Error; err != nil {
+		logger.SysError(fmt.Sprintf("create user notification failed: user=%d type=%s err=%v", userId, nType, err))
+	}
 }

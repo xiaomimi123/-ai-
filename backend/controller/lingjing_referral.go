@@ -436,6 +436,12 @@ func AdminProcessWithdraw(c *gin.Context) {
 			"processed_by": adminId,
 			"admin_remark": req.AdminRemark,
 		})
+		model.CreateUserNotification(
+			withdraw.UserId,
+			"提现申请已通过",
+			fmt.Sprintf("您的提现申请 ¥%.2f 已审核通过，管理员将尽快转账到您的支付宝账号 %s", withdraw.Amount, withdraw.AlipayAccount),
+			"withdraw_approved",
+		)
 		logger.SysLog(fmt.Sprintf("withdraw approved: id=%d admin=%d", id, adminId))
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已审核通过，请尽快打款"})
 
@@ -454,6 +460,12 @@ func AdminProcessWithdraw(c *gin.Context) {
 			"processed_by":  adminId,
 			"reject_reason": req.RejectReason,
 		})
+		model.CreateUserNotification(
+			withdraw.UserId,
+			"提现申请被拒绝",
+			fmt.Sprintf("您的提现申请 ¥%.2f 未通过审核，原因：%s", withdraw.Amount, req.RejectReason),
+			"withdraw_rejected",
+		)
 		logger.SysLog(fmt.Sprintf("withdraw rejected: id=%d admin=%d reason=%s", id, adminId, req.RejectReason))
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已拒绝申请"})
 
@@ -467,6 +479,12 @@ func AdminProcessWithdraw(c *gin.Context) {
 			"processed_at": now,
 			"admin_remark": req.AdminRemark,
 		})
+		model.CreateUserNotification(
+			withdraw.UserId,
+			"提现已打款",
+			fmt.Sprintf("您的提现申请 ¥%.2f 已完成打款，请查收支付宝到账通知", withdraw.Amount),
+			"withdraw_paid",
+		)
 		logger.SysLog(fmt.Sprintf("withdraw paid: id=%d admin=%d", id, adminId))
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已标记为打款完成"})
 

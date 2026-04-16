@@ -39,6 +39,13 @@ func SetLingjingRouter(router *gin.Engine) {
 		user.GET("/withdraw", controller.GetWithdrawInfo)
 		user.POST("/withdraw", controller.CreateWithdrawRequest)
 
+		// 通知中心
+		// 注意：/notifications/unread（静态）必须在 /notifications/:id/read（动态）之前注册，
+		// 否则 Gin 会把 "unread" 当 :id 参数匹配到 PUT /:id/read 上
+		user.GET("/notifications/unread", controller.GetUnreadCount)
+		user.GET("/notifications", controller.GetUserNotifications)
+		user.PUT("/notifications/:id/read", controller.MarkNotificationRead)
+
 		// 统计
 		user.GET("/stats/dashboard", controller.GetUserDashboardStats)
 
