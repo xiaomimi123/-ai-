@@ -141,12 +141,28 @@ func AlipayNotify(c *gin.Context) {
 		return
 	}
 
+	// ⚠️ 安全关键：验证支付宝 RSA2 签名，防止伪造回调刷余额
+	// out_trade_no 规则可枚举，没有验签任何公网主机都能 POST 假 notify 把用户余额刷满
+	alipayPublicKey := model.GetOptionValue("AlipayPublicKey")
+	if alipayPublicKey == "" {
+		logger.SysError("alipay notify: AlipayPublicKey not configured, rejecting for safety")
+		c.String(http.StatusOK, "fail")
+		return
+	}
+	// 先读出需要的字段（VerifySign 内部会从 bodyMap 移除 sign / sign_type）
 	tradeStatus := notifyReq.Get("trade_status")
 	outTradeNo := notifyReq.Get("out_trade_no")
 	tradeNo := notifyReq.Get("trade_no")
 	totalAmount := notifyReq.Get("total_amount")
 
-	logger.SysLog(fmt.Sprintf("alipay notify: order=%s status=%s amount=%s", outTradeNo, tradeStatus, totalAmount))
+	signOK, signErr := alipay.VerifySign(alipayPublicKey, notifyReq)
+	if signErr != nil || !signOK {
+		logger.SysError(fmt.Sprintf("alipay notify: signature verify failed, order=%s err=%v", outTradeNo, signErr))
+		c.String(http.StatusOK, "fail")
+		return
+	}
+
+	logger.SysLog(fmt.Sprintf("alipay notify: order=%s status=%s amount=%s (sign verified)", outTradeNo, tradeStatus, totalAmount))
 
 	if tradeStatus != "TRADE_SUCCESS" && tradeStatus != "TRADE_FINISHED" {
 		c.String(http.StatusOK, "success")
@@ -213,38 +229,86 @@ func AlipayNotify(c *gin.Context) {
 
 // AdminManualTopup 管理员手动补单
 func AdminManualTopup(c *gin.Context) {
+	adminId := c.GetInt("id")
 	var req struct {
 		UserId int     `json:"user_id" binding:"required"`
 		Amount float64 `json:"amount" binding:"required"`
 		Remark string  `json:"remark"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误: " + err.Error()})
+		return
+	}
+
+	// 参数校验：金额必须 > 0（binding:"required" 只防零值，不防负数）
+	if req.Amount <= 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "金额必须大于 0"})
+		return
+	}
+	if req.Amount > 100000 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "单次补单上限 ¥100000，请拆分或联系技术同学"})
+		return
+	}
+
+	// 校验用户存在
+	var user model.User
+	if err := model.DB.Select("id", "username").First(&user, req.UserId).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": fmt.Sprintf("用户 #%d 不存在", req.UserId)})
 		return
 	}
 
 	quota := int64(req.Amount * 500000)
 	orderNo := fmt.Sprintf("MANUAL%d%d", time.Now().Unix(), req.UserId)
 	nowUnix := time.Now().Unix()
+	remark := fmt.Sprintf("管理员 #%d 手动补单", adminId)
+	if req.Remark != "" {
+		remark += "：" + req.Remark
+	}
 
-	model.DB.Create(&model.Order{
-		OrderNo:       orderNo,
-		UserId:        req.UserId,
-		Amount:        req.Amount,
-		Quota:         quota,
-		Status:        1,
-		PaymentMethod: "manual",
-		Remark:        req.Remark,
-		PaidAt:        nowUnix,
-		CreatedAt:     nowUnix,
+	// 事务原子：创建订单 + 增加用户余额
+	err := model.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&model.Order{
+			OrderNo:       orderNo,
+			UserId:        req.UserId,
+			Amount:        req.Amount,
+			Quota:         quota,
+			Status:        1,
+			PaymentMethod: "manual",
+			Remark:        remark,
+			PaidAt:        nowUnix,
+			CreatedAt:     nowUnix,
+		}).Error; err != nil {
+			return fmt.Errorf("创建订单失败: %w", err)
+		}
+		res := tx.Model(&model.User{}).Where("id = ?", req.UserId).
+			Update("quota", gorm.Expr("quota + ?", quota))
+		if res.Error != nil {
+			return fmt.Errorf("加额度失败: %w", res.Error)
+		}
+		if res.RowsAffected != 1 {
+			return fmt.Errorf("用户余额更新影响 %d 行（期望 1）", res.RowsAffected)
+		}
+		return nil
 	})
+	if err != nil {
+		logger.SysError(fmt.Sprintf("admin manual topup transaction failed: admin=%d user=%d amount=%.2f err=%v", adminId, req.UserId, req.Amount, err))
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 
-	model.DB.Model(&model.User{}).Where("id = ?", req.UserId).
-		Update("quota", gorm.Expr("quota + ?", quota))
+	// 异步：站内通知 + 审计日志
+	model.CreateUserNotification(
+		req.UserId,
+		"充值成功",
+		fmt.Sprintf("管理员为您手动充值 ¥%.2f（%.2f 元额度）。%s", req.Amount, float64(quota)/500000.0, req.Remark),
+		"topup_success",
+	)
+	logger.SysLog(fmt.Sprintf("admin manual topup success: admin=%d user=%d(%s) amount=%.2f quota=%d order=%s remark=%q",
+		adminId, req.UserId, user.Username, req.Amount, quota, orderNo, req.Remark))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": fmt.Sprintf("已补单 ¥%.2f → %d 额度", req.Amount, quota),
+		"message": fmt.Sprintf("已为用户 %s 补单 ¥%.2f（%.2f 元额度）", user.Username, req.Amount, float64(quota)/500000.0),
 	})
 }
 

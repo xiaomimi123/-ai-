@@ -10,6 +10,7 @@ import (
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
+	"gorm.io/gorm"
 )
 
 // ====== 分销配置 ======
@@ -116,8 +117,9 @@ func WithdrawCommission(c *gin.Context) {
 		return
 	}
 
+	// 注意：Update 的 value 必须是 gorm.Expr（不是 DB.Raw —— Raw 是查询构造器不是列表达式）
 	if err := tx.Model(&model.User{}).Where("id = ?", userId).
-		Update("quota", model.DB.Raw("quota + ?", quotaToAdd)).Error; err != nil {
+		Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "增加额度失败"})
 		return
