@@ -102,18 +102,30 @@ func openMySQL(dsn string) (*gorm.DB, error) {
 	})
 }
 
-// ensureMySQLCharset 给 MySQL DSN 追加 charset=utf8mb4（若未显式设置）
-// go-sql-driver/mysql 会在每次建立连接时根据此参数发送 `SET NAMES`，
-// 这样无论 MySQL 服务端 character_set_client 默认是什么，客户端一侧都是 utf8mb4。
+// ensureMySQLCharset 给 MySQL DSN 补全必要参数（若未显式设置）：
+//   - charset=utf8mb4：让 go-sql-driver 在连接建立时发 `SET NAMES`，
+//     避免服务端 character_set_client 默认 latin1 导致中文写成 ????。
+//   - parseTime=True：让 DATETIME/DATE 列直接解析成 time.Time，
+//     不加则返回 []byte，任何 time.Time 字段 Scan 都会报 "unsupported Scan"。
+//   - loc=Local：time.Time 的时区按本地，跟 time.Now() 一致。
 func ensureMySQLCharset(dsn string) string {
-	if strings.Contains(dsn, "charset=") {
-		return dsn
+	needed := map[string]string{
+		"charset":   "utf8mb4",
+		"parseTime": "True",
+		"loc":       "Local",
 	}
 	sep := "?"
 	if strings.Contains(dsn, "?") {
 		sep = "&"
 	}
-	return dsn + sep + "charset=utf8mb4"
+	for key, val := range needed {
+		if strings.Contains(dsn, key+"=") {
+			continue
+		}
+		dsn += sep + key + "=" + val
+		sep = "&"
+	}
+	return dsn
 }
 
 func openSQLite() (*gorm.DB, error) {

@@ -77,7 +77,8 @@ R=$(curl -sS -b $CJ_USER "$BASE/api/token/?p=0")
 check "获取令牌列表" '"success":true' "$R"
 
 if [ -n "$TOKEN_ID" ]; then
-  R=$(curl -sS -b $CJ_USER -X DELETE "$BASE/api/token/$TOKEN_ID/")
+  # 注意：curl 不 follow 307 redirect（axios 会），所以 DELETE 不能带尾斜杠
+  R=$(curl -sS -b $CJ_USER -X DELETE "$BASE/api/token/$TOKEN_ID")
   check "删除令牌" '"success":true' "$R"
 fi
 
@@ -284,7 +285,7 @@ if [ -n "$TEST_KEY" ]; then
     echo -e "${YELLOW}⚠${NC}  DeepSeek 中转失败（检查渠道密钥/额度）"
     echo "   响应: $(echo $R | head -c 200)"
   fi
-  curl -sS -b $CJ_USER -X DELETE "$BASE/api/token/$TEST_TID/" > /dev/null
+  curl -sS -b $CJ_USER -X DELETE "$BASE/api/token/$TEST_TID" > /dev/null
 fi
 
 # ===== 报告 =====
