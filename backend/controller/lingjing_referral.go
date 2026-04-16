@@ -3,6 +3,8 @@ package controller
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/common/config"
@@ -247,4 +249,245 @@ func AdminUpdateReferralConfig(c *gin.Context) {
 			"withdraw_min_quota": WithdrawMinQuota,
 		},
 	})
+}
+
+// ====== 提现配置 ======
+
+const WithdrawMinAmount float64 = 10.0 // 最低提现 ¥10
+
+// sumWithdrawableCommission 计算用户可提现额度（已结算佣金 - 未被拒绝的提现申请合计）
+func sumWithdrawableCommission(userId int) (totalCommission, withdrawnAmount, available float64) {
+	model.DB.Model(&model.Commission{}).
+		Where("user_id = ? AND status = 1", userId).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
+	model.DB.Model(&model.WithdrawRequest{}).
+		Where("user_id = ? AND status IN (0,1,3)", userId).
+		Select("COALESCE(SUM(amount), 0)").Scan(&withdrawnAmount)
+	available = totalCommission - withdrawnAmount
+	if available < 0 {
+		available = 0
+	}
+	return
+}
+
+// ====== 用户: 获取提现信息（余额 + 历史）======
+
+func GetWithdrawInfo(c *gin.Context) {
+	userId := c.GetInt("id")
+
+	totalCommission, withdrawnAmount, available := sumWithdrawableCommission(userId)
+
+	var records []model.WithdrawRequest
+	model.DB.Where("user_id = ?", userId).
+		Order("created_at DESC").
+		Limit(20).
+		Find(&records)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"total_commission": totalCommission,
+			"withdrawn":        withdrawnAmount,
+			"available":        available,
+			"min_withdraw":     WithdrawMinAmount,
+			"records":          records,
+		},
+	})
+}
+
+// ====== 用户: 申请提现 ======
+
+func CreateWithdrawRequest(c *gin.Context) {
+	userId := c.GetInt("id")
+
+	var req struct {
+		Amount        float64 `json:"amount" binding:"required"`
+		AlipayAccount string  `json:"alipay_account" binding:"required"`
+		RealName      string  `json:"real_name" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
+		return
+	}
+
+	if req.Amount < WithdrawMinAmount {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": fmt.Sprintf("最低提现金额 ¥%.2f", WithdrawMinAmount)})
+		return
+	}
+
+	_, _, available := sumWithdrawableCommission(userId)
+	if req.Amount > available {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("可提现余额不足，当前可提现 ¥%.2f", available),
+		})
+		return
+	}
+
+	// 同一用户同时只能有一笔待审核
+	var pendingCount int64
+	model.DB.Model(&model.WithdrawRequest{}).
+		Where("user_id = ? AND status = 0", userId).
+		Count(&pendingCount)
+	if pendingCount > 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "您有待审核的提现申请，请等待处理后再申请"})
+		return
+	}
+
+	withdraw := model.WithdrawRequest{
+		UserId:        userId,
+		Amount:        req.Amount,
+		AlipayAccount: req.AlipayAccount,
+		RealName:      req.RealName,
+		Status:        0,
+	}
+	if err := model.DB.Create(&withdraw).Error; err != nil {
+		logger.SysError(fmt.Sprintf("create withdraw request failed: user=%d err=%v", userId, err))
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "申请失败"})
+		return
+	}
+
+	logger.SysLog(fmt.Sprintf("withdraw request created: user=%d amount=%.2f", userId, req.Amount))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "提现申请已提交，管理员将在 1-3 个工作日内处理",
+		"data":    withdraw,
+	})
+}
+
+// ====== 管理员: 提现申请列表 ======
+
+func AdminGetWithdrawList(c *gin.Context) {
+	status := c.Query("status") // 不传则全部
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+	const pageSize = 20
+
+	base := model.DB.Model(&model.WithdrawRequest{})
+	if status != "" {
+		base = base.Where("withdraw_requests.status = ?", status)
+	}
+
+	var total int64
+	base.Count(&total)
+
+	type WithdrawWithUser struct {
+		model.WithdrawRequest
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	var records []WithdrawWithUser
+	base.
+		Joins("LEFT JOIN users ON users.id = withdraw_requests.user_id").
+		Select("withdraw_requests.*, users.username, users.email").
+		Order("withdraw_requests.created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Scan(&records)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"data":      records,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// ====== 管理员: 处理提现申请 ======
+
+func AdminProcessWithdraw(c *gin.Context) {
+	adminId := c.GetInt("id")
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "无效 ID"})
+		return
+	}
+
+	var req struct {
+		Action       string `json:"action"`        // approve / reject / paid
+		RejectReason string `json:"reject_reason"` // 拒绝时必填
+		AdminRemark  string `json:"admin_remark"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
+		return
+	}
+
+	var withdraw model.WithdrawRequest
+	if err := model.DB.First(&withdraw, id).Error; err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "申请不存在"})
+		return
+	}
+
+	now := time.Now().Unix()
+	switch req.Action {
+	case "approve":
+		if withdraw.Status != 0 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "只能审核待处理的申请"})
+			return
+		}
+		model.DB.Model(&withdraw).Updates(map[string]interface{}{
+			"status":       1,
+			"processed_at": now,
+			"processed_by": adminId,
+			"admin_remark": req.AdminRemark,
+		})
+		logger.SysLog(fmt.Sprintf("withdraw approved: id=%d admin=%d", id, adminId))
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已审核通过，请尽快打款"})
+
+	case "reject":
+		if withdraw.Status != 0 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "只能拒绝待处理的申请"})
+			return
+		}
+		if req.RejectReason == "" {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "请填写拒绝原因"})
+			return
+		}
+		model.DB.Model(&withdraw).Updates(map[string]interface{}{
+			"status":        2,
+			"processed_at":  now,
+			"processed_by":  adminId,
+			"reject_reason": req.RejectReason,
+		})
+		logger.SysLog(fmt.Sprintf("withdraw rejected: id=%d admin=%d reason=%s", id, adminId, req.RejectReason))
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已拒绝申请"})
+
+	case "paid":
+		if withdraw.Status != 1 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "只能标记已审核通过的申请"})
+			return
+		}
+		model.DB.Model(&withdraw).Updates(map[string]interface{}{
+			"status":       3,
+			"processed_at": now,
+			"admin_remark": req.AdminRemark,
+		})
+		logger.SysLog(fmt.Sprintf("withdraw paid: id=%d admin=%d", id, adminId))
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": "已标记为打款完成"})
+
+	default:
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "无效操作"})
+	}
+}
+
+// ====== 管理员: 提现统计 ======
+
+func AdminGetWithdrawStats(c *gin.Context) {
+	type Stats struct {
+		Status int     `json:"status"`
+		Count  int64   `json:"count"`
+		Amount float64 `json:"amount"`
+	}
+	var stats []Stats
+	model.DB.Model(&model.WithdrawRequest{}).
+		Select("status, COUNT(*) as count, COALESCE(SUM(amount),0) as amount").
+		Group("status").
+		Scan(&stats)
+
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": stats})
 }

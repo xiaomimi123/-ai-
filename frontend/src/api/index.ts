@@ -58,4 +58,8 @@ export const referralApi = {
   getInfo: () => http.get('/api/lingjing/referral'),
   getCommissions: () => http.get('/api/lingjing/referral/commissions'),
   withdraw: () => http.post('/api/lingjing/referral/withdraw'),
+  // 支付宝提现
+  getWithdrawInfo: () => http.get('/api/lingjing/withdraw'),
+  createWithdraw: (data: { amount: number; alipay_account: string; real_name: string }) =>
+    http.post('/api/lingjing/withdraw', data),
 }

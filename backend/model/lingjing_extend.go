@@ -42,6 +42,22 @@ type Commission struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// WithdrawRequest 提现申请表
+// status: 0=待审核 1=已通过 2=已拒绝 3=已打款
+type WithdrawRequest struct {
+	Id            int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId        int     `json:"user_id" gorm:"index;not null"`
+	Amount        float64 `json:"amount" gorm:"type:decimal(10,2);not null"`
+	AlipayAccount string  `json:"alipay_account" gorm:"size:100"`
+	RealName      string  `json:"real_name" gorm:"size:50"`
+	Status        int     `json:"status" gorm:"default:0;index"`
+	RejectReason  string  `json:"reject_reason" gorm:"size:255"`
+	AdminRemark   string  `json:"admin_remark" gorm:"size:255"`
+	CreatedAt     int64   `json:"created_at" gorm:"autoCreateTime"`
+	ProcessedAt   int64   `json:"processed_at"`
+	ProcessedBy   int     `json:"processed_by"`
+}
+
 // Plan 套餐定价表
 type Plan struct {
 	Id          int     `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -87,6 +103,7 @@ func InitLingjingTables() error {
 		&Plan{},
 		&Notice{},
 		&ModelPrice{},
+		&WithdrawRequest{},
 	)
 	if err != nil {
 		return err

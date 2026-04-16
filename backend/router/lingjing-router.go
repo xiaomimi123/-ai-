@@ -33,7 +33,11 @@ func SetLingjingRouter(router *gin.Engine) {
 		// 分销
 		user.GET("/referral", controller.GetReferralInfo)
 		user.GET("/referral/commissions", controller.GetCommissionList)
-		user.POST("/referral/withdraw", controller.WithdrawCommission)
+		user.POST("/referral/withdraw", controller.WithdrawCommission) // 旧：提现转额度（保留）
+
+		// 提现（支付宝打款）
+		user.GET("/withdraw", controller.GetWithdrawInfo)
+		user.POST("/withdraw", controller.CreateWithdrawRequest)
 
 		// 统计
 		user.GET("/stats/dashboard", controller.GetUserDashboardStats)
@@ -90,5 +94,14 @@ func SetLingjingRouter(router *gin.Engine) {
 	{
 		adminStats.GET("/dashboard", controller.GetAdminDashboardStats)
 		adminStats.GET("/realtime", controller.GetAdminRealtimeStats)
+	}
+
+	// ===== 管理员提现审核 =====
+	adminWithdraw := router.Group("/api/admin/withdraw")
+	adminWithdraw.Use(middleware.AdminAuth())
+	{
+		adminWithdraw.GET("", controller.AdminGetWithdrawList)
+		adminWithdraw.GET("/stats", controller.AdminGetWithdrawStats)
+		adminWithdraw.PUT("/:id", controller.AdminProcessWithdraw)
 	}
 }

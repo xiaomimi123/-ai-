@@ -94,3 +94,11 @@ export const planApi = {
   update: (id: number, data: object) => http.put(`/api/admin/lingjing/plans/${id}`, data),
   delete: (id: number) => http.delete(`/api/admin/lingjing/plans/${id}`),
 }
+
+// 提现审核
+export const withdrawApi = {
+  list: (params?: { status?: string; page?: number }) => http.get('/api/admin/withdraw', { params }),
+  stats: () => http.get('/api/admin/withdraw/stats'),
+  process: (id: number, data: { action: 'approve' | 'reject' | 'paid'; reject_reason?: string; admin_remark?: string }) =>
+    http.put(`/api/admin/withdraw/${id}`, data),
+}

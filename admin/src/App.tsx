@@ -9,6 +9,7 @@ import RedemptionsPage from './pages/Redemptions'
 import LogsPage from './pages/Logs'
 import OrdersPage from './pages/Orders'
 import ReferralsPage from './pages/Referrals'
+import WithdrawalsPage from './pages/Withdrawals'
 import ModelPricesPage from './pages/ModelPrices'
 import ModelManagePage from './pages/ModelManage'
 import NoticesPage from './pages/Notices'
@@ -32,6 +33,7 @@ function App() {
           <Route path="logs" element={<LogsPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="referrals" element={<ReferralsPage />} />
+          <Route path="withdrawals" element={<WithdrawalsPage />} />
           <Route path="model-prices" element={<ModelPricesPage />} />
           <Route path="notices" element={<NoticesPage />} />
           <Route path="model-manage" element={<ModelManagePage />} />
