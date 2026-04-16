@@ -141,21 +141,22 @@ func InitLingjingTables() error {
 	DB.Exec("UPDATE model_prices SET name = model_name WHERE (name IS NULL OR name = '') AND model_name IS NOT NULL AND model_name != ''")
 
 	// 空表注入 10 条默认展示模型
+	// 价格单位：¥/百万 Token（对齐 OpenAI/Anthropic 官方定价口径）
 	var modelCount int64
 	DB.Model(&ModelPrice{}).Count(&modelCount)
 	if modelCount == 0 {
 		logger.SysLog("seeding default model prices...")
 		defaults := []ModelPrice{
-			{ModelId: "deepseek-chat", Name: "DeepSeek V3", Provider: "DeepSeek", Description: "综合能力旗舰，性价比之王，适合日常开发和内容创作", Tags: "对话,国产", Logo: "deepseek", InputPrice: 0.002, OutputPrice: 0.008, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 1},
-			{ModelId: "deepseek-reasoner", Name: "DeepSeek R1", Provider: "DeepSeek", Description: "深度推理模型，复杂逻辑与数学推导首选，媲美 o1", Tags: "推理,国产", Logo: "deepseek", InputPrice: 0.004, OutputPrice: 0.016, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 2},
-			{ModelId: "qwen-max", Name: "Qwen Max", Provider: "阿里云", Description: "通义千问旗舰版，中文理解和长文处理能力出众", Tags: "对话,国产", Logo: "qwen", InputPrice: 0.004, OutputPrice: 0.012, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 3},
-			{ModelId: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", Description: "多模态旗舰，支持图文理解，综合能力领先，开发者首选", Tags: "对话,海外", Logo: "openai", InputPrice: 0.018, OutputPrice: 0.072, ContextWindow: "128K", Featured: true, IsVisible: true, SortOrder: 4},
-			{ModelId: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", Description: "轻量快速，价格实惠，适合简单对话和批量处理任务", Tags: "对话,海外", Logo: "openai", InputPrice: 0.001, OutputPrice: 0.004, ContextWindow: "128K", Featured: false, IsVisible: true, SortOrder: 5},
-			{ModelId: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Provider: "Anthropic", Description: "当前综合能力最强均衡模型，代码与长文档处理出众，SWE-bench 72.7%", Tags: "对话,推理,海外", Logo: "anthropic", InputPrice: 0.022, OutputPrice: 0.108, ContextWindow: "1M", Featured: true, IsVisible: true, SortOrder: 6},
-			{ModelId: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Provider: "Anthropic", Description: "快速轻量，响应迅速，适合高并发和简单任务", Tags: "对话,海外", Logo: "anthropic", InputPrice: 0.007, OutputPrice: 0.036, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 7},
-			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 0.009, OutputPrice: 0.072, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
-			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 0.0011, OutputPrice: 0.0043, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
-			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 0.072, OutputPrice: 0.288, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
+			{ModelId: "deepseek-chat", Name: "DeepSeek V3", Provider: "DeepSeek", Description: "综合能力旗舰，性价比之王，适合日常开发和内容创作", Tags: "对话,国产", Logo: "deepseek", InputPrice: 2, OutputPrice: 8, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 1},
+			{ModelId: "deepseek-reasoner", Name: "DeepSeek R1", Provider: "DeepSeek", Description: "深度推理模型，复杂逻辑与数学推导首选，媲美 o1", Tags: "推理,国产", Logo: "deepseek", InputPrice: 4, OutputPrice: 16, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 2},
+			{ModelId: "qwen-max", Name: "Qwen Max", Provider: "阿里云", Description: "通义千问旗舰版，中文理解和长文处理能力出众", Tags: "对话,国产", Logo: "qwen", InputPrice: 4, OutputPrice: 12, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 3},
+			{ModelId: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", Description: "多模态旗舰，支持图文理解，综合能力领先，开发者首选", Tags: "对话,海外", Logo: "openai", InputPrice: 18, OutputPrice: 72, ContextWindow: "128K", Featured: true, IsVisible: true, SortOrder: 4},
+			{ModelId: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", Description: "轻量快速，价格实惠，适合简单对话和批量处理任务", Tags: "对话,海外", Logo: "openai", InputPrice: 1, OutputPrice: 4, ContextWindow: "128K", Featured: false, IsVisible: true, SortOrder: 5},
+			{ModelId: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Provider: "Anthropic", Description: "当前综合能力最强均衡模型，代码与长文档处理出众，SWE-bench 72.7%", Tags: "对话,推理,海外", Logo: "anthropic", InputPrice: 22, OutputPrice: 108, ContextWindow: "1M", Featured: true, IsVisible: true, SortOrder: 6},
+			{ModelId: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Provider: "Anthropic", Description: "快速轻量，响应迅速，适合高并发和简单任务", Tags: "对话,海外", Logo: "anthropic", InputPrice: 7, OutputPrice: 36, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 7},
+			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 9, OutputPrice: 72, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
+			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 1.1, OutputPrice: 4.3, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
+			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 72, OutputPrice: 288, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
 		}
 		if err := DB.Create(&defaults).Error; err != nil {
 			logger.SysError("failed to seed default model prices: " + err.Error())

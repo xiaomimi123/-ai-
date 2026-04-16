@@ -85,13 +85,13 @@ export default function ModelDetailPage() {
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
         <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输入价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{(model.input_price ?? 0).toFixed(4)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 千 Token</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{(model.input_price ?? 0).toFixed(2)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
         </div>
         <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--primary)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输出价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>¥{(model.output_price ?? 0).toFixed(4)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 千 Token</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>¥{(model.output_price ?? 0).toFixed(2)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
         </div>
       </div>
 

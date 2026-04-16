@@ -260,3 +260,152 @@ func GetPayInfo(c *gin.Context) {
 		},
 	})
 }
+
+// ====== 管理员订单管理 ======
+
+// AdminGetOrders 管理员订单列表（支持分页 + 状态/用户筛选）
+// GET /api/admin/lingjing/topups?page=1&page_size=20&status=0&username=xxx
+func AdminGetOrders(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 200 {
+		pageSize = 20
+	}
+	statusStr := c.Query("status")
+	username := c.Query("username")
+
+	q := model.DB.Model(&model.Order{})
+	if statusStr != "" {
+		if s, err := strconv.Atoi(statusStr); err == nil {
+			q = q.Where("status = ?", s)
+		}
+	}
+	if username != "" {
+		var userId int
+		if err := model.DB.Model(&model.User{}).Select("id").Where("username = ?", username).Scan(&userId).Error; err == nil && userId > 0 {
+			q = q.Where("user_id = ?", userId)
+		} else {
+			// 用户名匹配不到时，返回空但 total=0，防止全表泄漏
+			c.JSON(http.StatusOK, gin.H{"success": true, "data": []any{}, "total": 0, "page": page, "page_size": pageSize})
+			return
+		}
+	}
+
+	var total int64
+	q.Count(&total)
+
+	// 带上用户名 JOIN
+	type OrderWithUser struct {
+		model.Order
+		Username string `json:"username"`
+		Email    string `json:"email"`
+	}
+	var rows []OrderWithUser
+	q.Select("orders.*, users.username, users.email").
+		Joins("LEFT JOIN users ON users.id = orders.user_id").
+		Order("orders.created_at DESC").
+		Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Scan(&rows)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"data":      rows,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	})
+}
+
+// AdminCompleteOrder 管理员手动补单（把 pending 订单标为已支付 + 给用户加额度）
+// POST /api/admin/lingjing/topups/complete  body: {"order_no":"xxx", "remark":"可选"}
+// 兼容旧前端 body {"trade_no":"xxx"} —— 实际按 order_no 匹配
+func AdminCompleteOrder(c *gin.Context) {
+	adminId := c.GetInt("id")
+	var req struct {
+		OrderNo string `json:"order_no"`
+		TradeNo string `json:"trade_no"` // 兼容老前端
+		Remark  string `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
+		return
+	}
+	identifier := req.OrderNo
+	if identifier == "" {
+		identifier = req.TradeNo
+	}
+	if identifier == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "order_no 或 trade_no 至少填一个"})
+		return
+	}
+
+	// 先按 order_no 找；找不到再按 trade_no 找（pending 订单 trade_no 可能为空，所以 order_no 优先）
+	var order model.Order
+	err := model.DB.Where("order_no = ?", identifier).First(&order).Error
+	if err != nil {
+		err = model.DB.Where("trade_no = ?", identifier).First(&order).Error
+	}
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "订单不存在"})
+		return
+	}
+
+	if order.Status == 1 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "订单已是已支付状态，无需补单"})
+		return
+	}
+
+	// 事务：更新订单 + 加额度
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
+		updates := map[string]interface{}{
+			"status":  1,
+			"paid_at": time.Now().Unix(),
+		}
+		if order.TradeNo == "" {
+			updates["trade_no"] = fmt.Sprintf("MANUAL-%d-%d", adminId, time.Now().Unix())
+		}
+		remark := fmt.Sprintf("管理员 #%d 手动补单", adminId)
+		if req.Remark != "" {
+			remark += "：" + req.Remark
+		}
+		if order.Remark != "" {
+			updates["remark"] = order.Remark + " | " + remark
+		} else {
+			updates["remark"] = remark
+		}
+		if err := tx.Model(&order).Updates(updates).Error; err != nil {
+			return err
+		}
+		if err := tx.Model(&model.User{}).Where("id = ?", order.UserId).
+			Update("quota", gorm.Expr("quota + ?", order.Quota)).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		logger.SysError("manual topup failed: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "补单失败: " + err.Error()})
+		return
+	}
+
+	// 异步：发佣金 + 站内通知
+	go DistributeCommission(order.UserId, order.Amount, order.Id)
+	model.CreateUserNotification(
+		order.UserId,
+		"充值成功",
+		fmt.Sprintf("¥%.2f 已到账（管理员手动补单）。", order.Amount),
+		"topup_success",
+	)
+
+	logger.SysLog(fmt.Sprintf("manual topup: admin=%d order_no=%s user=%d amount=%.2f quota=%d",
+		adminId, order.OrderNo, order.UserId, order.Amount, order.Quota))
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": fmt.Sprintf("补单成功：¥%.2f 已到账给用户 #%d", order.Amount, order.UserId),
+	})
+}

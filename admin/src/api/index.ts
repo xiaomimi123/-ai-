@@ -44,10 +44,11 @@ export const logApi = {
 
 // 灵镜AI 扩展接口
 export const orderApi = {
-  list: (params?: { page?: number; page_size?: number }) =>
+  list: (params?: { page?: number; page_size?: number; status?: string; username?: string }) =>
     http.get('/api/admin/lingjing/topups', { params }),
-  complete: (trade_no: string) =>
-    http.post('/api/admin/lingjing/topups/complete', { trade_no }),
+  // 按订单号 order_no 补单（pending 订单 trade_no 可能为空）
+  complete: (order_no: string) =>
+    http.post('/api/admin/lingjing/topups/complete', { order_no }),
 }
 
 export const referralAdminApi = {

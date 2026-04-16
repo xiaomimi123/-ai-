@@ -88,6 +88,10 @@ func SetLingjingRouter(router *gin.Engine) {
 		admin.PUT("/pay/config", controller.UpdatePaymentConfig)
 		admin.POST("/pay/manual-topup", controller.AdminManualTopup)
 
+		// 订单管理（管理员）
+		admin.GET("/topups", controller.AdminGetOrders)
+		admin.POST("/topups/complete", controller.AdminCompleteOrder)
+
 		admin.PUT("/token/:id/rate-limit", controller.SetTokenRateLimit)
 	}
 

@@ -59,7 +59,7 @@ export default function ModelsPage() {
           <Cpu size={22} color="var(--accent)" />
           模型广场
         </h1>
-        <p className="page-desc">浏览所有可用模型及定价（价格单位：¥/千 Token）</p>
+        <p className="page-desc">浏览所有可用模型及定价（价格单位：¥/百万 Token）</p>
       </div>
 
       {/* 搜索 + 筛选 */}
@@ -163,15 +163,15 @@ export default function ModelsPage() {
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输入</div>
                   <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: 14 }}>
-                    ¥{(m.input_price ?? 0).toFixed(4)}
-                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/K</span>
+                    ¥{(m.input_price ?? 0).toFixed(2)}
+                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
                   </div>
                 </div>
                 <div>
                   <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输出</div>
                   <div style={{ fontWeight: 600, color: 'var(--primary)', fontSize: 14 }}>
-                    ¥{(m.output_price ?? 0).toFixed(4)}
-                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/K</span>
+                    ¥{(m.output_price ?? 0).toFixed(2)}
+                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
                   </div>
                 </div>
                 {m.context_window && (

@@ -126,8 +126,8 @@ export default function ModelPricesPage() {
               <th>名称</th>
               <th>厂商</th>
               <th>标识</th>
-              <th>输入 ¥/K</th>
-              <th>输出 ¥/K</th>
+              <th>输入 ¥/M</th>
+              <th>输出 ¥/M</th>
               <th>上下文</th>
               <th>标签</th>
               <th>状态</th>
@@ -162,8 +162,8 @@ export default function ModelPricesPage() {
                 </td>
                 <td>{m.provider || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                 <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{m.model_id}</code></td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--success)' }}>¥{(m.input_price ?? 0).toFixed(4)}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>¥{(m.output_price ?? 0).toFixed(4)}</td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--success)' }}>¥{(m.input_price ?? 0).toFixed(2)}</td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>¥{(m.output_price ?? 0).toFixed(2)}</td>
                 <td style={{ fontSize: 12, color: 'var(--muted)' }}>{m.context_window || '—'}</td>
                 <td style={{ maxWidth: 160 }}>
                   {m.tags
@@ -293,7 +293,7 @@ export default function ModelPricesPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输入 ¥/千 Token</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输入 ¥/百万 Token</label>
                 <input
                   type="number" step="0.0001" min="0"
                   value={dialog.data.input_price}
@@ -301,7 +301,7 @@ export default function ModelPricesPage() {
                 />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输出 ¥/千 Token</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输出 ¥/百万 Token</label>
                 <input
                   type="number" step="0.0001" min="0"
                   value={dialog.data.output_price}
