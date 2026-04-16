@@ -95,9 +95,25 @@ func openPostgreSQL(dsn string) (*gorm.DB, error) {
 func openMySQL(dsn string) (*gorm.DB, error) {
 	logger.SysLog("using MySQL as database")
 	common.UsingMySQL = true
+	// 强制 utf8mb4 连接字符集：若 DSN 没显式设 charset，补上避免服务端默认 latin1 导致中文乱码
+	dsn = ensureMySQLCharset(dsn)
 	return gorm.Open(mysql.Open(dsn), &gorm.Config{
 		PrepareStmt: true, // precompile SQL
 	})
+}
+
+// ensureMySQLCharset 给 MySQL DSN 追加 charset=utf8mb4（若未显式设置）
+// go-sql-driver/mysql 会在每次建立连接时根据此参数发送 `SET NAMES`，
+// 这样无论 MySQL 服务端 character_set_client 默认是什么，客户端一侧都是 utf8mb4。
+func ensureMySQLCharset(dsn string) string {
+	if strings.Contains(dsn, "charset=") {
+		return dsn
+	}
+	sep := "?"
+	if strings.Contains(dsn, "?") {
+		sep = "&"
+	}
+	return dsn + sep + "charset=utf8mb4"
 }
 
 func openSQLite() (*gorm.DB, error) {
