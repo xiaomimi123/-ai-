@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Radio, Gift, ScrollText, LogOut, Settings, Shield, Menu, X, CreditCard, Share2, Bell, Sliders, Wallet } from 'lucide-react'
+import { LayoutDashboard, Users, Radio, Gift, ScrollText, LogOut, Settings, Shield, Menu, X, CreditCard, Share2, Bell, Sliders, Wallet, Cpu } from 'lucide-react'
 import { useState } from 'react'
 
 const navSections = [
@@ -31,6 +31,7 @@ const navSections = [
   {
     label: '内容配置',
     items: [
+      { to: '/model-prices', icon: Cpu, label: '模型广场' },
       { to: '/model-manage', icon: Sliders, label: '模型管理' },
       { to: '/notices', icon: Bell, label: '公告管理' },
       { to: '/settings', icon: Settings, label: '系统设置' },

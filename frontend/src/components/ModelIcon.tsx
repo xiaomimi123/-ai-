@@ -36,9 +36,10 @@ function getLogoKey(modelName: string): string {
   return ''
 }
 
-export default function ModelIcon({ modelName, size = 32, style }: { modelName: string; size?: number; style?: React.CSSProperties }) {
+// logo 参数优先于从 modelName 推断的品牌名。数据库里 model_prices.logo 存的是 LobeHub icon key（如 "deepseek" / "openai"）
+export default function ModelIcon({ modelName, logo, size = 32, style }: { modelName: string; logo?: string; size?: number; style?: React.CSSProperties }) {
   const [error, setError] = useState(false)
-  const logoKey = getLogoKey(modelName)
+  const logoKey = (logo && logo.trim()) ? logo.trim().toLowerCase() : getLogoKey(modelName)
   const color = BRAND_COLORS[logoKey] || BRAND_COLORS['default']
   const radius = Math.round(size * 0.25)
 

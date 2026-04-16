@@ -10,19 +10,21 @@ import (
 	billingratio "github.com/songquanpeng/one-api/relay/billing/ratio"
 )
 
-// ModelInfo 统一模型信息
+// ModelInfo 统一模型信息（聚合 abilities + model_prices + 倍率 map）
+// 注意：ModelPrice schema 改为 ModelId/Name 后，这里 ModelName 字段对外
+// 保留原 JSON 名（admin 前端依赖），值取 ModelId 或 ability.Model
 type ModelInfo struct {
-	ModelName       string  `json:"model_name"`
-	InputRatio      float64 `json:"input_ratio"`      // 输入倍率
-	CompletionRatio float64 `json:"completion_ratio"`  // 补全倍率（相对于输入的倍数）
-	InputPrice      float64 `json:"input_price"`       // 前台展示输入价格
-	OutputPrice     float64 `json:"output_price"`      // 前台展示输出价格
-	Provider        string  `json:"provider"`          // 供应商
-	Category        string  `json:"category"`          // 分类
-	Description     string  `json:"description"`       // 描述
-	IsVisible       int     `json:"is_visible"`        // 前台是否可见
-	PriceId         int     `json:"price_id"`          // ModelPrice 表的 ID，0 表示未配置定价
-	ChannelCount    int     `json:"channel_count"`     // 提供此模型的渠道数
+	ModelName       string  `json:"model_name"`         // API 调用用的模型 id
+	DisplayName     string  `json:"display_name"`        // ModelPrice.Name 展示名
+	InputRatio      float64 `json:"input_ratio"`
+	CompletionRatio float64 `json:"completion_ratio"`
+	InputPrice      float64 `json:"input_price"`
+	OutputPrice     float64 `json:"output_price"`
+	Provider        string  `json:"provider"`
+	Description     string  `json:"description"`
+	IsVisible       int     `json:"is_visible"` // 0/1（前端期望 int）
+	PriceId         int     `json:"price_id"`
+	ChannelCount    int     `json:"channel_count"`
 }
 
 // AdminGetAllModels 获取系统中所有模型的统一视图
@@ -46,7 +48,7 @@ func AdminGetAllModels(c *gin.Context) {
 	model.DB.Find(&prices)
 	priceMap := make(map[string]*model.ModelPrice)
 	for i := range prices {
-		priceMap[prices[i].ModelName] = &prices[i]
+		priceMap[prices[i].ModelId] = &prices[i]
 	}
 
 	// 3. 获取倍率
@@ -55,8 +57,6 @@ func AdminGetAllModels(c *gin.Context) {
 
 	// 4. 合并结果
 	result := make([]ModelInfo, 0)
-
-	// 先处理 Ability 表中的模型
 	seen := make(map[string]bool)
 	for _, mc := range modelChannels {
 		info := ModelInfo{
@@ -67,31 +67,37 @@ func AdminGetAllModels(c *gin.Context) {
 			IsVisible:       0,
 		}
 		if p, ok := priceMap[mc.Model]; ok {
+			info.DisplayName = p.Name
 			info.InputPrice = p.InputPrice
 			info.OutputPrice = p.OutputPrice
 			info.Provider = p.Provider
-			info.Category = p.Category
 			info.Description = p.Description
-			info.IsVisible = p.IsVisible
+			if p.IsVisible {
+				info.IsVisible = 1
+			}
 			info.PriceId = p.Id
 		}
 		result = append(result, info)
 		seen[mc.Model] = true
 	}
 
-	// 再加上定价表中有但 Ability 没有的模型（可能是手动添加的）
+	// 再加上定价表中有但 Ability 没有的模型
 	for _, p := range prices {
-		if !seen[p.ModelName] {
+		if !seen[p.ModelId] {
+			isVis := 0
+			if p.IsVisible {
+				isVis = 1
+			}
 			info := ModelInfo{
-				ModelName:       p.ModelName,
-				InputRatio:      modelRatios[p.ModelName],
-				CompletionRatio: completionRatios[p.ModelName],
+				ModelName:       p.ModelId,
+				DisplayName:     p.Name,
+				InputRatio:      modelRatios[p.ModelId],
+				CompletionRatio: completionRatios[p.ModelId],
 				InputPrice:      p.InputPrice,
 				OutputPrice:     p.OutputPrice,
 				Provider:        p.Provider,
-				Category:        p.Category,
 				Description:     p.Description,
-				IsVisible:       p.IsVisible,
+				IsVisible:       isVis,
 				PriceId:         p.Id,
 				ChannelCount:    0,
 			}
@@ -102,15 +108,15 @@ func AdminGetAllModels(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
 }
 
-// AdminUpdateModel 统一更新模型的倍率 + 定价
+// UpdateModelRequest 保留旧 JSON 字段名，前端 admin ModelManage 仍按老字段提交
 type UpdateModelRequest struct {
 	ModelName       string  `json:"model_name" binding:"required"`
+	DisplayName     string  `json:"display_name"`
 	InputRatio      float64 `json:"input_ratio"`
 	CompletionRatio float64 `json:"completion_ratio"`
 	InputPrice      float64 `json:"input_price"`
 	OutputPrice     float64 `json:"output_price"`
 	Provider        string  `json:"provider"`
-	Category        string  `json:"category"`
 	Description     string  `json:"description"`
 	IsVisible       int     `json:"is_visible"`
 }
@@ -127,42 +133,48 @@ func AdminUpdateModel(c *gin.Context) {
 	if req.CompletionRatio > 0 {
 		billingratio.CompletionRatio[req.ModelName] = req.CompletionRatio
 	}
-
 	// 同步倍率到数据库 option
 	model.UpdateOption("ModelRatio", billingratio.ModelRatio2JSONString())
 	model.UpdateOption("CompletionRatio", billingratio.CompletionRatio2JSONString())
 
-	// 更新或创建定价记录
+	// 更新或创建定价记录（新 schema 用 ModelId）
+	displayName := req.DisplayName
+	if displayName == "" {
+		displayName = req.ModelName
+	}
 	price := &model.ModelPrice{
-		ModelName:   req.ModelName,
+		ModelId:     req.ModelName,
+		Name:        displayName,
 		InputPrice:  req.InputPrice,
 		OutputPrice: req.OutputPrice,
 		Provider:    req.Provider,
-		Category:    req.Category,
 		Description: req.Description,
-		IsVisible:   req.IsVisible,
+		IsVisible:   req.IsVisible == 1,
 	}
 
-	// 查找已存在的记录
+	// 查找已存在的记录（保留老字段也可以，model_id 是新唯一键）
 	var existing model.ModelPrice
-	if err := model.DB.Where("model_name = ?", req.ModelName).First(&existing).Error; err == nil {
+	if err := model.DB.Where("model_id = ?", req.ModelName).First(&existing).Error; err == nil {
 		price.Id = existing.Id
+		price.CreatedAt = existing.CreatedAt
+		// 保留已设好的展示字段（不要被没传的字段覆盖为空）
+		if displayName == req.ModelName && existing.Name != "" {
+			price.Name = existing.Name
+		}
+		price.Tags = existing.Tags
+		price.Logo = existing.Logo
+		price.ContextWindow = existing.ContextWindow
+		price.Featured = existing.Featured
+		price.SortOrder = existing.SortOrder
 	}
-	model.UpsertModelPrice(price)
-
+	if err := model.UpsertModelPrice(price); err != nil {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "message": "模型配置已更新"})
 }
 
 // AdminDeleteModel 从「模型管理」列表移除一个模型
-//
-// 背景：AdminGetAllModels 是 abilities 和 model_prices 两表的 UNION。
-// 删除渠道时 One API 会自动清 abilities，但 model_prices 是灵镜扩展表不会联动，
-// 导致列表里残留 channel_count=0 的「僵尸模型」。此 handler 清理这类残留。
-//
-// 行为：
-//   1. 删 model_prices 定价记录（前台模型广场也会同步消失）
-//   2. 兜底删 abilities 里指向已不存在 channel 的残留行
-//   3. 不动 ModelRatio/CompletionRatio（倍率 map 全局共用，可能被别的同名模型引用）
 func AdminDeleteModel(c *gin.Context) {
 	modelName := c.Query("model_name")
 	if modelName == "" {
@@ -170,8 +182,8 @@ func AdminDeleteModel(c *gin.Context) {
 		return
 	}
 
-	// 1. 删 model_prices
-	priceRes := model.DB.Where("model_name = ?", modelName).Delete(&model.ModelPrice{})
+	// 1. 删 model_prices（新 schema 按 model_id 匹配）
+	priceRes := model.DB.Where("model_id = ?", modelName).Delete(&model.ModelPrice{})
 	if priceRes.Error != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": priceRes.Error.Error()})
 		return

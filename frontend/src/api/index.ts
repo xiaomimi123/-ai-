@@ -51,6 +51,11 @@ export const publicApi = {
   getNotices: () => http.get('/api/lingjing/notices'),
 }
 
+// 新版模型广场数据接口（与 publicApi.getModelPrices 同端点，保留命名语义）
+export const modelPriceApi = {
+  listPublic: () => http.get('/api/lingjing/model-prices'),
+}
+
 export const payApi = {
   getConfig: () => http.get('/api/lingjing/pay/config'),
   getInfo: () => http.get('/api/lingjing/pay/info'),

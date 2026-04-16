@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import ModelIcon from '../components/ModelIcon'
 
 interface Notice { id: number; title: string; content: string }
-interface ModelPrice { model_name: string; provider: string; input_price: number; output_price: number; description: string; category: string }
+interface ModelPrice { model_id: string; name: string; provider: string; input_price: number; output_price: number; description: string; logo?: string }
 interface UserInfo { id: number; username: string; display_name: string; quota: number }
 
 export default function HomePage() {
@@ -24,7 +24,7 @@ export default function HomePage() {
   // 按 provider 归组取前 8 个流行模型
   const providerMap: Record<string, ModelPrice> = {}
   models.forEach(m => {
-    const p = m.provider || m.model_name
+    const p = m.provider || m.model_id
     if (!providerMap[p]) providerMap[p] = m
   })
   const topModels = Object.values(providerMap).slice(0, 8)
@@ -187,12 +187,12 @@ export default function HomePage() {
             margin: '0 auto',
           }}>
             {topModels.map(m => (
-              <div key={m.model_name} style={{
+              <div key={m.model_id} style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 color: 'var(--text)', fontSize: 14, fontWeight: 500,
               }}>
-                <ModelIcon modelName={m.model_name} size={24} />
-                {m.provider || m.model_name}
+                <ModelIcon modelName={m.model_id} logo={m.logo} size={24} />
+                {m.provider || m.model_id}
               </div>
             ))}
           </div>

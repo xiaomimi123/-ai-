@@ -56,9 +56,12 @@ export const referralAdminApi = {
 }
 
 export const modelPriceApi = {
-  list: () => http.get('/api/lingjing/model-prices'),
-  upsert: (data: object) => http.post('/api/admin/lingjing/model-prices', data),
+  // 管理员全部列表（含隐藏）
+  list: () => http.get('/api/admin/lingjing/model-prices'),
+  create: (data: object) => http.post('/api/admin/lingjing/model-prices', data),
+  update: (id: number, data: object) => http.put(`/api/admin/lingjing/model-prices/${id}`, data),
   delete: (id: number) => http.delete(`/api/admin/lingjing/model-prices/${id}`),
+  toggle: (id: number) => http.put(`/api/admin/lingjing/model-prices/${id}/toggle`),
 }
 
 export const noticeApi = {

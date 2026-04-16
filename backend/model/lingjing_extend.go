@@ -95,16 +95,25 @@ type Notice struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// ModelPrice 模型定价表
+// ModelPrice 模型定价表（模型广场展示信息）
+// Logo 字段存品牌名（LobeHub icons key），如 "deepseek" / "openai" / "anthropic"
+// Tags 逗号分隔，如 "对话,国产"；ContextWindow 展示字符串，如 "64K" / "1M"
 type ModelPrice struct {
-	Id          int     `json:"id" gorm:"primaryKey;autoIncrement"`
-	ModelName   string  `json:"model_name" gorm:"uniqueIndex;size:100;not null"`
-	InputPrice  float64 `json:"input_price" gorm:"type:decimal(10,4)"`
-	OutputPrice float64 `json:"output_price" gorm:"type:decimal(10,4)"`
-	IsVisible   int     `json:"is_visible" gorm:"default:1"`
-	Description string  `json:"description" gorm:"size:500"`
-	Provider    string  `json:"provider" gorm:"size:50"`
-	Category    string  `json:"category" gorm:"size:20;default:'chat'"`
+	Id            int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	ModelId       string  `json:"model_id" gorm:"uniqueIndex;size:64"` // 即 API 调用时填的 model 值
+	Name          string  `json:"name" gorm:"size:64"`                 // 展示名，如 "Claude Sonnet 4.6"
+	Provider      string  `json:"provider" gorm:"size:32"`
+	Description   string  `json:"description" gorm:"size:512"`
+	Tags          string  `json:"tags" gorm:"size:128"`           // 逗号分隔
+	Logo          string  `json:"logo" gorm:"size:32"`            // LobeHub icon key
+	InputPrice    float64 `json:"input_price" gorm:"type:decimal(10,4)"`
+	OutputPrice   float64 `json:"output_price" gorm:"type:decimal(10,4)"`
+	ContextWindow string  `json:"context_window" gorm:"size:16"`
+	Featured      bool    `json:"featured" gorm:"default:false"`
+	IsVisible     bool    `json:"is_visible" gorm:"default:true"`
+	SortOrder     int     `json:"sort_order" gorm:"default:0;index"`
+	CreatedAt     int64   `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt     int64   `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
 // InitLingjingTables 初始化灵镜AI扩展表
@@ -125,6 +134,33 @@ func InitLingjingTables() error {
 	// 扩展 Token 表添加速率限制字段（忽略已存在的错误）
 	DB.Exec("ALTER TABLE tokens ADD COLUMN rpm BIGINT DEFAULT 0")
 	DB.Exec("ALTER TABLE tokens ADD COLUMN tpm BIGINT DEFAULT 0")
+
+	// model_prices 老数据兼容：旧 schema 字段 model_name，新 schema 用 model_id + name
+	// 已存在的行若 model_id 为空，用 model_name 回填，保证老数据在新 UI 能显示
+	DB.Exec("UPDATE model_prices SET model_id = model_name WHERE (model_id IS NULL OR model_id = '') AND model_name IS NOT NULL AND model_name != ''")
+	DB.Exec("UPDATE model_prices SET name = model_name WHERE (name IS NULL OR name = '') AND model_name IS NOT NULL AND model_name != ''")
+
+	// 空表注入 10 条默认展示模型
+	var modelCount int64
+	DB.Model(&ModelPrice{}).Count(&modelCount)
+	if modelCount == 0 {
+		logger.SysLog("seeding default model prices...")
+		defaults := []ModelPrice{
+			{ModelId: "deepseek-chat", Name: "DeepSeek V3", Provider: "DeepSeek", Description: "综合能力旗舰，性价比之王，适合日常开发和内容创作", Tags: "对话,国产", Logo: "deepseek", InputPrice: 0.002, OutputPrice: 0.008, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 1},
+			{ModelId: "deepseek-reasoner", Name: "DeepSeek R1", Provider: "DeepSeek", Description: "深度推理模型，复杂逻辑与数学推导首选，媲美 o1", Tags: "推理,国产", Logo: "deepseek", InputPrice: 0.004, OutputPrice: 0.016, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 2},
+			{ModelId: "qwen-max", Name: "Qwen Max", Provider: "阿里云", Description: "通义千问旗舰版，中文理解和长文处理能力出众", Tags: "对话,国产", Logo: "qwen", InputPrice: 0.004, OutputPrice: 0.012, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 3},
+			{ModelId: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", Description: "多模态旗舰，支持图文理解，综合能力领先，开发者首选", Tags: "对话,海外", Logo: "openai", InputPrice: 0.018, OutputPrice: 0.072, ContextWindow: "128K", Featured: true, IsVisible: true, SortOrder: 4},
+			{ModelId: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", Description: "轻量快速，价格实惠，适合简单对话和批量处理任务", Tags: "对话,海外", Logo: "openai", InputPrice: 0.001, OutputPrice: 0.004, ContextWindow: "128K", Featured: false, IsVisible: true, SortOrder: 5},
+			{ModelId: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Provider: "Anthropic", Description: "当前综合能力最强均衡模型，代码与长文档处理出众，SWE-bench 72.7%", Tags: "对话,推理,海外", Logo: "anthropic", InputPrice: 0.022, OutputPrice: 0.108, ContextWindow: "1M", Featured: true, IsVisible: true, SortOrder: 6},
+			{ModelId: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Provider: "Anthropic", Description: "快速轻量，响应迅速，适合高并发和简单任务", Tags: "对话,海外", Logo: "anthropic", InputPrice: 0.007, OutputPrice: 0.036, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 7},
+			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 0.009, OutputPrice: 0.072, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
+			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 0.0011, OutputPrice: 0.0043, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
+			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 0.072, OutputPrice: 0.288, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
+		}
+		if err := DB.Create(&defaults).Error; err != nil {
+			logger.SysError("failed to seed default model prices: " + err.Error())
+		}
+	}
 
 	return nil
 }
@@ -234,13 +270,22 @@ func CreateNotice(notice *Notice) error {
 
 // ===== ModelPrice =====
 
+// GetVisibleModelPrices 返回前台可见的模型（按 sort_order, id 排序）
 func GetVisibleModelPrices() ([]ModelPrice, error) {
 	var prices []ModelPrice
-	err := DB.Where("is_visible = 1").Order("provider ASC, model_name ASC").Find(&prices).Error
+	err := DB.Where("is_visible = ?", true).Order("sort_order ASC, id ASC").Find(&prices).Error
 	return prices, err
 }
 
+// UpsertModelPrice 按 model_id 幂等写入
 func UpsertModelPrice(price *ModelPrice) error {
+	if price.ModelId == "" {
+		return DB.Create(price).Error
+	}
+	var existing ModelPrice
+	if err := DB.Where("model_id = ?", price.ModelId).First(&existing).Error; err == nil {
+		price.Id = existing.Id
+	}
 	return DB.Save(price).Error
 }
 
@@ -262,28 +307,6 @@ func SeedDefaultPlans() {
 	}
 	for _, plan := range plans {
 		DB.Create(&plan)
-	}
-}
-
-func SeedDefaultModelPrices() {
-	var count int64
-	DB.Model(&ModelPrice{}).Count(&count)
-	if count > 0 {
-		return
-	}
-	logger.SysLog("Seeding default model prices...")
-	prices := []ModelPrice{
-		{ModelName: "claude-sonnet-4-20250514", InputPrice: 21, OutputPrice: 105, Provider: "Anthropic", Category: "chat", IsVisible: 1, Description: "Claude Sonnet 4，最强综合能力"},
-		{ModelName: "claude-3-5-haiku-20241022", InputPrice: 2.8, OutputPrice: 14, Provider: "Anthropic", Category: "chat", IsVisible: 1, Description: "Claude 3.5 Haiku，快速轻量"},
-		{ModelName: "gpt-4o", InputPrice: 35, OutputPrice: 105, Provider: "OpenAI", Category: "chat", IsVisible: 1, Description: "GPT-4o，强大多模态"},
-		{ModelName: "gpt-4o-mini", InputPrice: 1.05, OutputPrice: 4.2, Provider: "OpenAI", Category: "chat", IsVisible: 1, Description: "GPT-4o Mini，高性价比"},
-		{ModelName: "deepseek-chat", InputPrice: 1.33, OutputPrice: 5.33, Provider: "DeepSeek", Category: "chat", IsVisible: 1, Description: "DeepSeek V3"},
-		{ModelName: "deepseek-reasoner", InputPrice: 4.2, OutputPrice: 16.8, Provider: "DeepSeek", Category: "chat", IsVisible: 1, Description: "DeepSeek R1，深度推理"},
-		{ModelName: "gemini-1.5-pro", InputPrice: 8.75, OutputPrice: 35, Provider: "Google", Category: "chat", IsVisible: 1, Description: "Gemini 1.5 Pro"},
-		{ModelName: "gemini-1.5-flash", InputPrice: 0.525, OutputPrice: 2.1, Provider: "Google", Category: "chat", IsVisible: 1, Description: "Gemini 1.5 Flash，极低成本"},
-	}
-	for _, price := range prices {
-		DB.Create(&price)
 	}
 }
 

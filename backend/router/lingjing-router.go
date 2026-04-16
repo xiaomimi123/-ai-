@@ -66,9 +66,14 @@ func SetLingjingRouter(router *gin.Engine) {
 		admin.POST("/notices", controller.AdminCreateNotice)
 		admin.DELETE("/notices/:id", controller.AdminDeleteNotice)
 
-		admin.POST("/model-prices", controller.AdminUpsertModelPrice)
+		// 模型广场 CRUD（新）
+		admin.GET("/model-prices", controller.AdminGetModelPrices)
+		admin.POST("/model-prices", controller.AdminCreateModelPrice)
+		admin.PUT("/model-prices/:id", controller.AdminUpdateModelPrice)
 		admin.DELETE("/model-prices/:id", controller.AdminDeleteModelPrice)
+		admin.PUT("/model-prices/:id/toggle", controller.AdminToggleModelVisibility)
 
+		// 「模型管理」聚合视图（保留）：倍率/渠道数/可见性
 		admin.GET("/models", controller.AdminGetAllModels)
 		admin.PUT("/models", controller.AdminUpdateModel)
 		admin.DELETE("/models", controller.AdminDeleteModel) // ?model_name=xxx

@@ -3,7 +3,17 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 
-interface ModelPrice { id: number; model_name: string; provider: string; input_price: number; output_price: number; description: string; category: string }
+interface ModelPrice {
+  id: number
+  model_id: string
+  name: string
+  provider: string
+  description: string
+  input_price: number
+  output_price: number
+  logo?: string
+  context_window?: string
+}
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
   const [copied, setCopied] = useState(false)
@@ -31,7 +41,7 @@ export default function ModelDetailPage() {
 
   useEffect(() => {
     fetch('/api/lingjing/model-prices').then(r => r.json()).then(r => {
-      if (r.success) setModel((r.data || []).find((m: ModelPrice) => m.model_name === modelName) || null)
+      if (r.success) setModel((r.data || []).find((m: ModelPrice) => m.model_id === modelName) || null)
     }).finally(() => setLoading(false))
   }, [modelName])
 
@@ -45,10 +55,10 @@ export default function ModelDetailPage() {
   )
 
   const codes: Record<string, string> = {
-    python: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nresponse = client.chat.completions.create(\n    model="${model.model_name}",\n    messages=[\n        {"role": "system", "content": "你是一个智能助手"},\n        {"role": "user", "content": "你好！"}\n    ]\n)\n\nprint(response.choices[0].message.content)`,
-    nodejs: `import OpenAI from 'openai'\n\nconst client = new OpenAI({\n  apiKey: 'sk-你的令牌',\n  baseURL: '${BASE_URL}'\n})\n\nconst response = await client.chat.completions.create({\n  model: '${model.model_name}',\n  messages: [\n    { role: 'system', content: '你是一个智能助手' },\n    { role: 'user', content: '你好！' }\n  ]\n})\n\nconsole.log(response.choices[0].message.content)`,
-    curl: `curl ${BASE_URL}/chat/completions \\\n  -H "Authorization: Bearer sk-你的令牌" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model.model_name}",\n    "messages": [\n      {"role": "user", "content": "你好！"}\n    ]\n  }'`,
-    stream: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nstream = client.chat.completions.create(\n    model="${model.model_name}",\n    messages=[{"role": "user", "content": "你好！"}],\n    stream=True\n)\n\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end="", flush=True)`,
+    python: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nresponse = client.chat.completions.create(\n    model="${model.model_id}",\n    messages=[\n        {"role": "system", "content": "你是一个智能助手"},\n        {"role": "user", "content": "你好！"}\n    ]\n)\n\nprint(response.choices[0].message.content)`,
+    nodejs: `import OpenAI from 'openai'\n\nconst client = new OpenAI({\n  apiKey: 'sk-你的令牌',\n  baseURL: '${BASE_URL}'\n})\n\nconst response = await client.chat.completions.create({\n  model: '${model.model_id}',\n  messages: [\n    { role: 'system', content: '你是一个智能助手' },\n    { role: 'user', content: '你好！' }\n  ]\n})\n\nconsole.log(response.choices[0].message.content)`,
+    curl: `curl ${BASE_URL}/chat/completions \\\n  -H "Authorization: Bearer sk-你的令牌" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model.model_id}",\n    "messages": [\n      {"role": "user", "content": "你好！"}\n    ]\n  }'`,
+    stream: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nstream = client.chat.completions.create(\n    model="${model.model_id}",\n    messages=[{"role": "user", "content": "你好！"}],\n    stream=True\n)\n\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end="", flush=True)`,
   }
 
   return (
@@ -59,12 +69,13 @@ export default function ModelDetailPage() {
 
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 12 }}>
-          <ModelIcon modelName={model.model_name} size={56} />
-          <div>
-            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 6 }}>{model.model_name}</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ModelIcon modelName={model.model_id} logo={model.logo} size={56} />
+          <div style={{ minWidth: 0 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 700, marginBottom: 4 }}>{model.name || model.model_id}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: 'var(--muted)' }}>by {model.provider}</span>
-              <span className="badge badge-blue">{model.category || 'chat'}</span>
+              <code style={{ fontSize: 12, background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--accent)' }}>{model.model_id}</code>
+              {model.context_window && <span className="badge badge-blue">{model.context_window}</span>}
             </div>
           </div>
         </div>
@@ -74,13 +85,13 @@ export default function ModelDetailPage() {
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
         <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输入价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{model.input_price}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{(model.input_price ?? 0).toFixed(4)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 千 Token</div>
         </div>
         <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--primary)' }}>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输出价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>¥{model.output_price}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>¥{(model.output_price ?? 0).toFixed(4)}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 千 Token</div>
         </div>
       </div>
 
@@ -88,7 +99,7 @@ export default function ModelDetailPage() {
         <h3 style={{ fontWeight: 600, marginBottom: 16 }}>API 调用示例</h3>
         <div style={{ marginBottom: 20, fontSize: 13, color: 'var(--muted)' }}>
           Base URL：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--accent)' }}>{BASE_URL}</code>
-          &nbsp;&nbsp;模型：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>{model.model_name}</code>
+          &nbsp;&nbsp;模型：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>{model.model_id}</code>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {[{ key: 'python', label: 'Python' }, { key: 'nodejs', label: 'Node.js' }, { key: 'curl', label: 'cURL' }, { key: 'stream', label: '流式输出' }].map(tab => (
