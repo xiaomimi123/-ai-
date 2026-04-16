@@ -13,16 +13,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// OptionSavedSentinel 给前端的"已配置但不返回真值"标记
+// 前端识别此值后：
+//   1. input 显示空但 placeholder 提示「已配置」
+//   2. 保存时若 input 仍为空，跳过下发（不下发 = 保留原 secret 值不被误清）
+//   3. 用户输了新值 → 正常下发覆盖
+const OptionSavedSentinel = "$$SAVED$$"
+
 func GetOptions(c *gin.Context) {
 	var options []*model.Option
 	config.OptionMapRWMutex.Lock()
 	for k, v := range config.OptionMap {
+		valStr := helper.Interface2String(v)
+		// secret 字段（Token/Secret 后缀）不返回真值，只用 sentinel 告诉前端是否已配置
+		// 这样既不暴露密码到 admin 页面源码，又解决"刷新后输入框空 → 用户以为没保存"的 UX 问题
 		if strings.HasSuffix(k, "Token") || strings.HasSuffix(k, "Secret") {
-			continue
+			if valStr != "" {
+				valStr = OptionSavedSentinel
+			}
 		}
 		options = append(options, &model.Option{
 			Key:   k,
-			Value: helper.Interface2String(v),
+			Value: valStr,
 		})
 	}
 	config.OptionMapRWMutex.Unlock()
@@ -42,6 +54,11 @@ func UpdateOption(c *gin.Context) {
 			"success": false,
 			"message": i18n.Translate(c, "invalid_parameter"),
 		})
+		return
+	}
+	// 防御：若前端误把 GetOptions 返回的 sentinel 原样回传，视为"不修改"，直接成功返回
+	if option.Value == OptionSavedSentinel {
+		c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 		return
 	}
 	switch option.Key {

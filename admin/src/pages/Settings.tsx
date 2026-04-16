@@ -3,8 +3,15 @@ import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle } from 'luc
 import { optionApi, lingjingConfigApi } from '../api'
 import toast from 'react-hot-toast'
 
+// 后端 GetOptions 对 *Token / *Secret 字段返回 sentinel 而不是真值
+// 前端识别后：input 留空 + placeholder 提示「已配置」；保存时空值跳过避免误清
+const SAVED_SENTINEL = '$$SAVED$$'
+const isSecretKey = (k: string) => k.endsWith('Token') || k.endsWith('Secret')
+
 export default function SettingsPage() {
   const [opts, setOpts] = useState<Record<string, string>>({})
+  // 标记哪些 secret 字段后端有配置（不暴露真值，仅状态）
+  const [secretConfigured, setSecretConfigured] = useState<Record<string, boolean>>({})
   const [csConfig, setCsConfig] = useState({
     customer_service_enabled: 'false',
     customer_service_wechat: '',
@@ -20,8 +27,18 @@ export default function SettingsPage() {
       if (r.data.success) {
         const arr: Array<{ key: string; value: string }> = r.data.data || []
         const map: Record<string, string> = {}
-        for (const item of arr) map[item.key] = item.value
+        const secret: Record<string, boolean> = {}
+        for (const item of arr) {
+          if (item.value === SAVED_SENTINEL) {
+            // secret 字段已配置：input 留空，单独标记
+            map[item.key] = ''
+            secret[item.key] = true
+          } else {
+            map[item.key] = item.value
+          }
+        }
         setOpts(map)
+        setSecretConfigured(secret)
       }
     }).catch(() => toast.error('加载配置失败')).finally(() => setLoading(false))
     lingjingConfigApi.get().then(r => {
@@ -56,11 +73,15 @@ export default function SettingsPage() {
       'SMTPServer', 'SMTPPort', 'SMTPAccount', 'SMTPFrom', 'SMTPToken',
     ]
     let allOk = true
+    let savedCount = 0
     for (const key of keys) {
-      if (opts[key] !== undefined) {
-        const ok = await saveOption(key, opts[key])
-        if (!ok) allOk = false
-      }
+      const val = opts[key]
+      if (val === undefined) continue
+      // secret 字段（密码/SecretKey）留空且后端已配置 → 跳过下发，避免清空原值
+      if (isSecretKey(key) && val === '' && secretConfigured[key]) continue
+      const ok = await saveOption(key, val)
+      if (ok) savedCount++
+      else allOk = false
     }
     // 保存客服配置
     try {
@@ -68,8 +89,26 @@ export default function SettingsPage() {
       if (!csRes.data.success) allOk = false
     } catch { allOk = false }
 
-    if (allOk) toast.success('所有设置已保存')
+    if (allOk) toast.success(`已保存 ${savedCount} 项设置`)
     setSaving(false)
+    // 刷新本地状态：保存后重新拉一遍，让 secret 字段标记成"已配置"
+    optionApi.get().then(r => {
+      if (r.data.success) {
+        const arr: Array<{ key: string; value: string }> = r.data.data || []
+        const map: Record<string, string> = {}
+        const secret: Record<string, boolean> = {}
+        for (const item of arr) {
+          if (item.value === SAVED_SENTINEL) {
+            map[item.key] = ''
+            secret[item.key] = true
+          } else {
+            map[item.key] = item.value
+          }
+        }
+        setOpts(map)
+        setSecretConfigured(secret)
+      }
+    }).catch(() => {})
   }
 
   const setOpt = (key: string, value: string) => {
@@ -162,8 +201,18 @@ export default function SettingsPage() {
                 <input value={opts.TurnstileSiteKey || ''} onChange={e => setOpt('TurnstileSiteKey', e.target.value)} placeholder="0x..." />
               </div>
               <div className="form-group">
-                <label className="form-label">Secret Key</label>
-                <input type="password" value={opts.TurnstileSecretKey || ''} onChange={e => setOpt('TurnstileSecretKey', e.target.value)} placeholder="0x..." />
+                <label className="form-label">
+                  Secret Key
+                  {secretConfigured.TurnstileSecretKey && (
+                    <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--success)', fontWeight: 500 }}>✓ 已配置</span>
+                  )}
+                </label>
+                <input
+                  type="password"
+                  value={opts.TurnstileSecretKey || ''}
+                  onChange={e => setOpt('TurnstileSecretKey', e.target.value)}
+                  placeholder={secretConfigured.TurnstileSecretKey ? '留空保持原值；输入新值则覆盖' : '0x...'}
+                />
               </div>
             </div>
           )}
@@ -191,8 +240,18 @@ export default function SettingsPage() {
               <input value={opts.SMTPAccount || ''} onChange={e => setOpt('SMTPAccount', e.target.value)} placeholder="your@email.com" />
             </div>
             <div className="form-group">
-              <label className="form-label">SMTP 密码/Token</label>
-              <input type="password" value={opts.SMTPToken || ''} onChange={e => setOpt('SMTPToken', e.target.value)} placeholder="应用专用密码" />
+              <label className="form-label">
+                SMTP 密码/Token
+                {secretConfigured.SMTPToken && (
+                  <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--success)', fontWeight: 500 }}>✓ 已配置</span>
+                )}
+              </label>
+              <input
+                type="password"
+                value={opts.SMTPToken || ''}
+                onChange={e => setOpt('SMTPToken', e.target.value)}
+                placeholder={secretConfigured.SMTPToken ? '留空保持原值；输入新值则覆盖' : '应用专用密码'}
+              />
             </div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
