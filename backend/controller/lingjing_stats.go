@@ -73,8 +73,8 @@ func GetAdminDashboardStats(c *gin.Context) {
 	model.DB.Model(&model.User{}).Count(&totalUsers)
 
 	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()).Unix()
-	var todayNewUsers int64
-	model.DB.Model(&model.User{}).Where("created_time >= ?", todayStart).Count(&todayNewUsers)
+	// TODO: One API 原版 users 表没有时间列，暂返回 0；要精确统计需给 User struct 加 CreatedTime 字段并做 DB 迁移
+	var todayNewUsers int64 = 0
 
 	type DailyRevenue struct {
 		Date    string  `json:"date"`
