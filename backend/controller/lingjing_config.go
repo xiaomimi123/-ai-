@@ -47,6 +47,9 @@ func GetLingjingConfig(c *gin.Context) {
 		}
 	}
 
+	// 注入 One API 全局配置：是否开启邮箱验证（注册页用此判断要不要展示验证码输入）
+	data["email_verify_enabled"] = config.EmailVerificationEnabled
+
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": data})
 }
 

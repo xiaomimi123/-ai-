@@ -15,8 +15,16 @@ http.interceptors.response.use(
 export const authApi = {
   login: (username: string, password: string) =>
     http.post('/api/user/login', { username, password }),
-  register: (data: { username: string; password: string; email?: string; aff_code?: string }) =>
-    http.post('/api/user/register', data),
+  register: (data: {
+    username: string
+    password: string
+    email?: string
+    aff_code?: string
+    verification_code?: string
+  }) => http.post('/api/user/register', data),
+  // 发送注册邮箱验证码（One API 原生接口：GET /api/verification?email=xxx）
+  sendEmailCode: (email: string) =>
+    http.get('/api/verification', { params: { email } }),
   logout: () => http.get('/api/user/logout'),
   getSelf: () => http.get('/api/user/self'),
   updateSelf: (data: object) => http.put('/api/user/self', data),

@@ -270,6 +270,9 @@ tr:hover td { background: var(--bg); }
   .plan-grid { grid-template-columns: 1fr !important; }
   .topup-grid { grid-template-columns: 1fr !important; }
   .dashboard-grid { grid-template-columns: 1fr !important; }
+  /* 登录/注册页：移动端隐藏左侧品牌面板，右侧表单全宽 */
+  .auth-brand { display: none !important; }
+  .auth-form-pane { padding: 32px 20px !important; min-height: 100vh; }
 }
 @media (max-width: 480px) {
   .stat-grid { grid-template-columns: 1fr 1fr; }
