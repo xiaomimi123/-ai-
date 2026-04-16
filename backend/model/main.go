@@ -42,6 +42,7 @@ func CreateRootAccountIfNeed() error {
 			DisplayName: "Root User",
 			AccessToken: accessToken,
 			Quota:       500000000000000,
+			CreatedTime: helper.GetTimestamp(),
 		}
 		DB.Create(&rootUser)
 		if config.InitialRootToken != "" {

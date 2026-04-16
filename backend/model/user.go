@@ -51,6 +51,7 @@ type User struct {
 	Group            string `json:"group" gorm:"type:varchar(32);default:'default'"`
 	AffCode          string `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	InviterId        int    `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	CreatedTime      int64  `json:"created_time" gorm:"bigint;index"`
 }
 
 func GetMaxUserId() int {
@@ -128,6 +129,7 @@ func (user *User) Insert(ctx context.Context, inviterId int) error {
 	user.Quota = config.QuotaForNewUser
 	user.AccessToken = random.GetUUID()
 	user.AffCode = random.GetRandomString(4)
+	user.CreatedTime = helper.GetTimestamp()
 	result := DB.Create(user)
 	if result.Error != nil {
 		return result.Error

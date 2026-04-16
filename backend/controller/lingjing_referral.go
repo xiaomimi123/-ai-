@@ -30,9 +30,8 @@ func GetReferralInfo(c *gin.Context) {
 	}
 
 	// 获取邀请的用户列表
-	// 注意：One API 原版 users 表没有时间列，仅查 id / username；前端 u.created_time 缺失会 fallback 到 "-"
 	var invitedUsers []model.User
-	model.DB.Select("id, username").Where("inviter_id = ?", userId).Find(&invitedUsers)
+	model.DB.Select("id, username, created_time").Where("inviter_id = ?", userId).Find(&invitedUsers)
 
 	// 获取佣金统计
 	var totalCommission float64
