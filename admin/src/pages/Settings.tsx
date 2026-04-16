@@ -16,7 +16,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     optionApi.get().then(r => {
-      if (r.data.success) setOpts(r.data.data || {})
+      // 后端返回数组 [{key, value}, ...]，前端用作 map 需要先转换
+      if (r.data.success) {
+        const arr: Array<{ key: string; value: string }> = r.data.data || []
+        const map: Record<string, string> = {}
+        for (const item of arr) map[item.key] = item.value
+        setOpts(map)
+      }
     }).catch(() => toast.error('加载配置失败')).finally(() => setLoading(false))
     lingjingConfigApi.get().then(r => {
       if (r.data.success) {
