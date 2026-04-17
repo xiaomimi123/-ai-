@@ -100,6 +100,9 @@ func main() {
 	// 孤儿 pending 订单清理：30 分钟未支付自动取消；每 5 分钟扫一次
 	// 误杀场景（虎皮椒 > 30min 后才 notify）由 HupijiaoNotify 的救回逻辑兜底
 	go model.CleanupPendingOrdersLoop(30*time.Minute, 5*time.Minute)
+
+	// 分销配置持久化：启动时从 options 加载，避免重启后回到默认值
+	controller.InitReferralConfig()
 	client.Init()
 
 	// Initialize i18n

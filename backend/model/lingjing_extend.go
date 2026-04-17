@@ -23,23 +23,18 @@ type Order struct {
 	PaidAt        int64   `json:"paid_at"`
 }
 
-// Referral 分销关系表
-type Referral struct {
-	Id             int       `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserId         int       `json:"user_id" gorm:"uniqueIndex;not null"`
-	InviterId      int       `json:"inviter_id" gorm:"index;not null"`
-	CommissionRate float64   `json:"commission_rate" gorm:"type:decimal(4,2);default:0.10"`
-	CreatedAt      time.Time `json:"created_at"`
-}
-
 // Commission 佣金记录表
+// status: 0=待结算, 1=已结算
+// settled_via: ""（未结算或老数据）/ "quota"（走路径A转余额）/ "withdraw"（走路径B支付宝打款完成）
+// OrderId 加 uniqueIndex 防止同一订单产生多条佣金（并发 / 重试场景的幂等保证）
 type Commission struct {
 	Id         int       `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId     int       `json:"user_id" gorm:"index;not null"`
 	FromUserId int       `json:"from_user_id" gorm:"not null"`
-	OrderId    int       `json:"order_id"`
+	OrderId    int       `json:"order_id" gorm:"uniqueIndex:idx_commission_order"`
 	Amount     float64   `json:"amount" gorm:"type:decimal(10,2);not null"`
-	Status     int       `json:"status" gorm:"default:0"` // 0待结算 1已结算
+	Status     int       `json:"status" gorm:"default:0"`
+	SettledVia string    `json:"settled_via" gorm:"size:16;default:''"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 
@@ -120,7 +115,6 @@ type ModelPrice struct {
 func InitLingjingTables() error {
 	err := DB.AutoMigrate(
 		&Order{},
-		&Referral{},
 		&Commission{},
 		&Plan{},
 		&Notice{},
@@ -131,6 +125,12 @@ func InitLingjingTables() error {
 	if err != nil {
 		return err
 	}
+
+	// 一次性迁移：把历史 status=1 的 commission 全部标记为 settled_via='quota'
+	// 理由：旧代码里只有 WithdrawCommission（路径 A，转余额）会把 status 0→1，
+	// 所以历史 status=1 的记录都是"已转余额"的，必须排除在路径 B 的可提现池外
+	// 否则用户能把同一笔佣金同时提现两次（详见分销审查报告 #1）
+	DB.Exec("UPDATE commissions SET settled_via = 'quota' WHERE status = 1 AND (settled_via IS NULL OR settled_via = '')")
 	// 扩展 Token 表添加速率限制字段（忽略已存在的错误）
 	DB.Exec("ALTER TABLE tokens ADD COLUMN rpm BIGINT DEFAULT 0")
 	DB.Exec("ALTER TABLE tokens ADD COLUMN tpm BIGINT DEFAULT 0")
@@ -220,29 +220,6 @@ func UpdatePlan(plan *Plan) error {
 
 func DeletePlan(id int) error {
 	return DB.Delete(&Plan{}, id).Error
-}
-
-// ===== Referral =====
-
-func CreateReferral(userId, inviterId int) error {
-	referral := &Referral{
-		UserId:         userId,
-		InviterId:      inviterId,
-		CommissionRate: 0.10,
-	}
-	return DB.Create(referral).Error
-}
-
-func GetReferralByUserId(userId int) (*Referral, error) {
-	var referral Referral
-	err := DB.Where("user_id = ?", userId).First(&referral).Error
-	return &referral, err
-}
-
-func GetReferralsByInviterId(inviterId int) ([]Referral, error) {
-	var referrals []Referral
-	err := DB.Where("inviter_id = ?", inviterId).Find(&referrals).Error
-	return referrals, err
 }
 
 // ===== Commission =====

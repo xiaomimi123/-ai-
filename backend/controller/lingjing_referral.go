@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +15,52 @@ import (
 	"gorm.io/gorm"
 )
 
-// ====== 分销配置 ======
-
+// ====== 分销配置（持久化到 options 表；重启自动恢复） ======
+//
+// options key:
+//   referral.commission_rate    - float (0~1)
+//   referral.enabled            - "true" / "false"
+//   referral.withdraw_min_quota - int（最低提现额度，路径 A 用；对应 quota 单位）
 var (
-	CommissionRate    float64 = 0.10 // 默认佣金比例 10%
-	CommissionEnabled bool    = true // 是否启用分销
-	WithdrawMinQuota  int     = 500000 // 最低提现额度（对应 $1）
+	referralCfgMu sync.RWMutex
+
+	CommissionRate    float64 = 0.10
+	CommissionEnabled bool    = true
+	WithdrawMinQuota  int64   = 500000 // 对应 $1；用 int64 防 32-bit 下溢
 )
+
+const (
+	optKeyCommissionRate    = "referral.commission_rate"
+	optKeyCommissionEnabled = "referral.enabled"
+	optKeyWithdrawMinQuota  = "referral.withdraw_min_quota"
+)
+
+// InitReferralConfig 启动时从 options 加载；没配置就保持默认值（首次写默认值到表）
+func InitReferralConfig() {
+	referralCfgMu.Lock()
+	defer referralCfgMu.Unlock()
+	if v := model.GetOptionValue(optKeyCommissionRate); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 && f <= 1 {
+			CommissionRate = f
+		}
+	}
+	if v := model.GetOptionValue(optKeyCommissionEnabled); v != "" {
+		CommissionEnabled = v == "true"
+	}
+	if v := model.GetOptionValue(optKeyWithdrawMinQuota); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			WithdrawMinQuota = n
+		}
+	}
+	logger.SysLog(fmt.Sprintf("referral config loaded: rate=%.2f enabled=%v minQuota=%d",
+		CommissionRate, CommissionEnabled, WithdrawMinQuota))
+}
+
+func getReferralCfg() (rate float64, enabled bool, minQuota int64) {
+	referralCfgMu.RLock()
+	defer referralCfgMu.RUnlock()
+	return CommissionRate, CommissionEnabled, WithdrawMinQuota
+}
 
 // ====== 用户: 获取邀请信息 ======
 
@@ -32,36 +73,47 @@ func GetReferralInfo(c *gin.Context) {
 		return
 	}
 
-	// 获取邀请的用户列表
+	// 邀请用户列表：限 50 条；另外独立 COUNT 拿总数，避免一次返回几百条卡前端
 	var invitedUsers []model.User
-	model.DB.Select("id, username, created_time").Where("inviter_id = ?", userId).Find(&invitedUsers)
+	var invitedCount int64
+	model.DB.Model(&model.User{}).Where("inviter_id = ?", userId).Count(&invitedCount)
+	model.DB.Select("id, username, created_time").
+		Where("inviter_id = ?", userId).
+		Order("created_time DESC").
+		Limit(50).
+		Find(&invitedUsers)
 
-	// 获取佣金统计
-	var totalCommission float64
-	var pendingCommission float64
-	var settledCommission float64
+	// 佣金统计：pending = 未结算；settled = 已结算待支付宝提现；quota_spent = 已转余额
+	var totalCommission, pendingCommission, settledAvailable, quotaSpent float64
 	model.DB.Model(&model.Commission{}).Where("user_id = ?", userId).
 		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
 	model.DB.Model(&model.Commission{}).Where("user_id = ? AND status = 0", userId).
 		Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
-	model.DB.Model(&model.Commission{}).Where("user_id = ? AND status = 1", userId).
-		Select("COALESCE(SUM(amount), 0)").Scan(&settledCommission)
+	model.DB.Model(&model.Commission{}).
+		Where("user_id = ? AND status = 1 AND (settled_via IS NULL OR settled_via = '' OR settled_via = 'withdraw')", userId).
+		Select("COALESCE(SUM(amount), 0)").Scan(&settledAvailable)
+	model.DB.Model(&model.Commission{}).
+		Where("user_id = ? AND status = 1 AND settled_via = 'quota'", userId).
+		Select("COALESCE(SUM(amount), 0)").Scan(&quotaSpent)
 
-	inviteLink := fmt.Sprintf("%s/register?ref=%s", config.ServerAddress, user.AffCode)
+	rate, enabled, minQuota := getReferralCfg()
+	inviteLink := fmt.Sprintf("%s/register?ref=%s",
+		strings.TrimRight(config.ServerAddress, "/"), user.AffCode)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"aff_code":             user.AffCode,
-			"invite_link":          inviteLink,
-			"invited_count":        len(invitedUsers),
-			"invited_users":        invitedUsers,
-			"commission_rate":      CommissionRate,
-			"total_commission":     totalCommission,
-			"pending_commission":   pendingCommission,
-			"settled_commission":   settledCommission,
-			"withdraw_min_quota":   WithdrawMinQuota,
-			"commission_enabled":   CommissionEnabled,
+			"aff_code":           user.AffCode,
+			"invite_link":        inviteLink,
+			"invited_count":      invitedCount,
+			"invited_users":      invitedUsers, // 最近 50 条
+			"commission_rate":    rate,
+			"total_commission":   totalCommission,
+			"pending_commission": pendingCommission,
+			"settled_commission": settledAvailable, // 仅路径 B 可用
+			"quota_spent":        quotaSpent,       // 历史已转余额的（信息展示用）
+			"withdraw_min_quota": minQuota,
+			"commission_enabled": enabled,
 		},
 	})
 }
@@ -70,22 +122,22 @@ func GetReferralInfo(c *gin.Context) {
 
 func GetCommissionList(c *gin.Context) {
 	userId := c.GetInt("id")
-
 	commissions, err := model.GetCommissionsByUserId(userId)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": commissions})
 }
 
-// ====== 用户: 佣金提现（转为额度）======
-
+// ====== 用户: 佣金提现（路径 A：转为站内额度） ======
+// 把所有 status=0 的佣金标为 status=1 + settled_via='quota'，再把等值 quota 加到用户余额
+// 事务 + 条件 UPDATE 防并发双倍结算
 func WithdrawCommission(c *gin.Context) {
 	userId := c.GetInt("id")
 
-	if !CommissionEnabled {
+	_, enabled, minQuota := getReferralCfg()
+	if !enabled {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "分销功能未启用"})
 		return
 	}
@@ -96,78 +148,103 @@ func WithdrawCommission(c *gin.Context) {
 		Where("user_id = ? AND status = 0", userId).
 		Select("COALESCE(SUM(amount), 0)").Scan(&pendingAmount)
 
-	// 转换为额度
-	quotaToAdd := int(pendingAmount * config.QuotaPerUnit)
-	if quotaToAdd < WithdrawMinQuota {
+	// 转成 quota（int64 防 32-bit 下溢）
+	quotaToAdd := int64(pendingAmount * config.QuotaPerUnit)
+	if quotaToAdd < minQuota {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
-			"message": fmt.Sprintf("最低提现额度为 $%.2f", float64(WithdrawMinQuota)/config.QuotaPerUnit),
+			"message": fmt.Sprintf("最低提现额度为 $%.2f", float64(minQuota)/config.QuotaPerUnit),
 		})
 		return
 	}
 
-	// 事务：标记佣金为已结算 + 增加用户额度
-	tx := model.DB.Begin()
-
-	if err := tx.Model(&model.Commission{}).
-		Where("user_id = ? AND status = 0", userId).
-		Update("status", 1).Error; err != nil {
-		tx.Rollback()
+	// 事务：条件 UPDATE 把 status=0 全部改 status=1 + settled_via=quota，然后加余额
+	// 如果并发两次调用，第二次 RowsAffected=0（因为 status 已不是 0）不会重复加额度
+	var actuallyUpdated int64
+	err := model.DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&model.Commission{}).
+			Where("user_id = ? AND status = 0", userId).
+			Updates(map[string]interface{}{
+				"status":      1,
+				"settled_via": "quota",
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		actuallyUpdated = res.RowsAffected
+		if actuallyUpdated == 0 {
+			// 并发场景：已经被另一次调用处理过
+			return nil
+		}
+		if err := tx.Model(&model.User{}).Where("id = ?", userId).
+			Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		logger.SysError(fmt.Sprintf("withdraw commission tx failed: user=%d err=%v", userId, err))
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "提现失败"})
 		return
 	}
-
-	// 注意：Update 的 value 必须是 gorm.Expr（不是 DB.Raw —— Raw 是查询构造器不是列表达式）
-	if err := tx.Model(&model.User{}).Where("id = ?", userId).
-		Update("quota", gorm.Expr("quota + ?", quotaToAdd)).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "增加额度失败"})
+	if actuallyUpdated == 0 {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "没有可提现的佣金（可能已被并发处理）"})
 		return
 	}
 
-	tx.Commit()
-
-	logger.SysLog(fmt.Sprintf("user %d withdrew commission: amount=%.2f quota=%d", userId, pendingAmount, quotaToAdd))
+	logger.SysLog(fmt.Sprintf("user %d withdrew commission (to quota): amount=%.2f quota=%d rows=%d",
+		userId, pendingAmount, quotaToAdd, actuallyUpdated))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": fmt.Sprintf("提现成功，已添加 $%.2f 额度", pendingAmount),
 		"data": gin.H{
-			"amount":     pendingAmount,
+			"amount":      pendingAmount,
 			"quota_added": quotaToAdd,
 		},
 	})
 }
 
-// ====== 充值时发放佣金（在支付成功后调用）======
-
+// ====== 充值时发放佣金（在支付成功后调用） ======
+// 幂等保证：commissions.order_id 加了 uniqueIndex，重复插入会返回错误，安全吞掉
+// 自邀请防护：user.InviterId == userId 时不发（注册流程理论上杜绝此情况，防御性检查）
 func DistributeCommission(userId int, orderAmount float64, orderId int) {
-	if !CommissionEnabled || orderAmount <= 0 {
+	rate, enabled, _ := getReferralCfg()
+	if !enabled || orderAmount <= 0 || orderId <= 0 {
 		return
 	}
 
-	// 查找邀请人
 	user, err := model.GetUserById(userId, false)
 	if err != nil || user.InviterId == 0 {
 		return
 	}
+	if user.InviterId == userId {
+		logger.SysError(fmt.Sprintf("self-invite commission blocked: user=%d", userId))
+		return
+	}
 
-	commissionAmount := orderAmount * CommissionRate
+	commissionAmount := orderAmount * rate
 
 	commission := &model.Commission{
 		UserId:     user.InviterId,
 		FromUserId: userId,
 		OrderId:    orderId,
 		Amount:     commissionAmount,
-		Status:     0, // 待结算
+		Status:     0,
 	}
 
 	if err := model.CreateCommission(commission); err != nil {
+		// 唯一键冲突说明该订单已发过佣金（幂等），吞掉
+		if strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+			logger.SysLog(fmt.Sprintf("commission already exists for order=%d (idempotent skip)", orderId))
+			return
+		}
 		logger.SysError(fmt.Sprintf("create commission failed: %v", err))
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("commission created: inviter=%d from_user=%d amount=%.2f", user.InviterId, userId, commissionAmount))
+	logger.SysLog(fmt.Sprintf("commission created: inviter=%d from_user=%d amount=%.2f order=%d",
+		user.InviterId, userId, commissionAmount, orderId))
 }
 
 // ====== 管理员: 分销概览 ======
@@ -183,7 +260,12 @@ func AdminGetReferralStats(c *gin.Context) {
 	model.DB.Model(&model.Commission{}).Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
 	model.DB.Model(&model.Commission{}).Where("status = 0").Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
 
-	// 分销排行榜（按邀请人数）
+	// 除零防护（新环境数据空时）
+	referralRate := "0.0%"
+	if totalUsers > 0 {
+		referralRate = fmt.Sprintf("%.1f%%", float64(usersWithInviter)/float64(totalUsers)*100)
+	}
+
 	type InviterRank struct {
 		InviterId    int    `json:"inviter_id"`
 		Username     string `json:"username"`
@@ -200,33 +282,36 @@ func AdminGetReferralStats(c *gin.Context) {
 		LIMIT 20
 	`).Scan(&rankings)
 
+	rate, _, _ := getReferralCfg()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"total_users":          totalUsers,
-			"users_with_inviter":   usersWithInviter,
-			"referral_rate":        fmt.Sprintf("%.1f%%", float64(usersWithInviter)/float64(totalUsers)*100),
-			"total_commission":     totalCommission,
-			"pending_commission":   pendingCommission,
-			"commission_rate":      CommissionRate,
-			"rankings":             rankings,
+			"total_users":        totalUsers,
+			"users_with_inviter": usersWithInviter,
+			"referral_rate":      referralRate,
+			"total_commission":   totalCommission,
+			"pending_commission": pendingCommission,
+			"commission_rate":    rate,
+			"rankings":           rankings,
 		},
 	})
 }
 
-// ====== 管理员: 更新分销配置 ======
+// ====== 管理员: 更新分销配置（持久化到 options） ======
 
 func AdminUpdateReferralConfig(c *gin.Context) {
 	var req struct {
 		CommissionRate    *float64 `json:"commission_rate"`
 		CommissionEnabled *bool    `json:"commission_enabled"`
-		WithdrawMinQuota  *int     `json:"withdraw_min_quota"`
+		WithdrawMinQuota  *int64   `json:"withdraw_min_quota"`
 	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
 		return
 	}
+
+	referralCfgMu.Lock()
+	defer referralCfgMu.Unlock()
 
 	if req.CommissionRate != nil {
 		if *req.CommissionRate < 0 || *req.CommissionRate > 1 {
@@ -234,12 +319,23 @@ func AdminUpdateReferralConfig(c *gin.Context) {
 			return
 		}
 		CommissionRate = *req.CommissionRate
+		model.SaveOption(optKeyCommissionRate, strconv.FormatFloat(CommissionRate, 'f', 4, 64))
 	}
 	if req.CommissionEnabled != nil {
 		CommissionEnabled = *req.CommissionEnabled
+		v := "false"
+		if CommissionEnabled {
+			v = "true"
+		}
+		model.SaveOption(optKeyCommissionEnabled, v)
 	}
 	if req.WithdrawMinQuota != nil {
+		if *req.WithdrawMinQuota <= 0 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "最低提现额度须大于 0"})
+			return
+		}
 		WithdrawMinQuota = *req.WithdrawMinQuota
+		model.SaveOption(optKeyWithdrawMinQuota, strconv.FormatInt(WithdrawMinQuota, 10))
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -255,12 +351,14 @@ func AdminUpdateReferralConfig(c *gin.Context) {
 
 // ====== 提现配置 ======
 
-const WithdrawMinAmount float64 = 10.0 // 最低提现 ¥10
+const WithdrawMinAmount float64 = 10.0 // 最低提现 ¥10（路径 B）
 
-// sumWithdrawableCommission 计算用户可提现额度（已结算佣金 - 未被拒绝的提现申请合计）
+// sumWithdrawableCommission 计算用户路径 B 可提现余额
+// 关键修复：**排除 settled_via='quota'**（已走路径 A 转余额的佣金不能再申请支付宝提现）
+// 否则用户能双路径刷钱（同一笔佣金既转了余额又申请了真金提现）
 func sumWithdrawableCommission(userId int) (totalCommission, withdrawnAmount, available float64) {
 	model.DB.Model(&model.Commission{}).
-		Where("user_id = ? AND status = 1", userId).
+		Where("user_id = ? AND status = 1 AND (settled_via IS NULL OR settled_via = '' OR settled_via = 'withdraw')", userId).
 		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
 	model.DB.Model(&model.WithdrawRequest{}).
 		Where("user_id = ? AND status IN (0,1,3)", userId).
@@ -272,7 +370,7 @@ func sumWithdrawableCommission(userId int) (totalCommission, withdrawnAmount, av
 	return
 }
 
-// ====== 用户: 获取提现信息（余额 + 历史）======
+// ====== 用户: 获取提现信息（余额 + 历史） ======
 
 func GetWithdrawInfo(c *gin.Context) {
 	userId := c.GetInt("id")
