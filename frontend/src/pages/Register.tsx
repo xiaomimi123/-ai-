@@ -192,23 +192,31 @@ export default function RegisterPage() {
 
             {emailVerifyEnabled && (
               <div className="form-group">
-                <label className="form-label">邮箱验证码</label>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    type="text"
-                    placeholder="6 位验证码"
-                    value={verifyCode}
-                    onChange={e => setVerifyCode(e.target.value)}
-                    inputMode="numeric"
-                    maxLength={8}
-                    style={{ flex: 1 }}
-                  />
+                <label className="form-label" htmlFor="verification_code">邮箱验证码</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+                  {/* name + autoComplete="one-time-code" 明确告诉 Chrome / 1Password 这是 OTP，
+                      避免它把紧跟 password 的 type=text 识别成可自动填充字段而锁掉焦点。
+                      外层 div 用 flex: 1 + min-width: 0 防 input 被按钮挤到宽度 0。 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <input
+                      id="verification_code"
+                      name="verification_code"
+                      type="text"
+                      placeholder="6 位验证码"
+                      value={verifyCode}
+                      onChange={e => setVerifyCode(e.target.value)}
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={8}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="btn btn-outline"
                     onClick={sendCode}
                     disabled={codeSending || countdown > 0}
-                    style={{ whiteSpace: 'nowrap', minWidth: 110, fontSize: 13 }}
+                    style={{ whiteSpace: 'nowrap', minWidth: 110, fontSize: 13, flexShrink: 0 }}
                   >
                     {countdown > 0 ? `${countdown}s 后重发` : (codeSending ? '发送中...' : '获取验证码')}
                   </button>
