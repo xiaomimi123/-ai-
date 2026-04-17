@@ -178,6 +178,11 @@ func CreatePayOrder(c *gin.Context) {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	bodyStr := string(body)
+	bodySnippet := bodyStr
+	if len(bodySnippet) > 500 {
+		bodySnippet = bodySnippet[:500] + "...(truncated)"
+	}
 
 	var apiResp struct {
 		OpenId    int             `json:"openid"`
@@ -188,20 +193,24 @@ func CreatePayOrder(c *gin.Context) {
 		Hash      string          `json:"hash"`
 	}
 	if err := json.Unmarshal(body, &apiResp); err != nil {
-		logger.SysError(fmt.Sprintf("hupijiao create order: parse response failed: %s, body=%s", err.Error(), string(body)))
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关返回异常"})
+		logger.SysError(fmt.Sprintf("hupijiao create order: parse response failed: %s, httpStatus=%d body=%s", err.Error(), resp.StatusCode, bodyStr))
+		// 把原始 body 回传到前端方便排查第三方兼容网关的协议差异
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"message": fmt.Sprintf("支付网关返回异常 (HTTP %d): %s", resp.StatusCode, bodySnippet),
+		})
 		return
 	}
 
 	// errcode 兼容 0 / "0" 两种写法
 	errCodeStr := strings.Trim(string(apiResp.ErrCode), `"`)
 	if errCodeStr != "" && errCodeStr != "0" {
-		logger.SysError(fmt.Sprintf("hupijiao create order: errcode=%s errmsg=%s body=%s", errCodeStr, apiResp.ErrMsg, string(body)))
+		logger.SysError(fmt.Sprintf("hupijiao create order: errcode=%s errmsg=%s body=%s", errCodeStr, apiResp.ErrMsg, bodyStr))
 		msg := apiResp.ErrMsg
 		if msg == "" {
 			msg = "支付下单失败"
 		}
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付下单失败：" + msg})
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付下单失败（错误码 " + errCodeStr + "）：" + msg})
 		return
 	}
 
@@ -210,8 +219,8 @@ func CreatePayOrder(c *gin.Context) {
 		payUrl = apiResp.UrlQrCode
 	}
 	if payUrl == "" {
-		logger.SysError("hupijiao create order: empty url, body=" + string(body))
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关未返回跳转地址"})
+		logger.SysError("hupijiao create order: empty url, body=" + bodyStr)
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关未返回跳转地址：" + bodySnippet})
 		return
 	}
 
