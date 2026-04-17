@@ -1,7 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
-import { CreditCard, Gift, Tag, CheckCircle, Loader2 } from 'lucide-react'
+import { CreditCard, Gift, Tag, CheckCircle, Loader2, X } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
 import { redeemApi, payApi, authApi } from '../api'
 import axios from 'axios'
+
+// PC 端 vs 移动端：PC 渲染二维码让用户手机扫；移动端直接跳转唤起支付 App
+const isMobile = () => /android|iphone|ipad|ipod|mobile|micromessenger/i.test(navigator.userAgent)
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -26,31 +30,42 @@ export default function TopupPage() {
   const [redeemMsg, setRedeemMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [payStatus, setPayStatus] = useState(0) // 0idle 1success
   const [orderNo, setOrderNo] = useState('')
+  const [qrPayUrl, setQrPayUrl] = useState('')     // PC 端二维码内容（支付跳转 URL）
+  const [qrAmount, setQrAmount] = useState(0)     // 二维码弹窗展示的金额
   const [user, setUser] = useState<any>(null)
   const [payConfig, setPayConfig] = useState({ alipay_enabled: false, redeem_enabled: true })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // 启动订单状态轮询（PC 扫码支付用；每 2s 查一次，最多 150 次 = 5 分钟）
+  const startPolling = (targetOrderNo: string) => {
+    if (pollRef.current) clearInterval(pollRef.current)
+    let cnt = 0
+    pollRef.current = setInterval(async () => {
+      cnt++
+      if (cnt > 150) { clearInterval(pollRef.current!); return }
+      try {
+        const r = await http.get(`/api/lingjing/pay/order/${targetOrderNo}`)
+        if (r.data.success && r.data.data.status === 1) {
+          clearInterval(pollRef.current!)
+          setPayStatus(1)
+          setQrPayUrl('') // 关闭二维码弹窗
+          authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
+        }
+      } catch {}
+    }, 2000)
+  }
 
   useEffect(() => {
     authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
     http.get('/api/lingjing/plans').then(r => { if (r.data.success && r.data.data?.length) setPlans(r.data.data) }).catch(() => {})
     payApi.getConfig().then(r => { if (r.data.success) setPayConfig(r.data.data) }).catch(() => {})
 
-    // 易支付 return_url 带 ?order=LJxxx 回跳，读取后轮询一次订单状态
+    // 移动端 return_url 回跳 /topup?order=LJxxx，轮询订单状态
     const params = new URLSearchParams(window.location.search)
     const returnedOrder = params.get('order')
     if (returnedOrder) {
       setOrderNo(returnedOrder)
-      let cnt = 0
-      pollRef.current = setInterval(async () => {
-        cnt++; if (cnt > 20) { clearInterval(pollRef.current!); return }
-        try {
-          const r = await http.get(`/api/lingjing/pay/order/${returnedOrder}`)
-          if (r.data.success && r.data.data.status === 1) {
-            clearInterval(pollRef.current!); setPayStatus(1)
-            authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
-          }
-        } catch {}
-      }, 2000)
+      startPolling(returnedOrder)
     }
 
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
@@ -66,10 +81,24 @@ export default function TopupPage() {
         : { amount: parseFloat(customAmount), pay_type: payType }
       const res = await http.post('/api/lingjing/pay/create', payload)
       if (res.data.success) {
-        // 易支付协议：直接跳转到收银台（submit.php），完成支付后 return_url 回到 /topup?order=xxx
-        window.location.href = res.data.data.pay_url
+        const { pay_url, order_no } = res.data.data
+        if (isMobile()) {
+          // 移动端：直接跳到支付页唤起支付宝 / 微信 App
+          window.location.href = pay_url
+        } else {
+          // PC 端：展示二维码让用户手机扫码支付 + 启动订单状态轮询
+          setOrderNo(order_no)
+          setQrPayUrl(pay_url)
+          setQrAmount(amount)
+          startPolling(order_no)
+        }
       } else alert(res.data.message || '创建订单失败')
     } catch { alert('网络错误') } finally { setLoading(false) }
+  }
+
+  const closeQR = () => {
+    setQrPayUrl('')
+    if (pollRef.current) clearInterval(pollRef.current)
   }
 
   const handleRedeem = async () => {
@@ -99,6 +128,62 @@ export default function TopupPage() {
           <div>
             <div style={{ fontWeight: 600, color: 'var(--primary)' }}>支付成功！</div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>额度已到账，订单号：{orderNo}</div>
+          </div>
+        </div>
+      )}
+
+      {/* PC 端扫码支付弹窗 */}
+      {qrPayUrl && payStatus === 0 && (
+        <div
+          onClick={closeQR}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(13,31,20,.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 200, backdropFilter: 'blur(4px)', padding: 20,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 14, padding: '28px 32px',
+              boxShadow: '0 8px 32px rgba(0,0,0,.2)',
+              minWidth: 320, position: 'relative', textAlign: 'center',
+            }}
+          >
+            <button
+              onClick={closeQR}
+              style={{
+                position: 'absolute', top: 12, right: 12,
+                background: 'none', border: 'none', cursor: 'pointer',
+                padding: 6, borderRadius: 6, color: 'var(--muted)',
+              }}
+            >
+              <X size={18} />
+            </button>
+            <div style={{ fontWeight: 600, fontSize: 16, color: 'var(--primary)', marginBottom: 4 }}>
+              请使用手机扫码支付
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 18 }}>
+              支付金额 <span style={{ color: 'var(--accent)', fontWeight: 600 }}>¥{qrAmount.toFixed(2)}</span>
+            </div>
+            <div style={{
+              padding: 14, border: '0.5px solid var(--border)', borderRadius: 12,
+              display: 'inline-block', background: '#fff',
+            }}>
+              <QRCodeSVG value={qrPayUrl} size={220} level="M" />
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14, lineHeight: 1.6 }}>
+              打开手机「支付宝」或「微信」扫一扫
+              <br />完成支付后页面将自动跳转
+            </div>
+            <div style={{
+              marginTop: 14, padding: '8px 12px', background: 'var(--bg)',
+              borderRadius: 8, fontSize: 12, color: 'var(--muted)',
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+            }}>
+              <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />
+              <span>等待支付结果...（订单号 {orderNo}）</span>
+            </div>
           </div>
         </div>
       )}
