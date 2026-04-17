@@ -68,12 +68,13 @@ func CreatePayOrder(c *gin.Context) {
 		quota = int64(plan.Quota) + int64(plan.BonusQuota)
 		orderName = "灵镜AI-" + plan.Name
 		planId = plan.Id
-	} else if req.Amount >= 10.0 {
+	} else if req.Amount >= 1.0 {
+		// 临时下调到 ¥1 以便测试支付链路；测试通过后改回 10.0
 		amount = req.Amount
 		quota = int64(amount * 500000)
 		orderName = fmt.Sprintf("灵镜AI-充值¥%.0f", amount)
 	} else {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "最低充值 ¥10.00"})
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "最低充值 ¥1.00"})
 		return
 	}
 

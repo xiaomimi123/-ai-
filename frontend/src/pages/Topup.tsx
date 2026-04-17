@@ -58,7 +58,7 @@ export default function TopupPage() {
 
   const handlePay = async () => {
     const amount = payMode === 'plan' ? selectedPlan?.price : parseFloat(customAmount)
-    if (!amount || amount < 10) { alert(payMode === 'plan' ? '请选择套餐' : '最低充值 ¥10'); return }
+    if (!amount || amount < 1) { alert(payMode === 'plan' ? '请选择套餐' : '最低充值 ¥1'); return }
     setLoading(true); setPayStatus(0)
     try {
       const payload = payMode === 'plan' && selectedPlan
@@ -163,19 +163,21 @@ export default function TopupPage() {
           <div style={{ fontWeight: 600, marginBottom: 12 }}>输入充值金额</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
             <span style={{ fontSize: 22, fontWeight: 600, color: 'var(--accent)' }}>¥</span>
-            <input type="number" min="10" value={customAmount} onChange={e => setCustomAmount(e.target.value)} placeholder="最低 10" style={{ flex: 1, fontSize: 24, fontWeight: 600, border: 'none', outline: 'none', padding: '8px 0' }} />
+            <input type="number" min="1" value={customAmount} onChange={e => setCustomAmount(e.target.value)} placeholder="最低 1" style={{ flex: 1, fontSize: 24, fontWeight: 600, border: 'none', outline: 'none', padding: '8px 0' }} />
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>最低 ¥10 · 1 元 = 50 万 Token</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>最低 ¥1 · 1 元 = 50 万 Token</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {[10, 30, 50, 100, 200, 500].map(a => (
-              <button key={a} onClick={() => setCustomAmount(String(a))} className={`btn btn-sm ${customAmount === String(a) ? 'btn-accent' : 'btn-outline'}`} style={{ fontSize: 12 }}>¥{a}</button>
+            {[1, 10, 30, 50, 100, 200, 500].map(a => (
+              <button key={a} onClick={() => setCustomAmount(String(a))} className={`btn btn-sm ${customAmount === String(a) ? 'btn-accent' : 'btn-outline'}`} style={{ fontSize: 12 }}>
+                ¥{a}{a === 1 && <span style={{ marginLeft: 4, opacity: .7 }}>(测试)</span>}
+              </button>
             ))}
           </div>
         </div>
       )}
 
       {/* 支付按钮 */}
-      {curAmount >= 10 && payConfig.alipay_enabled && (
+      {curAmount >= 1 && payConfig.alipay_enabled && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
