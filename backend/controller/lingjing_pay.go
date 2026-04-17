@@ -415,7 +415,7 @@ func HupijiaoNotify(c *gin.Context) {
 
 	// 事务：**条件 UPDATE** 防并发双倍加额度
 	// 两个并发 notify 同时进来时，只有第一条能让 UPDATE 影响 1 行；第二条匹配 0 行 → errOrderAlreadyPaid
-	// 这样即使虎皮椒重试过快或网关多投递，也不会重复加用户余额
+	// 若订单已被孤儿清理任务误取消（status=2）但虎皮椒才 notify 过来，救回为 status=1 并加额度
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&model.Order{}).
 			Where("order_no = ? AND status = 0", orderNo).
@@ -428,8 +428,32 @@ func HupijiaoNotify(c *gin.Context) {
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
-			// 订单已被另一并发 notify 或管理员补单处理过
-			return errOrderAlreadyPaid
+			// 0 行：订单当前状态不是 pending，再读一次区分是"已完成（幂等）"还是"被 cleanup 误取消（要救回）"
+			var cur model.Order
+			if e := tx.Where("order_no = ?", orderNo).First(&cur).Error; e != nil {
+				return e
+			}
+			if cur.Status == 1 {
+				// 已完成：幂等返回
+				return errOrderAlreadyPaid
+			}
+			// status=2：cleanup 误杀，虎皮椒确认支付成功 → 救回
+			rescue := tx.Model(&model.Order{}).
+				Where("order_no = ? AND status = 2", orderNo).
+				Updates(map[string]interface{}{
+					"status":   1,
+					"trade_no": tradeNo,
+					"paid_at":  time.Now().Unix(),
+					"remark":   gorm.Expr("CONCAT(IFNULL(remark, ''), ?)", " | [晚到回调救回] 虎皮椒 notify 晚于取消超时"),
+				})
+			if rescue.Error != nil {
+				return rescue.Error
+			}
+			if rescue.RowsAffected == 0 {
+				// 并发再次变化（几乎不可能）→ 幂等
+				return errOrderAlreadyPaid
+			}
+			logger.SysLog(fmt.Sprintf("hupijiao notify: rescued cancelled order=%s (cleanup misfire)", orderNo))
 		}
 		if err := tx.Model(&model.User{}).Where("id = ?", order.UserId).
 			Update("quota", gorm.Expr("quota + ?", order.Quota)).Error; err != nil {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/gin-contrib/sessions"
 	"github.com/gin-contrib/sessions/cookie"
@@ -96,6 +97,9 @@ func main() {
 		openai.InitTokenEncoders()
 		logger.SysLog("token encoders initialized")
 	}()
+	// 孤儿 pending 订单清理：30 分钟未支付自动取消；每 5 分钟扫一次
+	// 误杀场景（虎皮椒 > 30min 后才 notify）由 HupijiaoNotify 的救回逻辑兜底
+	go model.CleanupPendingOrdersLoop(30*time.Minute, 5*time.Minute)
 	client.Init()
 
 	// Initialize i18n
