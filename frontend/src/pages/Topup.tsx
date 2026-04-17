@@ -6,6 +6,11 @@ import axios from 'axios'
 
 // PC 端 vs 移动端：PC 渲染二维码让用户手机扫；移动端直接跳转唤起支付 App
 const isMobile = () => /android|iphone|ipad|ipod|mobile|micromessenger/i.test(navigator.userAgent)
+// 微信内置浏览器（支付宝跳转会被拦截 → 需要提示用户"在浏览器打开"）
+const isWechatBrowser = () => /micromessenger/i.test(navigator.userAgent)
+
+// pending 订单号 localStorage key（移动端支付完成后可能不回跳本站，下次访问时补查状态）
+const PENDING_ORDER_KEY = 'lingjing_pending_order'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -36,19 +41,25 @@ export default function TopupPage() {
   const [payConfig, setPayConfig] = useState({ alipay_enabled: false, wxpay_enabled: false, redeem_enabled: true })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // 启动订单状态轮询（PC 扫码支付用；每 2s 查一次，最多 150 次 = 5 分钟）
+  // 启动订单状态轮询（每 2s 查一次，最多 150 次 = 5 分钟）
   const startPolling = (targetOrderNo: string) => {
     if (pollRef.current) clearInterval(pollRef.current)
     let cnt = 0
     pollRef.current = setInterval(async () => {
       cnt++
-      if (cnt > 150) { clearInterval(pollRef.current!); return }
+      if (cnt > 150) {
+        clearInterval(pollRef.current!)
+        // 5 分钟还没支付成功，清掉 localStorage 避免脏数据
+        localStorage.removeItem(PENDING_ORDER_KEY)
+        return
+      }
       try {
         const r = await http.get(`/api/lingjing/pay/order/${targetOrderNo}`)
         if (r.data.success && r.data.data.status === 1) {
           clearInterval(pollRef.current!)
           setPayStatus(1)
           setQrPayUrl('') // 关闭二维码弹窗
+          localStorage.removeItem(PENDING_ORDER_KEY)
           authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
         }
       } catch {}
@@ -72,12 +83,25 @@ export default function TopupPage() {
       }
     }).catch(() => {})
 
-    // 移动端 return_url 回跳 /topup?order=LJxxx，轮询订单状态
+    // 待处理订单恢复：优先从 URL ?order= 取（移动端支付后 return_url 回跳），
+    // 次优从 localStorage 取（用户关掉浏览器又回来的场景）
     const params = new URLSearchParams(window.location.search)
-    const returnedOrder = params.get('order')
+    const returnedOrder = params.get('order') || localStorage.getItem(PENDING_ORDER_KEY)
     if (returnedOrder) {
       setOrderNo(returnedOrder)
-      startPolling(returnedOrder)
+      // 先查一次当前状态：已完成就显示成功，未完成才启动轮询
+      http.get(`/api/lingjing/pay/order/${returnedOrder}`).then(r => {
+        if (r.data.success && r.data.data.status === 1) {
+          setPayStatus(1)
+          localStorage.removeItem(PENDING_ORDER_KEY)
+          authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
+        } else if (r.data.success) {
+          startPolling(returnedOrder)
+        } else {
+          // 订单不存在：清理陈旧 localStorage
+          localStorage.removeItem(PENDING_ORDER_KEY)
+        }
+      }).catch(() => {})
     }
 
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
@@ -86,6 +110,11 @@ export default function TopupPage() {
   const handlePay = async () => {
     const amount = payMode === 'plan' ? selectedPlan?.price : parseFloat(customAmount)
     if (!amount || amount < 1) { alert(payMode === 'plan' ? '请选择套餐' : '最低充值 ¥1'); return }
+    // 微信内置浏览器要跳支付宝：微信必然拦截，先提示用户
+    if (payType === 'alipay' && isWechatBrowser()) {
+      alert('微信内暂时无法直接唤起支付宝。\n请点击右上角「...」→ 在浏览器打开，再支付')
+      return
+    }
     setLoading(true); setPayStatus(0)
     try {
       const payload = payMode === 'plan' && selectedPlan
@@ -94,6 +123,8 @@ export default function TopupPage() {
       const res = await http.post('/api/lingjing/pay/create', payload)
       if (res.data.success) {
         const { pay_url, order_no } = res.data.data
+        // 记 pending 订单到 localStorage：移动端支付完可能不回跳，下次打开本页仍能识别
+        localStorage.setItem(PENDING_ORDER_KEY, order_no)
         if (isMobile()) {
           // 移动端：直接跳到支付页唤起支付宝 / 微信 App
           window.location.href = pay_url

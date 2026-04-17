@@ -1,12 +1,14 @@
 package controller
 
 import (
+	crand "crypto/rand"
 	"crypto/md5"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
-	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"sort"
@@ -19,6 +21,10 @@ import (
 	"github.com/songquanpeng/one-api/model"
 	"gorm.io/gorm"
 )
+
+// errOrderAlreadyPaid 用于 HupijiaoNotify / AdminCompleteOrder 的事务内部
+// 当条件 UPDATE 匹配 0 行（订单已被并发处理）时标记为"已处理"，不抛错不回滚新加额度
+var errOrderAlreadyPaid = errors.New("order already paid")
 
 // hupijiaoSign 虎皮椒 MD5 签名（官方 v1.1 规则）
 // 规则：
@@ -45,13 +51,35 @@ func hupijiaoSign(params map[string]string, secret string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// hupijiaoNonce 生成 nonce_str（32 位十六进制随机串）
+// hupijiaoNonce 生成 nonce_str（32 位十六进制随机串，crypto/rand 不可预测）
 func hupijiaoNonce() string {
 	b := make([]byte, 16)
-	for i := range b {
-		b[i] = byte(mrand.Intn(256))
+	if _, err := crand.Read(b); err != nil {
+		// crypto/rand 几乎不会失败；兜底用时间戳至少保证有值
+		ts := time.Now().UnixNano()
+		for i := range b {
+			b[i] = byte(ts >> (i % 8))
+		}
 	}
 	return hex.EncodeToString(b)
+}
+
+// randSuffix 返回 n 位随机数字串（crypto/rand，订单号防猜测/冲突用）
+func randSuffix(n int) string {
+	b := make([]byte, n)
+	_, err := crand.Read(b)
+	if err != nil {
+		// 兜底（几乎不发生）
+		nano := time.Now().UnixNano()
+		for i := range b {
+			b[i] = byte(nano >> (i * 4))
+		}
+	}
+	out := make([]byte, n)
+	for i, v := range b {
+		out[i] = '0' + v%10
+	}
+	return string(out)
 }
 
 // 虎皮椒下单接口默认网关（若管理员没填就用这个）
@@ -97,6 +125,11 @@ func CreatePayOrder(c *gin.Context) {
 		planId = plan.Id
 	} else if req.Amount >= 1.0 {
 		// 临时下调到 ¥1 以便测试支付链路；测试通过后改回 10.0
+		// 上限防前端传入异常大的金额污染订单表 / 虎皮椒被拒
+		if req.Amount > 100000 {
+			c.JSON(http.StatusOK, gin.H{"success": false, "message": "单笔充值上限 ¥100000，请分多次充值"})
+			return
+		}
 		amount = req.Amount
 		quota = int64(amount * 500000)
 		orderName = fmt.Sprintf("灵镜AI-充值¥%.0f", amount)
@@ -120,7 +153,8 @@ func CreatePayOrder(c *gin.Context) {
 	}
 	gateway = strings.TrimRight(gateway, "/")
 
-	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, mrand.Intn(10000))
+	// 订单号：LJ + unix + userId + 6 位随机数字，crypto/rand 降低同秒并发冲突和可预测性
+	orderNo := fmt.Sprintf("LJ%d%d%s", time.Now().Unix(), userId, randSuffix(6))
 
 	order := &model.Order{
 		OrderNo:       orderNo,
@@ -262,14 +296,6 @@ func CreatePayOrder(c *gin.Context) {
 	})
 }
 
-// isMobileUA 粗略判断是不是移动端 UA（只影响虎皮椒 type=WAP 的策略，误判成本低）
-func isMobileUA(ua string) bool {
-	ua = strings.ToLower(ua)
-	return strings.Contains(ua, "mobile") || strings.Contains(ua, "android") ||
-		strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") ||
-		strings.Contains(ua, "micromessenger")
-}
-
 // GetUserOrders 用户订单列表
 func GetUserOrders(c *gin.Context) {
 	userId := c.GetInt("id")
@@ -350,7 +376,8 @@ func HupijiaoNotify(c *gin.Context) {
 	}
 
 	expected := hupijiaoSign(params, appsecret)
-	if !strings.EqualFold(expected, hash) {
+	// 恒时比较防 timing attack（同时用 ToLower 容忍大小写差异）
+	if subtle.ConstantTimeCompare([]byte(strings.ToLower(expected)), []byte(strings.ToLower(hash))) != 1 {
 		logger.SysError(fmt.Sprintf("hupijiao notify: hash verify failed, order=%s trade=%s amount=%s expect=%s got=%s",
 			orderNo, tradeNo, totalFee, expected, hash))
 		if orderNo != "" {
@@ -377,12 +404,6 @@ func HupijiaoNotify(c *gin.Context) {
 		return
 	}
 
-	// 幂等
-	if order.Status == 1 {
-		c.String(http.StatusOK, "success")
-		return
-	}
-
 	// 金额校验：防恶意篡改 total_fee 参数伪造小额支付换大额订单
 	paidAmount, _ := strconv.ParseFloat(totalFee, 64)
 	if paidAmount < order.Amount-0.01 {
@@ -392,14 +413,23 @@ func HupijiaoNotify(c *gin.Context) {
 		return
 	}
 
-	// 事务：更新订单 + 加额度
+	// 事务：**条件 UPDATE** 防并发双倍加额度
+	// 两个并发 notify 同时进来时，只有第一条能让 UPDATE 影响 1 行；第二条匹配 0 行 → errOrderAlreadyPaid
+	// 这样即使虎皮椒重试过快或网关多投递，也不会重复加用户余额
 	err := model.DB.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&order).Updates(map[string]interface{}{
-			"status":   1,
-			"trade_no": tradeNo,
-			"paid_at":  time.Now().Unix(),
-		}).Error; err != nil {
-			return err
+		res := tx.Model(&model.Order{}).
+			Where("order_no = ? AND status = 0", orderNo).
+			Updates(map[string]interface{}{
+				"status":   1,
+				"trade_no": tradeNo,
+				"paid_at":  time.Now().Unix(),
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			// 订单已被另一并发 notify 或管理员补单处理过
+			return errOrderAlreadyPaid
 		}
 		if err := tx.Model(&model.User{}).Where("id = ?", order.UserId).
 			Update("quota", gorm.Expr("quota + ?", order.Quota)).Error; err != nil {
@@ -407,6 +437,11 @@ func HupijiaoNotify(c *gin.Context) {
 		}
 		return nil
 	})
+	if errors.Is(err, errOrderAlreadyPaid) {
+		// 幂等：对虎皮椒返回 success 让它停止重试
+		c.String(http.StatusOK, "success")
+		return
+	}
 	if err != nil {
 		logger.SysError("hupijiao notify: transaction failed: " + err.Error())
 		c.String(http.StatusOK, "fail")
@@ -630,7 +665,7 @@ func AdminCompleteOrder(c *gin.Context) {
 		return
 	}
 
-	// 事务：更新订单 + 加额度
+	// 事务：**条件 UPDATE** 防并发（管理员误双击 or notify 并行到达都会触发）
 	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		updates := map[string]interface{}{
 			"status":  1,
@@ -648,8 +683,14 @@ func AdminCompleteOrder(c *gin.Context) {
 		} else {
 			updates["remark"] = remark
 		}
-		if err := tx.Model(&order).Updates(updates).Error; err != nil {
-			return err
+		res := tx.Model(&model.Order{}).
+			Where("order_no = ? AND status = 0", order.OrderNo).
+			Updates(updates)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errOrderAlreadyPaid
 		}
 		if err := tx.Model(&model.User{}).Where("id = ?", order.UserId).
 			Update("quota", gorm.Expr("quota + ?", order.Quota)).Error; err != nil {
@@ -657,6 +698,10 @@ func AdminCompleteOrder(c *gin.Context) {
 		}
 		return nil
 	})
+	if errors.Is(err, errOrderAlreadyPaid) {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "订单已被处理（并发补单 / 异步回调已到）"})
+		return
+	}
 	if err != nil {
 		logger.SysError("manual topup failed: " + err.Error())
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "补单失败: " + err.Error()})
