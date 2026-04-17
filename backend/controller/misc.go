@@ -114,7 +114,9 @@ func SendEmailVerification(c *gin.Context) {
 		})
 		return
 	}
-	code := common.GenerateVerificationCode(6)
+	// 纯数字验证码：前端限制手机 type=tel / inputMode=numeric 只能输数字，
+	// 原来用 uuid 截的十六进制含 a-f 字母，手机端键盘打不出
+	code := common.GenerateNumericCode(6)
 	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
 	subject := fmt.Sprintf("%s 邮箱验证邮件", config.SystemName)
 	content := message.EmailTemplate(
