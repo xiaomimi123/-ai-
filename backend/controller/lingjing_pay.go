@@ -1,32 +1,56 @@
 package controller
 
 import (
-	"context"
+	"crypto/md5"
 	"fmt"
+	"math/rand"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/go-pay/gopay"
-	"github.com/go-pay/gopay/alipay"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
-	"github.com/songquanpeng/one-api/payment"
 	"gorm.io/gorm"
 )
 
-// CreatePayOrder 创建支付订单
+// epaySign 生成易支付 MD5 签名
+// 规则：去掉 sign / sign_type / 空值 → 按 key ASCII 升序 → k=v&... + key → md5 小写
+func epaySign(params map[string]string, key string) string {
+	keys := make([]string, 0, len(params))
+	for k, v := range params {
+		if k == "sign" || k == "sign_type" || v == "" {
+			continue
+		}
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, k+"="+params[k])
+	}
+	raw := strings.Join(parts, "&") + key
+	sum := md5.Sum([]byte(raw))
+	return fmt.Sprintf("%x", sum)
+}
+
+// CreatePayOrder 创建支付订单（易支付协议，兼容虎皮椒）
 func CreatePayOrder(c *gin.Context) {
 	userId := c.GetInt("id")
 	var req struct {
 		PlanId  int     `json:"plan_id"`
 		Amount  float64 `json:"amount"`
-		PayType string  `json:"pay_type"`
+		PayType string  `json:"pay_type"` // alipay / wxpay
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "参数错误"})
 		return
+	}
+	if req.PayType != "alipay" && req.PayType != "wxpay" {
+		req.PayType = "alipay"
 	}
 
 	var amount float64
@@ -53,7 +77,13 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 
-	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, time.Now().Nanosecond()%10000)
+	epayUrl, pid, key, enabled := model.GetEpayConfig()
+	if !enabled || epayUrl == "" || pid == "" || key == "" {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付未配置或未开启"})
+		return
+	}
+
+	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, rand.Intn(10000))
 
 	order := &model.Order{
 		OrderNo:       orderNo,
@@ -62,7 +92,7 @@ func CreatePayOrder(c *gin.Context) {
 		Amount:        amount,
 		Quota:         quota,
 		Status:        0,
-		PaymentMethod: "alipay",
+		PaymentMethod: req.PayType,
 		CreatedAt:     time.Now().Unix(),
 	}
 	if err := model.DB.Create(order).Error; err != nil {
@@ -70,23 +100,28 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 
-	client, err := payment.GetAlipayClient()
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付未配置: " + err.Error()})
-		return
+	serverAddr := strings.TrimRight(model.GetOptionValue("ServerAddress"), "/")
+	if serverAddr == "" {
+		serverAddr = "https://aitoken.homes"
 	}
 
-	bm := make(gopay.BodyMap)
-	bm.Set("subject", orderName)
-	bm.Set("out_trade_no", orderNo)
-	bm.Set("total_amount", fmt.Sprintf("%.2f", amount))
-	bm.Set("product_code", "FAST_INSTANT_TRADE_PAY")
-
-	payUrl, err := client.TradePagePay(context.Background(), bm)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "创建支付链接失败: " + err.Error()})
-		return
+	params := map[string]string{
+		"pid":          pid,
+		"type":         req.PayType,
+		"out_trade_no": orderNo,
+		"notify_url":   serverAddr + "/api/lingjing/pay/notify/epay",
+		"return_url":   serverAddr + "/topup?order=" + orderNo,
+		"name":         orderName,
+		"money":        fmt.Sprintf("%.2f", amount),
 	}
+	params["sign"] = epaySign(params, key)
+	params["sign_type"] = "MD5"
+
+	vals := url.Values{}
+	for k, v := range params {
+		vals.Set(k, v)
+	}
+	payUrl := strings.TrimRight(epayUrl, "/") + "/submit.php?" + vals.Encode()
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -104,11 +139,13 @@ func GetUserOrders(c *gin.Context) {
 	userId := c.GetInt("id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if page < 1 { page = 1 }
+	if page < 1 {
+		page = 1
+	}
 	var orders []model.Order
 	var total int64
 	model.DB.Model(&model.Order{}).Where("user_id = ?", userId).Count(&total)
-	model.DB.Where("user_id = ?", userId).Order("created_at DESC").Offset((page-1)*pageSize).Limit(pageSize).Find(&orders)
+	model.DB.Where("user_id = ?", userId).Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&orders)
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": orders, "total": total})
 }
 
@@ -128,58 +165,64 @@ func GetPayOrderStatus(c *gin.Context) {
 			"status":   order.Status,
 			"amount":   order.Amount,
 			"quota":    order.Quota,
+			"paid_at":  order.PaidAt,
 		},
 	})
 }
 
-// AlipayNotify 支付宝异步回调
-func AlipayNotify(c *gin.Context) {
-	notifyReq, err := alipay.ParseNotifyToBodyMap(c.Request)
-	if err != nil {
-		logger.SysError("alipay notify parse error: " + err.Error())
+// EpayNotify 易支付异步回调（支持 POST form 和 GET query，都可能被用到）
+// 安全关键：必须验 MD5 签名；不验直接任何人都能 POST 假 notify 刷余额。
+func EpayNotify(c *gin.Context) {
+	// 收集所有参数（form 优先、query 回退）
+	params := map[string]string{}
+	for k, v := range c.Request.URL.Query() {
+		if len(v) > 0 {
+			params[k] = v[0]
+		}
+	}
+	_ = c.Request.ParseForm()
+	for k, v := range c.Request.PostForm {
+		if len(v) > 0 {
+			params[k] = v[0]
+		}
+	}
+
+	orderNo := params["out_trade_no"]
+	tradeNo := params["trade_no"]
+	tradeStatus := params["trade_status"]
+	totalAmount := params["money"]
+	sign := params["sign"]
+
+	_, _, key, _ := model.GetEpayConfig()
+	if key == "" {
+		logger.SysError("epay notify: EpayKey not configured, rejecting")
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	// ⚠️ 安全关键：验证支付宝 RSA2 签名，防止伪造回调刷余额
-	// out_trade_no 规则可枚举，没有验签任何公网主机都能 POST 假 notify 把用户余额刷满
-	// NormalizePublicKeyPEM：支付宝后台拷的公钥是裸 base64，必须包成 PEM 格式
-	alipayPublicKey := payment.NormalizePublicKeyPEM(model.GetOptionValue("AlipayPublicKey"))
-	if alipayPublicKey == "" {
-		logger.SysError("alipay notify: AlipayPublicKey not configured, rejecting for safety")
-		c.String(http.StatusOK, "fail")
-		return
-	}
-	// 先读出需要的字段（VerifySign 内部会从 bodyMap 移除 sign / sign_type）
-	tradeStatus := notifyReq.Get("trade_status")
-	outTradeNo := notifyReq.Get("out_trade_no")
-	tradeNo := notifyReq.Get("trade_no")
-	totalAmount := notifyReq.Get("total_amount")
-
-	signOK, signErr := alipay.VerifySign(alipayPublicKey, notifyReq)
-	if signErr != nil || !signOK {
-		// 验签失败时把回调原文 + trade_no 暂存到对应订单 Remark 里，方便管理员手动补单核对
-		logger.SysError(fmt.Sprintf("alipay notify: signature verify failed, order=%s trade_no=%s amount=%s err=%v",
-			outTradeNo, tradeNo, totalAmount, signErr))
-		if outTradeNo != "" {
-			model.DB.Model(&model.Order{}).Where("order_no = ? AND status = 0", outTradeNo).
+	expected := epaySign(params, key)
+	if expected != sign {
+		logger.SysError(fmt.Sprintf("epay notify: signature verify failed, order=%s trade=%s amount=%s expect=%s got=%s",
+			orderNo, tradeNo, totalAmount, expected, sign))
+		if orderNo != "" {
+			model.DB.Model(&model.Order{}).Where("order_no = ? AND status = 0", orderNo).
 				Update("remark", gorm.Expr("CONCAT(IFNULL(remark, ''), ?)",
-					fmt.Sprintf(" | [验签失败 %s] trade_no=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalAmount)))
+					fmt.Sprintf(" | [验签失败 %s] trade=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalAmount)))
 		}
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("alipay notify: order=%s status=%s amount=%s (sign verified)", outTradeNo, tradeStatus, totalAmount))
+	logger.SysLog(fmt.Sprintf("epay notify: order=%s status=%s trade=%s amount=%s (sign verified)", orderNo, tradeStatus, tradeNo, totalAmount))
 
-	if tradeStatus != "TRADE_SUCCESS" && tradeStatus != "TRADE_FINISHED" {
+	if tradeStatus != "TRADE_SUCCESS" {
 		c.String(http.StatusOK, "success")
 		return
 	}
 
 	var order model.Order
-	if err := model.DB.Where("order_no = ?", outTradeNo).First(&order).Error; err != nil {
-		logger.SysError("alipay notify: order not found: " + outTradeNo)
+	if err := model.DB.Where("order_no = ?", orderNo).First(&order).Error; err != nil {
+		logger.SysError("epay notify: order not found: " + orderNo)
 		c.String(http.StatusOK, "fail")
 		return
 	}
@@ -190,16 +233,17 @@ func AlipayNotify(c *gin.Context) {
 		return
 	}
 
-	// 验证金额
+	// 金额校验：防恶意篡改 money 参数伪造小额支付换大额订单
 	paidAmount, _ := strconv.ParseFloat(totalAmount, 64)
 	if paidAmount < order.Amount-0.01 {
-		logger.SysError(fmt.Sprintf("alipay notify: amount mismatch, paid=%.2f expected=%.2f", paidAmount, order.Amount))
+		logger.SysError(fmt.Sprintf("epay notify: amount mismatch, paid=%.2f expected=%.2f order=%s",
+			paidAmount, order.Amount, orderNo))
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	// 事务：更新订单 + 增加额度
-	err = model.DB.Transaction(func(tx *gorm.DB) error {
+	// 事务：更新订单 + 加额度
+	err := model.DB.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&order).Updates(map[string]interface{}{
 			"status":   1,
 			"trade_no": tradeNo,
@@ -213,17 +257,16 @@ func AlipayNotify(c *gin.Context) {
 		}
 		return nil
 	})
-
 	if err != nil {
-		logger.SysError("alipay notify: transaction failed: " + err.Error())
+		logger.SysError("epay notify: transaction failed: " + err.Error())
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	// 异步处理分销佣金
-	go DistributeCommission(order.UserId, float64(order.Amount), order.Id)
+	// 分销佣金（异步）
+	go DistributeCommission(order.UserId, order.Amount, order.Id)
 
-	// 充值成功通知
+	// 站内通知
 	model.CreateUserNotification(
 		order.UserId,
 		"充值成功",
@@ -231,7 +274,8 @@ func AlipayNotify(c *gin.Context) {
 		"topup_success",
 	)
 
-	logger.SysLog(fmt.Sprintf("alipay payment success: user=%d order=%s amount=%.2f quota=%d", order.UserId, outTradeNo, order.Amount, order.Quota))
+	logger.SysLog(fmt.Sprintf("epay payment success: user=%d order=%s amount=%.2f quota=%d",
+		order.UserId, orderNo, order.Amount, order.Quota))
 	c.String(http.StatusOK, "success")
 }
 
@@ -322,12 +366,15 @@ func AdminManualTopup(c *gin.Context) {
 
 // GetPayInfo 获取支付方式信息
 func GetPayInfo(c *gin.Context) {
+	enabled := model.IsEpayConfigured()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"alipay_enabled": payment.IsAlipayConfigured(),
+			"epay_enabled":   enabled,
+			"alipay_enabled": enabled, // 兼容旧前端字段
 			"methods": []gin.H{
-				{"type": "alipay", "name": "支付宝", "enabled": payment.IsAlipayConfigured()},
+				{"type": "alipay", "name": "支付宝", "enabled": enabled},
+				{"type": "wxpay", "name": "微信支付", "enabled": enabled},
 			},
 		},
 	})

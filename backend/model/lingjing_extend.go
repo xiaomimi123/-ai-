@@ -311,6 +311,21 @@ func SeedDefaultPlans() {
 	}
 }
 
+// GetEpayConfig 读取易支付四件套配置（兼容虎皮椒）
+func GetEpayConfig() (payUrl, pid, key string, enabled bool) {
+	payUrl = GetOptionValue("EpayUrl")
+	pid = GetOptionValue("EpayPid")
+	key = GetOptionValue("EpayKey")
+	enabled = GetOptionValue("EpayEnabled") == "true"
+	return
+}
+
+// IsEpayConfigured 是否已完整配置易支付
+func IsEpayConfigured() bool {
+	payUrl, pid, key, enabled := GetEpayConfig()
+	return enabled && payUrl != "" && pid != "" && key != ""
+}
+
 // GetOptionValue 从 option 表读取配置
 func GetOptionValue(key string) string {
 	var option Option

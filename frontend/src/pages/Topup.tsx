@@ -19,13 +19,13 @@ export default function TopupPage() {
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
   const [customAmount, setCustomAmount] = useState('')
   const [payMode, setPayMode] = useState<'plan' | 'custom'>('plan')
+  const [payType, setPayType] = useState<'alipay' | 'wxpay'>('alipay')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [redeemLoading, setRedeemLoading] = useState(false)
   const [redeemMsg, setRedeemMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [payStatus, setPayStatus] = useState(0) // 0idle 1success
   const [orderNo, setOrderNo] = useState('')
-  const [payUrl, setPayUrl] = useState('')
   const [user, setUser] = useState<any>(null)
   const [payConfig, setPayConfig] = useState({ alipay_enabled: false, redeem_enabled: true })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -34,35 +34,40 @@ export default function TopupPage() {
     authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
     http.get('/api/lingjing/plans').then(r => { if (r.data.success && r.data.data?.length) setPlans(r.data.data) }).catch(() => {})
     payApi.getConfig().then(r => { if (r.data.success) setPayConfig(r.data.data) }).catch(() => {})
+
+    // 易支付 return_url 带 ?order=LJxxx 回跳，读取后轮询一次订单状态
+    const params = new URLSearchParams(window.location.search)
+    const returnedOrder = params.get('order')
+    if (returnedOrder) {
+      setOrderNo(returnedOrder)
+      let cnt = 0
+      pollRef.current = setInterval(async () => {
+        cnt++; if (cnt > 20) { clearInterval(pollRef.current!); return }
+        try {
+          const r = await http.get(`/api/lingjing/pay/order/${returnedOrder}`)
+          if (r.data.success && r.data.data.status === 1) {
+            clearInterval(pollRef.current!); setPayStatus(1)
+            authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
+          }
+        } catch {}
+      }, 2000)
+    }
+
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [])
 
   const handlePay = async () => {
     const amount = payMode === 'plan' ? selectedPlan?.price : parseFloat(customAmount)
     if (!amount || amount < 10) { alert(payMode === 'plan' ? '请选择套餐' : '最低充值 ¥10'); return }
-    setLoading(true); setPayStatus(0); setPayUrl('')
+    setLoading(true); setPayStatus(0)
     try {
       const payload = payMode === 'plan' && selectedPlan
-        ? { plan_id: selectedPlan.id, amount: selectedPlan.price, pay_type: 'alipay' }
-        : { amount: parseFloat(customAmount), pay_type: 'alipay' }
+        ? { plan_id: selectedPlan.id, amount: selectedPlan.price, pay_type: payType }
+        : { amount: parseFloat(customAmount), pay_type: payType }
       const res = await http.post('/api/lingjing/pay/create', payload)
       if (res.data.success) {
-        const { pay_url, order_no } = res.data.data
-        setOrderNo(order_no); setPayUrl(pay_url)
-        window.open(pay_url, '_blank')
-        // 轮询
-        if (pollRef.current) clearInterval(pollRef.current)
-        let cnt = 0
-        pollRef.current = setInterval(async () => {
-          cnt++; if (cnt > 60) { clearInterval(pollRef.current!); return }
-          try {
-            const r = await http.get(`/api/lingjing/pay/order/${order_no}`)
-            if (r.data.success && r.data.data.status === 1) {
-              clearInterval(pollRef.current!); setPayStatus(1)
-              authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
-            }
-          } catch {}
-        }, 3000)
+        // 易支付协议：直接跳转到收银台（submit.php），完成支付后 return_url 回到 /topup?order=xxx
+        window.location.href = res.data.data.pay_url
       } else alert(res.data.message || '创建订单失败')
     } catch { alert('网络错误') } finally { setLoading(false) }
   }
@@ -102,11 +107,8 @@ export default function TopupPage() {
         <div style={{ background: 'var(--accent-light)', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, borderLeft: '3px solid var(--accent)' }}>
           <Loader2 size={18} color="var(--accent)" style={{ animation: 'spin 1s linear infinite' }} />
           <div>
-            <div style={{ fontWeight: 600, color: 'var(--primary)' }}>等待支付...</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-              请在新窗口完成支付
-              <button onClick={() => window.open(payUrl, '_blank')} style={{ color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 12, marginLeft: 6 }}>重新打开</button>
-            </div>
+            <div style={{ fontWeight: 600, color: 'var(--primary)' }}>支付结果确认中...</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>订单号：{orderNo}（如已完成支付请稍等数秒）</div>
           </div>
         </div>
       )}
@@ -185,10 +187,31 @@ export default function TopupPage() {
               <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{fmtQuota(curQuota)} Token</span>
             </div>
           </div>
+
+          {/* 支付方式 */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+            <button
+              type="button"
+              onClick={() => setPayType('alipay')}
+              className={`btn ${payType === 'alipay' ? 'btn-accent' : 'btn-outline'}`}
+              style={{ flex: 1 }}
+            >
+              支付宝
+            </button>
+            <button
+              type="button"
+              onClick={() => setPayType('wxpay')}
+              className={`btn ${payType === 'wxpay' ? 'btn-accent' : 'btn-outline'}`}
+              style={{ flex: 1 }}
+            >
+              微信支付
+            </button>
+          </div>
+
           <button onClick={handlePay} disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: 13, fontSize: 15, fontWeight: 600 }}>
-            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : '支付宝扫码支付'}
+            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `${payType === 'alipay' ? '支付宝' : '微信'}支付 ¥${curAmount.toFixed(2)}`}
           </button>
-          <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>点击后在新窗口打开支付宝收银台</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>点击后跳转到收银台完成支付</div>
         </div>
       )}
 
