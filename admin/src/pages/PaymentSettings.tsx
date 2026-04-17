@@ -49,7 +49,7 @@ export default function PaymentSettingsPage() {
         <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <CreditCard size={22} color="var(--primary)" />支付配置
         </h1>
-        <p className="page-desc">配置易支付网关（兼容虎皮椒等易支付协议服务商）与充值码开关</p>
+        <p className="page-desc">配置虎皮椒支付网关与充值码开关</p>
       </div>
 
       {/* 状态提示 */}
@@ -61,7 +61,7 @@ export default function PaymentSettingsPage() {
       }}>
         {payConfig.epay_enabled ? <CheckCircle size={18} color="#16a34a" /> : <AlertCircle size={18} color="#d97706" />}
         <span style={{ fontSize: 14, color: payConfig.epay_enabled ? '#166534' : '#92400e' }}>
-          {payConfig.epay_enabled ? '易支付已开启，用户可使用支付宝 / 微信充值' : '易支付未开启，用户只能使用充值码兑换额度'}
+          {payConfig.epay_enabled ? '虎皮椒已开启，用户可在线充值' : '虎皮椒未开启，用户只能使用充值码兑换额度'}
         </span>
       </div>
 
@@ -78,44 +78,49 @@ export default function PaymentSettingsPage() {
             <input type="checkbox" checked={payConfig.redeem_enabled} onChange={e => setPayConfig(p => ({ ...p, redeem_enabled: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
           </div>
 
-          {/* 易支付开关 */}
+          {/* 虎皮椒开关 */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', marginBottom: payConfig.epay_enabled ? 20 : 0 }}>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 14 }}>易支付（兼容虎皮椒）</div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>支付宝 + 微信，接入所有易支付协议服务商</div>
+              <div style={{ fontWeight: 500, fontSize: 14 }}>虎皮椒支付</div>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>一个 AppID 对应一种渠道（微信 或 支付宝），以虎皮椒后台应用为准</div>
             </div>
             <input type="checkbox" checked={payConfig.epay_enabled} onChange={e => setPayConfig(p => ({ ...p, epay_enabled: e.target.checked }))} style={{ width: 'auto', accentColor: 'var(--primary)' }} />
           </div>
 
-          {/* 易支付配置 */}
+          {/* 虎皮椒配置 */}
           {payConfig.epay_enabled && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">支付网关地址</label>
-                <input value={payConfig.epay_url} onChange={e => setPayConfig(p => ({ ...p, epay_url: e.target.value }))} placeholder="https://pay.xunhupay.com" />
+                <label className="form-label">下单接口地址</label>
+                <input value={payConfig.epay_url} onChange={e => setPayConfig(p => ({ ...p, epay_url: e.target.value }))} placeholder="https://api.xunhupay.com" />
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                  例如虎皮椒：<code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>https://pay.xunhupay.com</code>
+                  官方网关：<code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>https://api.xunhupay.com</code>
+                  （留空自动使用）。后端会自动拼接 <code>/payment/do.html</code>
                 </div>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">商户 ID (PID)</label>
-                <input value={payConfig.epay_pid} onChange={e => setPayConfig(p => ({ ...p, epay_pid: e.target.value }))} placeholder="虎皮椒后台的 AppID" />
+                <label className="form-label">AppID</label>
+                <input value={payConfig.epay_pid} onChange={e => setPayConfig(p => ({ ...p, epay_pid: e.target.value }))} placeholder="虎皮椒应用的 AppID" />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">
-                  商户密钥 (KEY)
+                  AppSecret
                   {payConfig.epay_key_configured && <span style={{ color: 'var(--accent, #2ECC71)', marginLeft: 8, fontWeight: 400 }}>已配置 ✓</span>}
                 </label>
                 <input
                   type="password"
                   value={payConfig.epay_key}
                   onChange={e => setPayConfig(p => ({ ...p, epay_key: e.target.value }))}
-                  placeholder={payConfig.epay_key_configured ? '留空则保持原值' : '虎皮椒后台的 AppSecret'}
+                  placeholder={payConfig.epay_key_configured ? '留空则保持原值' : '虎皮椒应用的 AppSecret'}
                 />
               </div>
               <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534' }}>
-                回调地址：<code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: 4 }}>https://aitoken.homes/api/lingjing/pay/notify/epay</code>
-                <br />请在易支付 / 虎皮椒后台配置此异步通知地址
+                <div style={{ marginBottom: 4 }}>
+                  <strong>异步回调地址</strong>（填到虎皮椒后台）：
+                </div>
+                <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: 4, display: 'inline-block', wordBreak: 'break-all' }}>
+                  https://aitoken.homes/api/lingjing/pay/notify/hupijiao
+                </code>
               </div>
             </div>
           )}

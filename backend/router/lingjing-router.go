@@ -16,9 +16,9 @@ func SetLingjingRouter(router *gin.Engine) {
 		public.GET("/config", controller.GetLingjingConfig)
 		public.GET("/pay/config", controller.GetPublicPaymentConfig)
 
-		// 易支付回调（兼容虎皮椒；部分网关回调是 GET query，也挂一份）
-		public.POST("/pay/notify/epay", controller.EpayNotify)
-		public.GET("/pay/notify/epay", controller.EpayNotify)
+		// 虎皮椒支付异步回调（官方是 POST form，GET 兜底以防某些场景）
+		public.POST("/pay/notify/hupijiao", controller.HupijiaoNotify)
+		public.GET("/pay/notify/hupijiao", controller.HupijiaoNotify)
 	}
 
 	// ===== 用户接口 =====

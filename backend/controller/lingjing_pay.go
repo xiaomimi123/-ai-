@@ -2,8 +2,11 @@ package controller
 
 import (
 	"crypto/md5"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"math/rand"
+	"io"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"sort"
@@ -17,12 +20,17 @@ import (
 	"gorm.io/gorm"
 )
 
-// epaySign 生成易支付 MD5 签名
-// 规则：去掉 sign / sign_type / 空值 → 按 key ASCII 升序 → k=v&... + key → md5 小写
-func epaySign(params map[string]string, key string) string {
+// hupijiaoSign 虎皮椒 MD5 签名（官方 v1.1 规则）
+// 规则：
+//  1. 排除 hash 字段和所有空值参数
+//  2. 剩下的 key 按 ASCII 升序
+//  3. 按 "k1=v1&k2=v2..." 拼接 URL query 格式（值**不做** URL encode，原样拼）
+//  4. 末尾直接拼上 AppSecret（注意：不是 "&key=AppSecret"，是直接 + AppSecret）
+//  5. MD5 小写即为 hash
+func hupijiaoSign(params map[string]string, secret string) string {
 	keys := make([]string, 0, len(params))
 	for k, v := range params {
-		if k == "sign" || k == "sign_type" || v == "" {
+		if k == "hash" || v == "" {
 			continue
 		}
 		keys = append(keys, k)
@@ -32,12 +40,31 @@ func epaySign(params map[string]string, key string) string {
 	for _, k := range keys {
 		parts = append(parts, k+"="+params[k])
 	}
-	raw := strings.Join(parts, "&") + key
+	raw := strings.Join(parts, "&") + secret
 	sum := md5.Sum([]byte(raw))
-	return fmt.Sprintf("%x", sum)
+	return hex.EncodeToString(sum[:])
 }
 
-// CreatePayOrder 创建支付订单（易支付协议，兼容虎皮椒）
+// hupijiaoNonce 生成 nonce_str（32 位十六进制随机串）
+func hupijiaoNonce() string {
+	b := make([]byte, 16)
+	for i := range b {
+		b[i] = byte(mrand.Intn(256))
+	}
+	return hex.EncodeToString(b)
+}
+
+// 虎皮椒下单接口默认网关（若管理员没填就用这个）
+const hupijiaoDefaultGateway = "https://api.xunhupay.com"
+
+// httpClientHupijiao 独立 http client，设 10s 超时防挂住支付创建接口
+var httpClientHupijiao = &http.Client{Timeout: 10 * time.Second}
+
+// CreatePayOrder 创建支付订单（对接虎皮椒官方 API v1.1）
+// 流程：本地创建 pending 订单 → POST 到 {gateway}/payment/do.html →
+// 拿 JSON 里的 url 或 url_qrcode 回给前端跳转。
+// 一个 appid/appsecret 对应商户配置的单一渠道（微信 or 支付宝），前端传的 pay_type
+// 仅用于展示 / 记录，真正的渠道由虎皮椒后台应用决定。
 func CreatePayOrder(c *gin.Context) {
 	userId := c.GetInt("id")
 	var req struct {
@@ -50,7 +77,7 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 	if req.PayType != "alipay" && req.PayType != "wxpay" {
-		req.PayType = "alipay"
+		req.PayType = "wxpay"
 	}
 
 	var amount float64
@@ -78,13 +105,17 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 
-	epayUrl, pid, key, enabled := model.GetEpayConfig()
-	if !enabled || epayUrl == "" || pid == "" || key == "" {
+	gateway, appid, appsecret, enabled := model.GetEpayConfig()
+	if !enabled || appid == "" || appsecret == "" {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付未配置或未开启"})
 		return
 	}
+	if gateway == "" {
+		gateway = hupijiaoDefaultGateway
+	}
+	gateway = strings.TrimRight(gateway, "/")
 
-	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, rand.Intn(10000))
+	orderNo := fmt.Sprintf("LJ%d%d%04d", time.Now().Unix(), userId, mrand.Intn(10000))
 
 	order := &model.Order{
 		OrderNo:       orderNo,
@@ -106,23 +137,85 @@ func CreatePayOrder(c *gin.Context) {
 		serverAddr = "https://aitoken.homes"
 	}
 
-	params := map[string]string{
-		"pid":          pid,
-		"type":         req.PayType,
-		"out_trade_no": orderNo,
-		"notify_url":   serverAddr + "/api/lingjing/pay/notify/epay",
-		"return_url":   serverAddr + "/topup?order=" + orderNo,
-		"name":         orderName,
-		"money":        fmt.Sprintf("%.2f", amount),
+	siteName := model.GetOptionValue("site_name")
+	if siteName == "" {
+		siteName = "灵镜 AI"
 	}
-	params["sign"] = epaySign(params, key)
-	params["sign_type"] = "MD5"
 
-	vals := url.Values{}
-	for k, v := range params {
-		vals.Set(k, v)
+	// 虎皮椒下单参数
+	params := map[string]string{
+		"version":        "1.1",
+		"lang":           "zh-cn",
+		"appid":          appid,
+		"trade_order_id": orderNo,
+		"total_fee":      fmt.Sprintf("%.2f", amount),
+		"title":          orderName,
+		"time":           fmt.Sprintf("%d", time.Now().Unix()),
+		"notify_url":     serverAddr + "/api/lingjing/pay/notify/hupijiao",
+		"return_url":     serverAddr + "/topup?order=" + orderNo,
+		"nonce_str":      hupijiaoNonce(),
+		"wap_name":       siteName,
+		"wap_url":        serverAddr,
 	}
-	payUrl := strings.TrimRight(epayUrl, "/") + "/submit.php?" + vals.Encode()
+	// 若是微信支付且来自移动端浏览器，传 type=WAP 走 H5 唤起；
+	// 其它场景不传 type，让虎皮椒按商户配置走（一般是扫码）
+	if req.PayType == "wxpay" && isMobileUA(c.Request.UserAgent()) {
+		params["type"] = "WAP"
+	}
+	params["hash"] = hupijiaoSign(params, appsecret)
+
+	// POST form 到虎皮椒
+	form := url.Values{}
+	for k, v := range params {
+		form.Set(k, v)
+	}
+	endpoint := gateway + "/payment/do.html"
+	resp, err := httpClientHupijiao.PostForm(endpoint, form)
+	if err != nil {
+		logger.SysError("hupijiao create order: POST failed: " + err.Error())
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关请求失败，请稍后重试"})
+		return
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+
+	var apiResp struct {
+		OpenId    int             `json:"openid"`
+		UrlQrCode string          `json:"url_qrcode"`
+		Url       string          `json:"url"`
+		ErrCode   json.RawMessage `json:"errcode"` // 虎皮椒 errcode 可能是 int 或 string，用 RawMessage 兼容
+		ErrMsg    string          `json:"errmsg"`
+		Hash      string          `json:"hash"`
+	}
+	if err := json.Unmarshal(body, &apiResp); err != nil {
+		logger.SysError(fmt.Sprintf("hupijiao create order: parse response failed: %s, body=%s", err.Error(), string(body)))
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关返回异常"})
+		return
+	}
+
+	// errcode 兼容 0 / "0" 两种写法
+	errCodeStr := strings.Trim(string(apiResp.ErrCode), `"`)
+	if errCodeStr != "" && errCodeStr != "0" {
+		logger.SysError(fmt.Sprintf("hupijiao create order: errcode=%s errmsg=%s body=%s", errCodeStr, apiResp.ErrMsg, string(body)))
+		msg := apiResp.ErrMsg
+		if msg == "" {
+			msg = "支付下单失败"
+		}
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付下单失败：" + msg})
+		return
+	}
+
+	payUrl := apiResp.Url
+	if payUrl == "" {
+		payUrl = apiResp.UrlQrCode
+	}
+	if payUrl == "" {
+		logger.SysError("hupijiao create order: empty url, body=" + string(body))
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关未返回跳转地址"})
+		return
+	}
+
+	logger.SysLog(fmt.Sprintf("hupijiao create order: user=%d order=%s amount=%.2f type=%s", userId, orderNo, amount, req.PayType))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -133,6 +226,14 @@ func CreatePayOrder(c *gin.Context) {
 			"pay_url":  payUrl,
 		},
 	})
+}
+
+// isMobileUA 粗略判断是不是移动端 UA（只影响虎皮椒 type=WAP 的策略，误判成本低）
+func isMobileUA(ua string) bool {
+	ua = strings.ToLower(ua)
+	return strings.Contains(ua, "mobile") || strings.Contains(ua, "android") ||
+		strings.Contains(ua, "iphone") || strings.Contains(ua, "ipad") ||
+		strings.Contains(ua, "micromessenger")
 }
 
 // GetUserOrders 用户订单列表
@@ -171,10 +272,11 @@ func GetPayOrderStatus(c *gin.Context) {
 	})
 }
 
-// EpayNotify 易支付异步回调（支持 POST form 和 GET query，都可能被用到）
-// 安全关键：必须验 MD5 签名；不验直接任何人都能 POST 假 notify 刷余额。
-func EpayNotify(c *gin.Context) {
-	// 收集所有参数（form 优先、query 回退）
+// HupijiaoNotify 虎皮椒异步回调（POST form）
+// 虎皮椒要求成功响应 body 为纯文本 "success"，非此值会被重试
+// 安全关键：必须验 MD5 hash；不验任何人都能 POST 假 notify 刷余额
+func HupijiaoNotify(c *gin.Context) {
+	// 收集所有参数（form 优先、query 兜底）
 	params := map[string]string{}
 	for k, v := range c.Request.URL.Query() {
 		if len(v) > 0 {
@@ -188,42 +290,46 @@ func EpayNotify(c *gin.Context) {
 		}
 	}
 
-	orderNo := params["out_trade_no"]
-	tradeNo := params["trade_no"]
-	tradeStatus := params["trade_status"]
-	totalAmount := params["money"]
-	sign := params["sign"]
+	orderNo := params["trade_order_id"]
+	tradeNo := params["transaction_id"]
+	if tradeNo == "" {
+		tradeNo = params["open_order_id"]
+	}
+	totalFee := params["total_fee"]
+	status := params["status"]
+	hash := params["hash"]
 
-	_, _, key, _ := model.GetEpayConfig()
-	if key == "" {
-		logger.SysError("epay notify: EpayKey not configured, rejecting")
+	_, _, appsecret, _ := model.GetEpayConfig()
+	if appsecret == "" {
+		logger.SysError("hupijiao notify: AppSecret not configured, rejecting")
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	expected := epaySign(params, key)
-	if expected != sign {
-		logger.SysError(fmt.Sprintf("epay notify: signature verify failed, order=%s trade=%s amount=%s expect=%s got=%s",
-			orderNo, tradeNo, totalAmount, expected, sign))
+	expected := hupijiaoSign(params, appsecret)
+	if !strings.EqualFold(expected, hash) {
+		logger.SysError(fmt.Sprintf("hupijiao notify: hash verify failed, order=%s trade=%s amount=%s expect=%s got=%s",
+			orderNo, tradeNo, totalFee, expected, hash))
 		if orderNo != "" {
 			model.DB.Model(&model.Order{}).Where("order_no = ? AND status = 0", orderNo).
 				Update("remark", gorm.Expr("CONCAT(IFNULL(remark, ''), ?)",
-					fmt.Sprintf(" | [验签失败 %s] trade=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalAmount)))
+					fmt.Sprintf(" | [验签失败 %s] trade=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalFee)))
 		}
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("epay notify: order=%s status=%s trade=%s amount=%s (sign verified)", orderNo, tradeStatus, tradeNo, totalAmount))
+	logger.SysLog(fmt.Sprintf("hupijiao notify: order=%s status=%s trade=%s amount=%s (sign verified)", orderNo, status, tradeNo, totalFee))
 
-	if tradeStatus != "TRADE_SUCCESS" {
+	// 虎皮椒支付成功状态码为 OD
+	if status != "OD" {
 		c.String(http.StatusOK, "success")
 		return
 	}
 
 	var order model.Order
 	if err := model.DB.Where("order_no = ?", orderNo).First(&order).Error; err != nil {
-		logger.SysError("epay notify: order not found: " + orderNo)
+		logger.SysError("hupijiao notify: order not found: " + orderNo)
 		c.String(http.StatusOK, "fail")
 		return
 	}
@@ -234,10 +340,10 @@ func EpayNotify(c *gin.Context) {
 		return
 	}
 
-	// 金额校验：防恶意篡改 money 参数伪造小额支付换大额订单
-	paidAmount, _ := strconv.ParseFloat(totalAmount, 64)
+	// 金额校验：防恶意篡改 total_fee 参数伪造小额支付换大额订单
+	paidAmount, _ := strconv.ParseFloat(totalFee, 64)
 	if paidAmount < order.Amount-0.01 {
-		logger.SysError(fmt.Sprintf("epay notify: amount mismatch, paid=%.2f expected=%.2f order=%s",
+		logger.SysError(fmt.Sprintf("hupijiao notify: amount mismatch, paid=%.2f expected=%.2f order=%s",
 			paidAmount, order.Amount, orderNo))
 		c.String(http.StatusOK, "fail")
 		return
@@ -259,7 +365,7 @@ func EpayNotify(c *gin.Context) {
 		return nil
 	})
 	if err != nil {
-		logger.SysError("epay notify: transaction failed: " + err.Error())
+		logger.SysError("hupijiao notify: transaction failed: " + err.Error())
 		c.String(http.StatusOK, "fail")
 		return
 	}
@@ -275,7 +381,7 @@ func EpayNotify(c *gin.Context) {
 		"topup_success",
 	)
 
-	logger.SysLog(fmt.Sprintf("epay payment success: user=%d order=%s amount=%.2f quota=%d",
+	logger.SysLog(fmt.Sprintf("hupijiao payment success: user=%d order=%s amount=%.2f quota=%d",
 		order.UserId, orderNo, order.Amount, order.Quota))
 	c.String(http.StatusOK, "success")
 }

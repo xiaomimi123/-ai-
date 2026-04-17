@@ -211,7 +211,7 @@ export default function TopupPage() {
           </div>
 
           <button onClick={handlePay} disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: 13, fontSize: 15, fontWeight: 600 }}>
-            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `${payType === 'alipay' ? '支付宝' : '微信'}支付 ¥${curAmount.toFixed(2)}`}
+            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `支付 ¥${curAmount.toFixed(2)}`}
           </button>
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>点击后跳转到收银台完成支付</div>
         </div>
