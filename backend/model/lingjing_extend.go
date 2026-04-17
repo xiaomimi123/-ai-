@@ -311,7 +311,7 @@ func SeedDefaultPlans() {
 	}
 }
 
-// GetEpayConfig 读取易支付四件套配置（兼容虎皮椒）
+// GetEpayConfig 读取支付宝渠道配置（字段名沿用 Epay* 是历史原因，等同支付宝通道）
 func GetEpayConfig() (payUrl, pid, key string, enabled bool) {
 	payUrl = GetOptionValue("EpayUrl")
 	pid = GetOptionValue("EpayPid")
@@ -320,10 +320,39 @@ func GetEpayConfig() (payUrl, pid, key string, enabled bool) {
 	return
 }
 
-// IsEpayConfigured 是否已完整配置易支付
+// GetHupijiaoWxConfig 读取微信渠道配置
+func GetHupijiaoWxConfig() (payUrl, pid, key string, enabled bool) {
+	payUrl = GetOptionValue("EpayWxUrl")
+	pid = GetOptionValue("EpayWxPid")
+	key = GetOptionValue("EpayWxKey")
+	enabled = GetOptionValue("EpayWxEnabled") == "true"
+	return
+}
+
+// GetHupijiaoChannel 按支付方式 (alipay/wxpay) 返回对应的虎皮椒渠道配置
+// 微信渠道未单独配置网关地址时，fallback 到支付宝渠道的网关（它们通常是同一家平台）
+func GetHupijiaoChannel(payType string) (payUrl, pid, key string, enabled bool) {
+	if payType == "wxpay" {
+		payUrl, pid, key, enabled = GetHupijiaoWxConfig()
+		if payUrl == "" {
+			payUrl = GetOptionValue("EpayUrl")
+		}
+		return
+	}
+	// 默认支付宝渠道
+	return GetEpayConfig()
+}
+
+// IsEpayConfigured 是否已完整配置支付宝渠道（网关留空时后端自动使用官方默认，故不要求）
 func IsEpayConfigured() bool {
-	payUrl, pid, key, enabled := GetEpayConfig()
-	return enabled && payUrl != "" && pid != "" && key != ""
+	_, pid, key, enabled := GetEpayConfig()
+	return enabled && pid != "" && key != ""
+}
+
+// IsHupijiaoWxConfigured 是否已完整配置微信渠道
+func IsHupijiaoWxConfigured() bool {
+	_, pid, key, enabled := GetHupijiaoWxConfig()
+	return enabled && pid != "" && key != ""
 }
 
 // GetOptionValue 从 option 表读取配置

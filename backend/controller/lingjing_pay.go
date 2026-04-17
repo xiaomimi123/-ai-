@@ -105,9 +105,14 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 
-	gateway, appid, appsecret, enabled := model.GetEpayConfig()
+	// 按支付类型读对应渠道配置（支付宝和微信在虎皮椒后台是两个独立应用 / AppID）
+	gateway, appid, appsecret, enabled := model.GetHupijiaoChannel(req.PayType)
 	if !enabled || appid == "" || appsecret == "" {
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付未配置或未开启"})
+		channelName := "支付宝"
+		if req.PayType == "wxpay" {
+			channelName = "微信"
+		}
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": channelName + "支付未开通，请联系管理员"})
 		return
 	}
 	if gateway == "" {
@@ -312,9 +317,18 @@ func HupijiaoNotify(c *gin.Context) {
 	status := params["status"]
 	hash := params["hash"]
 
-	_, _, appsecret, _ := model.GetEpayConfig()
+	// 按订单的 payment_method 选验签 key（支付宝、微信两个渠道的 AppSecret 不一样）
+	// 先读订单，再选 key；订单不存在时两套 key 都试一下（兜底历史订单）
+	var orderForSign model.Order
+	var payType string
+	if orderNo != "" {
+		if err := model.DB.Select("id", "order_no", "payment_method").Where("order_no = ?", orderNo).First(&orderForSign).Error; err == nil {
+			payType = orderForSign.PaymentMethod
+		}
+	}
+	_, _, appsecret, _ := model.GetHupijiaoChannel(payType)
 	if appsecret == "" {
-		logger.SysError("hupijiao notify: AppSecret not configured, rejecting")
+		logger.SysError("hupijiao notify: AppSecret not configured for payType=" + payType)
 		c.String(http.StatusOK, "fail")
 		return
 	}
@@ -486,15 +500,17 @@ func AdminManualTopup(c *gin.Context) {
 
 // GetPayInfo 获取支付方式信息
 func GetPayInfo(c *gin.Context) {
-	enabled := model.IsEpayConfigured()
+	alipayOn := model.IsEpayConfigured()
+	wxOn := model.IsHupijiaoWxConfigured()
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"epay_enabled":   enabled,
-			"alipay_enabled": enabled, // 兼容旧前端字段
+			"alipay_enabled": alipayOn,
+			"wxpay_enabled":  wxOn,
+			"epay_enabled":   alipayOn || wxOn,
 			"methods": []gin.H{
-				{"type": "alipay", "name": "支付宝", "enabled": enabled},
-				{"type": "wxpay", "name": "微信支付", "enabled": enabled},
+				{"type": "alipay", "name": "支付宝", "enabled": alipayOn},
+				{"type": "wxpay", "name": "微信支付", "enabled": wxOn},
 			},
 		},
 	})

@@ -33,7 +33,7 @@ export default function TopupPage() {
   const [qrPayUrl, setQrPayUrl] = useState('')     // PC 端二维码内容（支付跳转 URL）
   const [qrAmount, setQrAmount] = useState(0)     // 二维码弹窗展示的金额
   const [user, setUser] = useState<any>(null)
-  const [payConfig, setPayConfig] = useState({ alipay_enabled: false, redeem_enabled: true })
+  const [payConfig, setPayConfig] = useState({ alipay_enabled: false, wxpay_enabled: false, redeem_enabled: true })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 启动订单状态轮询（PC 扫码支付用；每 2s 查一次，最多 150 次 = 5 分钟）
@@ -58,7 +58,19 @@ export default function TopupPage() {
   useEffect(() => {
     authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) }).catch(() => {})
     http.get('/api/lingjing/plans').then(r => { if (r.data.success && r.data.data?.length) setPlans(r.data.data) }).catch(() => {})
-    payApi.getConfig().then(r => { if (r.data.success) setPayConfig(r.data.data) }).catch(() => {})
+    payApi.getConfig().then(r => {
+      if (r.data.success) {
+        const cfg = r.data.data
+        setPayConfig({
+          alipay_enabled: !!cfg.alipay_enabled,
+          wxpay_enabled: !!cfg.wxpay_enabled,
+          redeem_enabled: cfg.redeem_enabled !== false,
+        })
+        // 若默认选中的支付宝未开通但微信开通，自动切到微信；反之亦然
+        if (!cfg.alipay_enabled && cfg.wxpay_enabled) setPayType('wxpay')
+        else if (cfg.alipay_enabled && !cfg.wxpay_enabled) setPayType('alipay')
+      }
+    }).catch(() => {})
 
     // 移动端 return_url 回跳 /topup?order=LJxxx，轮询订单状态
     const params = new URLSearchParams(window.location.search)
@@ -262,7 +274,7 @@ export default function TopupPage() {
       )}
 
       {/* 支付按钮 */}
-      {curAmount >= 1 && payConfig.alipay_enabled && (
+      {curAmount >= 1 && (payConfig.alipay_enabled || payConfig.wxpay_enabled) && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ background: 'var(--bg)', borderRadius: 8, padding: 14, marginBottom: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -275,28 +287,30 @@ export default function TopupPage() {
             </div>
           </div>
 
-          {/* 支付方式 */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-            <button
-              type="button"
-              onClick={() => setPayType('alipay')}
-              className={`btn ${payType === 'alipay' ? 'btn-accent' : 'btn-outline'}`}
-              style={{ flex: 1 }}
-            >
-              支付宝
-            </button>
-            <button
-              type="button"
-              onClick={() => setPayType('wxpay')}
-              className={`btn ${payType === 'wxpay' ? 'btn-accent' : 'btn-outline'}`}
-              style={{ flex: 1 }}
-            >
-              微信支付
-            </button>
-          </div>
+          {/* 支付方式切换：两个都开通时才显示切换条 */}
+          {payConfig.alipay_enabled && payConfig.wxpay_enabled && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+              <button
+                type="button"
+                onClick={() => setPayType('alipay')}
+                className={`btn ${payType === 'alipay' ? 'btn-accent' : 'btn-outline'}`}
+                style={{ flex: 1 }}
+              >
+                支付宝
+              </button>
+              <button
+                type="button"
+                onClick={() => setPayType('wxpay')}
+                className={`btn ${payType === 'wxpay' ? 'btn-accent' : 'btn-outline'}`}
+                style={{ flex: 1 }}
+              >
+                微信支付
+              </button>
+            </div>
+          )}
 
           <button onClick={handlePay} disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: 13, fontSize: 15, fontWeight: 600 }}>
-            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `支付 ¥${curAmount.toFixed(2)}`}
+            {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `${payType === 'alipay' ? '支付宝' : '微信'}支付 ¥${curAmount.toFixed(2)}`}
           </button>
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>点击后跳转到收银台完成支付</div>
         </div>
