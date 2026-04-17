@@ -162,9 +162,9 @@ func CreatePayOrder(c *gin.Context) {
 		"wap_name":       siteName,
 		"wap_url":        serverAddr,
 	}
-	// 若是微信支付且来自移动端浏览器，传 type=WAP 走 H5 唤起；
-	// 其它场景不传 type，让虎皮椒按商户配置走（一般是扫码）
-	if req.PayType == "wxpay" && isMobileUA(c.Request.UserAgent()) {
+	// 微信支付始终传 type=WAP（虎皮椒 / dpweixin 微信渠道有些版本不接受空 type 会 502；
+	// WAP 模式扫码后支付页是 H5，PC 扫码和移动端都兼容）
+	if req.PayType == "wxpay" {
 		params["type"] = "WAP"
 	}
 	params["hash"] = hupijiaoSign(params, appsecret)
@@ -179,7 +179,23 @@ func CreatePayOrder(c *gin.Context) {
 	if !strings.HasSuffix(endpoint, "/payment/do.html") {
 		endpoint = endpoint + "/payment/do.html"
 	}
-	resp, err := httpClientHupijiao.PostForm(endpoint, form)
+
+	// 排查参数差异时需要的日志：打印本次下单请求（hash 脱敏）
+	debugParams := make(map[string]string, len(params))
+	for k, v := range params {
+		if k == "hash" {
+			debugParams[k] = "***"
+		} else {
+			debugParams[k] = v
+		}
+	}
+	logger.SysLog(fmt.Sprintf("hupijiao create order request: endpoint=%s payType=%s params=%v", endpoint, req.PayType, debugParams))
+
+	// 加 User-Agent，避免某些网关拒绝默认 Go-http-client/1.1
+	httpReq, _ := http.NewRequest("POST", endpoint, strings.NewReader(form.Encode()))
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	httpReq.Header.Set("User-Agent", "lingjing-ai/1.0 (+https://aitoken.homes)")
+	resp, err := httpClientHupijiao.Do(httpReq)
 	if err != nil {
 		logger.SysError("hupijiao create order: POST failed: " + err.Error())
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关请求失败，请稍后重试"})
