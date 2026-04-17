@@ -93,9 +93,11 @@ export default function PaymentSettingsPage() {
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">下单接口地址</label>
                 <input value={payConfig.epay_url} onChange={e => setPayConfig(p => ({ ...p, epay_url: e.target.value }))} placeholder="https://api.xunhupay.com" />
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6 }}>
-                  官方网关：<code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>https://api.xunhupay.com</code>
-                  （留空自动使用）。后端会自动拼接 <code>/payment/do.html</code>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 6, lineHeight: 1.6 }}>
+                  只填<strong>域名</strong>即可（推荐），后端自动拼接 <code>/payment/do.html</code>。<br />
+                  例如：<code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>https://api.xunhupay.com</code>
+                  或 <code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>https://api.dpweixin.com</code><br />
+                  填完整 URL（含 <code>/payment/do.html</code>）也支持，会自动去重。
                 </div>
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>

@@ -169,7 +169,11 @@ func CreatePayOrder(c *gin.Context) {
 	for k, v := range params {
 		form.Set(k, v)
 	}
-	endpoint := gateway + "/payment/do.html"
+	// 容错：管理员可能填域名（https://api.xxx.com）或完整接口（https://api.xxx.com/payment/do.html）
+	endpoint := gateway
+	if !strings.HasSuffix(endpoint, "/payment/do.html") {
+		endpoint = endpoint + "/payment/do.html"
+	}
 	resp, err := httpClientHupijiao.PostForm(endpoint, form)
 	if err != nil {
 		logger.SysError("hupijiao create order: POST failed: " + err.Error())
