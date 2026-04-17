@@ -193,30 +193,35 @@ export default function RegisterPage() {
             {emailVerifyEnabled && (
               <div className="form-group">
                 <label className="form-label" htmlFor="verification_code">邮箱验证码</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
-                  {/* name + autoComplete="one-time-code" 明确告诉 Chrome / 1Password 这是 OTP，
-                      避免它把紧跟 password 的 type=text 识别成可自动填充字段而锁掉焦点。
-                      外层 div 用 flex: 1 + min-width: 0 防 input 被按钮挤到宽度 0。 */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <input
-                      id="verification_code"
-                      name="verification_code"
-                      type="text"
-                      placeholder="6 位验证码"
-                      value={verifyCode}
-                      onChange={e => setVerifyCode(e.target.value)}
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      maxLength={8}
-                      style={{ width: '100%' }}
-                    />
-                  </div>
+                {/* 手机端踩坑：input 和按钮并排放 flex 容器里时，Android 输入法 + maxLength
+                    会锁住输入；按钮的触摸热区也可能吞掉 input 点击。改为 input 独占一行，
+                    "获取验证码" 放下方小字按钮，彻底脱离 flex 布局。type=tel 是移动端最兼容
+                    的数字键盘触发方式；不设 maxLength，改 onChange 里截断。 */}
+                <input
+                  id="verification_code"
+                  name="verification_code"
+                  type="tel"
+                  placeholder="请输入 6 位验证码"
+                  value={verifyCode}
+                  onChange={e => setVerifyCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                    验证码发送到注册邮箱
+                  </span>
                   <button
                     type="button"
-                    className="btn btn-outline"
                     onClick={sendCode}
                     disabled={codeSending || countdown > 0}
-                    style={{ whiteSpace: 'nowrap', minWidth: 110, fontSize: 13, flexShrink: 0 }}
+                    style={{
+                      background: 'none', border: 'none', padding: '4px 2px',
+                      color: (codeSending || countdown > 0) ? 'var(--muted)' : 'var(--accent)',
+                      fontSize: 13, fontWeight: 500,
+                      cursor: (codeSending || countdown > 0) ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
                   >
                     {countdown > 0 ? `${countdown}s 后重发` : (codeSending ? '发送中...' : '获取验证码')}
                   </button>
