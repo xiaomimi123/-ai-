@@ -9,7 +9,7 @@ export default function RedemptionsPage() {
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState<number | null>(null)
 
-  const load = async () => { const r = await redemptionApi.list({ p: 0 }); if (r.data.success) setList(r.data.data || []) }
+  const load = async () => { const r = await redemptionApi.list({ p: 0, page_size: 100 }); if (r.data.success) setList(r.data.data || []) }
   useEffect(() => { load() }, [])
 
   const handleCreate = async () => {

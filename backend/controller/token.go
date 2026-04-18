@@ -19,9 +19,14 @@ func GetAllTokens(c *gin.Context) {
 	if p < 0 {
 		p = 0
 	}
+	// 支持前端传 page_size 覆盖默认 ItemsPerPage（前端 Tokens 页容易踩坑：超过 10 个令牌看不到）
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = config.ItemsPerPage
+	}
 
 	order := c.Query("order")
-	tokens, err := model.GetAllUserTokens(userId, p*config.ItemsPerPage, config.ItemsPerPage, order)
+	tokens, err := model.GetAllUserTokens(userId, p*pageSize, pageSize, order)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

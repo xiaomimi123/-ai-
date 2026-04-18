@@ -189,9 +189,13 @@ func GetAllUsers(c *gin.Context) {
 	if p < 0 {
 		p = 0
 	}
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = config.ItemsPerPage
+	}
 
 	order := c.DefaultQuery("order", "")
-	users, err := model.GetAllUsers(p*config.ItemsPerPage, config.ItemsPerPage, order)
+	users, err := model.GetAllUsers(p*pageSize, pageSize, order)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{

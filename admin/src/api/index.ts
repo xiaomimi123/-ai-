@@ -42,7 +42,7 @@ export const tokenApi = {
 }
 
 export const redemptionApi = {
-  list: (params: { p?: number }) => http.get('/api/redemption/', { params }),
+  list: (params: { p?: number; page_size?: number }) => http.get('/api/redemption/', { params }),
   create: (data: { name: string; quota: number; count: number }) => http.post('/api/redemption/', data),
   delete: (id: number) => http.delete(`/api/redemption/${id}`),
 }
