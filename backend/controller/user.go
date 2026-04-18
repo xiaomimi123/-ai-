@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -14,6 +15,7 @@ import (
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/ctxkey"
 	"github.com/songquanpeng/one-api/common/i18n"
+	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/common/random"
 	"github.com/songquanpeng/one-api/model"
 )
@@ -420,6 +422,16 @@ func UpdateUser(c *gin.Context) {
 	if updatedUser.Password == "$I_LOVE_U" {
 		updatedUser.Password = "" // rollback to what it should be
 	}
+	// Email 重复检查：email 在 DB 层只是 index 不是 uniqueIndex，不检查会产生两个用户同邮箱
+	if updatedUser.Email != "" && updatedUser.Email != originUser.Email {
+		if model.IsEmailAlreadyTaken(updatedUser.Email) {
+			c.JSON(http.StatusOK, gin.H{
+				"success": false,
+				"message": "该邮箱已被其他用户使用",
+			})
+			return
+		}
+	}
 	updatePassword := updatedUser.Password != ""
 	if err := updatedUser.Update(updatePassword); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -428,8 +440,31 @@ func UpdateUser(c *gin.Context) {
 		})
 		return
 	}
+	// 审计日志：记录关键字段的变动（被谁改、改了什么）
+	adminId := c.GetInt(ctxkey.Id)
+	var changes []string
 	if originUser.Quota != updatedUser.Quota {
 		model.RecordLog(ctx, originUser.Id, model.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", common.LogQuota(originUser.Quota), common.LogQuota(updatedUser.Quota)))
+		changes = append(changes, fmt.Sprintf("quota=%d→%d", originUser.Quota, updatedUser.Quota))
+	}
+	if originUser.Role != updatedUser.Role {
+		changes = append(changes, fmt.Sprintf("role=%d→%d", originUser.Role, updatedUser.Role))
+	}
+	if originUser.Status != updatedUser.Status {
+		changes = append(changes, fmt.Sprintf("status=%d→%d", originUser.Status, updatedUser.Status))
+	}
+	if originUser.Email != updatedUser.Email {
+		changes = append(changes, fmt.Sprintf("email=%q→%q", originUser.Email, updatedUser.Email))
+	}
+	if originUser.Group != updatedUser.Group {
+		changes = append(changes, fmt.Sprintf("group=%q→%q", originUser.Group, updatedUser.Group))
+	}
+	if updatePassword {
+		changes = append(changes, "password=reset")
+	}
+	if len(changes) > 0 {
+		logger.SysLog(fmt.Sprintf("admin #%d updated user #%d (%s): %s",
+			adminId, originUser.Id, originUser.Username, strings.Join(changes, ", ")))
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -513,11 +548,18 @@ func DeleteUser(c *gin.Context) {
 	err = model.DeleteUserById(id)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "",
+			"success": false,
+			"message": err.Error(),
 		})
 		return
 	}
+	// 审计日志：谁删了谁
+	adminId := c.GetInt(ctxkey.Id)
+	logger.SysLog(fmt.Sprintf("admin #%d deleted user #%d (%s, role=%d)", adminId, originUser.Id, originUser.Username, originUser.Role))
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "",
+	})
 }
 
 func DeleteSelf(c *gin.Context) {
