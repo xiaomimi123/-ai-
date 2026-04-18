@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, Save, Eye, EyeOff, Radio, Sliders, Trash2, ExternalLink, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Search, Save, Eye, EyeOff, Radio, Sliders, Trash2, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 
@@ -20,57 +20,12 @@ interface ModelInfo {
   channel_count: number
 }
 
-// 展示价 vs 扣费倍率 的对齐检查
-// 一致：|input_ratio * 2 - input_price| / input_price < 2% （float 精度容差）
-// 未配置展示价：input_price === 0（只有扣费没展示）
-// 未配置扣费倍率：input_ratio === 0
-// 撕裂：两者都有值但差异 > 2%
-type AlignState = 'ok' | 'drift' | 'no-display' | 'no-ratio' | 'none'
-
-function checkAlign(m: ModelInfo): AlignState {
-  const hasRatio = m.input_ratio > 0
-  const hasPrice = m.input_price > 0
-  if (!hasRatio && !hasPrice) return 'none'
-  if (!hasRatio) return 'no-ratio'
-  if (!hasPrice) return 'no-display'
-  const expected = m.input_ratio * 2
-  const drift = Math.abs(expected - m.input_price) / m.input_price
-  return drift < 0.02 ? 'ok' : 'drift'
-}
-
-function AlignBadge({ state, m }: { state: AlignState; m: ModelInfo }) {
-  switch (state) {
-    case 'ok':
-      return (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--success)', fontSize: 12 }}>
-          <CheckCircle size={12} />一致
-        </span>
-      )
-    case 'drift':
-      return (
-        <span
-          title={`实际扣费 $${(m.input_ratio * 2).toFixed(3)}/M，展示价 $${m.input_price}/M —— 差异 > 2%`}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--danger)', fontSize: 12, fontWeight: 600 }}
-        >
-          <AlertTriangle size={12} />撕裂
-        </span>
-      )
-    case 'no-display':
-      return <span style={{ fontSize: 12, color: 'var(--muted)' }}>未设展示</span>
-    case 'no-ratio':
-      return <span style={{ fontSize: 12, color: 'var(--muted)' }}>未设扣费</span>
-    default:
-      return <span style={{ fontSize: 12, color: 'var(--muted)' }}>—</span>
-  }
-}
-
 export default function ModelManagePage() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [search, setSearch] = useState('')
   const [editModel, setEditModel] = useState<ModelInfo | null>(null)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [onlyDrift, setOnlyDrift] = useState(false)
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
@@ -100,13 +55,10 @@ export default function ModelManagePage() {
     if (!editModel) return
     setSaving(true)
     try {
-      // 只提交倍率相关字段，避免误改展示字段（展示去模型价格页改）
-      const payload = {
-        model_name: editModel.model_name,
-        input_ratio: editModel.input_ratio,
-        completion_ratio: editModel.completion_ratio,
-      }
-      const r = await http.put('/api/admin/lingjing/models', payload)
+      // 后端 AdminUpdateModel 是全量覆盖 —— 必须把 editModel 里的完整字段透传回去
+      // （包括 input_price/output_price/provider/description/is_visible 这些展示字段的"原值"）
+      // 否则后端会把没传的字段当成零值写回，把模型广场数据清空
+      const r = await http.put('/api/admin/lingjing/models', editModel)
       if (r.data.success) {
         toast.success(`${editModel.model_name} 倍率已更新`)
         setEditModel(null)
@@ -132,14 +84,13 @@ export default function ModelManagePage() {
     navigate(`/model-prices?model=${encodeURIComponent(modelName)}`)
   }
 
-  const filtered = (search
+  const filtered = search
     ? models.filter(m => m.model_name.toLowerCase().includes(search.toLowerCase()) || m.provider?.toLowerCase().includes(search.toLowerCase()))
     : models
-  ).filter(m => !onlyDrift || checkAlign(m) === 'drift')
 
   const activeModels = models.filter(m => m.channel_count > 0)
   const visibleModels = models.filter(m => m.is_visible === 1)
-  const driftCount = models.filter(m => checkAlign(m) === 'drift').length
+  const providers = Array.from(new Set(models.map(m => m.provider).filter(Boolean)))
 
   return (
     <div>
@@ -166,21 +117,12 @@ export default function ModelManagePage() {
           <div className="stat-label">前台可见</div>
           <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{visibleModels.length}</div>
         </div>
-        <div
-          className="stat-card"
-          onClick={() => driftCount > 0 && setOnlyDrift(v => !v)}
-          style={{
-            padding: '14px 20px', minWidth: 100,
-            cursor: driftCount > 0 ? 'pointer' : 'default',
-            border: driftCount > 0 ? '1.5px solid var(--danger)' : undefined,
-            background: driftCount > 0 ? '#fef2f2' : undefined,
-          }}
-        >
-          <div className="stat-label" style={{ color: driftCount > 0 ? 'var(--danger)' : undefined }}>
-            {onlyDrift ? '↩ 显示全部' : '撕裂项'}
+        {providers.slice(0, 5).map(p => (
+          <div key={p} className="stat-card" style={{ padding: '14px 20px', minWidth: 100 }}>
+            <div className="stat-label">{p}</div>
+            <div style={{ fontSize: 22, fontWeight: 700 }}>{models.filter(m => m.provider === p).length}</div>
           </div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: driftCount > 0 ? 'var(--danger)' : 'var(--muted)' }}>{driftCount}</div>
-        </div>
+        ))}
       </div>
 
       {/* Search */}
@@ -192,9 +134,6 @@ export default function ModelManagePage() {
       {/* Info */}
       <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#0369a1' }}>
         <strong>职责分工：</strong>本页只管<strong>计费倍率</strong>（实际扣费）。模型的图标、描述、标签、可见性等<strong>展示字段</strong>请在右侧「调展示」按钮跳转的「模型价格」页管理。
-        <div style={{ marginTop: 6, color: '#0c4a6e' }}>
-          <strong>对齐检查：</strong><code>输入倍率 × 2</code> 应等于展示的 <code>$/M input</code>。若撕裂（&gt;2%）表示前端显示和真实扣费不一致，用户可能投诉。
-        </div>
       </div>
 
       {/* Table */}
@@ -207,7 +146,6 @@ export default function ModelManagePage() {
               <th>输入倍率</th>
               <th>补全倍率</th>
               <th>展示价格 ($/M)</th>
-              <th>对齐</th>
               <th>供应商</th>
               <th>前台可见</th>
               <th>操作</th>
@@ -215,11 +153,10 @@ export default function ModelManagePage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={9} className="empty-state">
-                {loading ? '加载中...' : search ? '未找到匹配模型' : onlyDrift ? '无撕裂项 🎉' : '暂无模型，请先在渠道管理中添加渠道'}
+              <tr><td colSpan={8} className="empty-state">
+                {loading ? '加载中...' : search ? '未找到匹配模型' : '暂无模型，请先在渠道管理中添加渠道'}
               </td></tr>
             ) : filtered.map(m => {
-              const align = checkAlign(m)
               return (
                 <tr key={m.model_name} ref={el => { rowRefs.current[m.model_name] = el }} style={{ background: m.channel_count === 0 ? '#fefce8' : undefined }}>
                   <td>
@@ -239,7 +176,6 @@ export default function ModelManagePage() {
                       <span><span style={{ color: 'var(--success)' }}>${m.input_price}</span> / <span style={{ color: 'var(--primary)' }}>${m.output_price}</span></span>
                     ) : <span style={{ color: 'var(--muted)' }}>未设</span>}
                   </td>
-                  <td><AlignBadge state={align} m={m} /></td>
                   <td>{m.provider ? <span className="badge badge-blue">{m.provider}</span> : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
                   <td>
                     {m.is_visible ? (
@@ -281,9 +217,7 @@ export default function ModelManagePage() {
       </div>
 
       {/* Edit Modal — 只改倍率 */}
-      {editModel && (() => {
-        const align = checkAlign(editModel)
-        return (
+      {editModel && (
           <div className="modal-overlay" onClick={() => setEditModel(null)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520 }}>
               <div className="modal-title">调整倍率 — {editModel.model_name}</div>
@@ -347,11 +281,6 @@ export default function ModelManagePage() {
                     <div>{editModel.is_visible ? '是' : '否'}</div>
                   </div>
                 </div>
-                {align === 'drift' && (
-                  <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12, color: 'var(--danger)' }}>
-                    ⚠️ 展示价与扣费倍率不一致（倍率×2 = ${((editModel.input_ratio || 0) * 2).toFixed(3)}，展示 = ${editModel.input_price}）。建议同步修改展示价。
-                  </div>
-                )}
               </div>
 
               <div className="modal-actions">
@@ -362,8 +291,7 @@ export default function ModelManagePage() {
               </div>
             </div>
           </div>
-        )
-      })()}
+      )}
     </div>
   )
 }
