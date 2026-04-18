@@ -141,29 +141,71 @@ func InitLingjingTables() error {
 	DB.Exec("UPDATE model_prices SET name = model_name WHERE (name IS NULL OR name = '') AND model_name IS NOT NULL AND model_name != ''")
 
 	// 空表注入 10 条默认展示模型
-	// 价格单位：¥/百万 Token（对齐 OpenAI/Anthropic 官方定价口径）
+	// 价格单位：$/百万 Token（官方美元定价 × 0.7，下面 applyModelPriceMigration2026April 会把老库统一到这个价）
 	var modelCount int64
 	DB.Model(&ModelPrice{}).Count(&modelCount)
 	if modelCount == 0 {
 		logger.SysLog("seeding default model prices...")
 		defaults := []ModelPrice{
-			{ModelId: "deepseek-chat", Name: "DeepSeek V3", Provider: "DeepSeek", Description: "综合能力旗舰，性价比之王，适合日常开发和内容创作", Tags: "对话,国产", Logo: "deepseek", InputPrice: 2, OutputPrice: 8, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 1},
-			{ModelId: "deepseek-reasoner", Name: "DeepSeek R1", Provider: "DeepSeek", Description: "深度推理模型，复杂逻辑与数学推导首选，媲美 o1", Tags: "推理,国产", Logo: "deepseek", InputPrice: 4, OutputPrice: 16, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 2},
-			{ModelId: "qwen-max", Name: "Qwen Max", Provider: "阿里云", Description: "通义千问旗舰版，中文理解和长文处理能力出众", Tags: "对话,国产", Logo: "qwen", InputPrice: 4, OutputPrice: 12, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 3},
-			{ModelId: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", Description: "多模态旗舰，支持图文理解，综合能力领先，开发者首选", Tags: "对话,海外", Logo: "openai", InputPrice: 18, OutputPrice: 72, ContextWindow: "128K", Featured: true, IsVisible: true, SortOrder: 4},
-			{ModelId: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", Description: "轻量快速，价格实惠，适合简单对话和批量处理任务", Tags: "对话,海外", Logo: "openai", InputPrice: 1, OutputPrice: 4, ContextWindow: "128K", Featured: false, IsVisible: true, SortOrder: 5},
-			{ModelId: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Provider: "Anthropic", Description: "当前综合能力最强均衡模型，代码与长文档处理出众，SWE-bench 72.7%", Tags: "对话,推理,海外", Logo: "anthropic", InputPrice: 22, OutputPrice: 108, ContextWindow: "1M", Featured: true, IsVisible: true, SortOrder: 6},
-			{ModelId: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Provider: "Anthropic", Description: "快速轻量，响应迅速，适合高并发和简单任务", Tags: "对话,海外", Logo: "anthropic", InputPrice: 7, OutputPrice: 36, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 7},
-			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 9, OutputPrice: 72, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
-			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 1.1, OutputPrice: 4.3, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
-			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 72, OutputPrice: 288, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
+			{ModelId: "deepseek-chat", Name: "DeepSeek V3.2", Provider: "DeepSeek", Description: "综合能力旗舰，性价比之王，适合日常开发和内容创作", Tags: "对话,国产", Logo: "deepseek", InputPrice: 0.20, OutputPrice: 0.29, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 1},
+			{ModelId: "deepseek-reasoner", Name: "DeepSeek R1", Provider: "DeepSeek", Description: "深度推理模型，复杂逻辑与数学推导首选，媲美 o1", Tags: "推理,国产", Logo: "deepseek", InputPrice: 0.39, OutputPrice: 1.53, ContextWindow: "64K", Featured: false, IsVisible: true, SortOrder: 2},
+			{ModelId: "qwen-max", Name: "Qwen Max", Provider: "阿里云", Description: "通义千问旗舰版，中文理解和长文处理能力出众", Tags: "对话,国产", Logo: "qwen", InputPrice: 0.23, OutputPrice: 0.93, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 3},
+			{ModelId: "gpt-4o", Name: "GPT-4o", Provider: "OpenAI", Description: "多模态旗舰，支持图文理解，综合能力领先，开发者首选", Tags: "对话,海外", Logo: "openai", InputPrice: 1.75, OutputPrice: 7.00, ContextWindow: "128K", Featured: true, IsVisible: true, SortOrder: 4},
+			{ModelId: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "OpenAI", Description: "轻量快速，价格实惠，适合简单对话和批量处理任务", Tags: "对话,海外", Logo: "openai", InputPrice: 0.11, OutputPrice: 0.42, ContextWindow: "128K", Featured: false, IsVisible: true, SortOrder: 5},
+			{ModelId: "claude-sonnet-4-6", Name: "Claude Sonnet 4.6", Provider: "Anthropic", Description: "当前综合能力最强均衡模型，代码与长文档处理出众，SWE-bench 72.7%", Tags: "对话,推理,海外", Logo: "anthropic", InputPrice: 2.10, OutputPrice: 10.50, ContextWindow: "1M", Featured: true, IsVisible: true, SortOrder: 6},
+			{ModelId: "claude-haiku-4-5", Name: "Claude Haiku 4.5", Provider: "Anthropic", Description: "快速轻量，响应迅速，适合高并发和简单任务", Tags: "对话,海外", Logo: "anthropic", InputPrice: 0.70, OutputPrice: 3.50, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 7},
+			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 0.88, OutputPrice: 7.00, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
+			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 0.21, OutputPrice: 1.75, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
+			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 7.00, OutputPrice: 28.00, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
 		}
 		if err := DB.Create(&defaults).Error; err != nil {
 			logger.SysError("failed to seed default model prices: " + err.Error())
 		}
 	}
 
+	// 2026-04 定价对齐：官方美元价 × 0.7。用 option 标记幂等，只跑一次；
+	// 管理员后续在后台手动微调某个模型价，再次部署也不会被覆盖
+	applyModelPriceMigration2026April()
+
 	return nil
+}
+
+// applyModelPriceMigration2026April 把模型广场价格统一调整为官方美元价的 70%
+// 幂等：通过 option 表的 migrate.model_prices_0.7x_20260418 标记控制只执行一次
+func applyModelPriceMigration2026April() {
+	const migrationKey = "migrate.model_prices_0.7x_20260418"
+	if GetOptionValue(migrationKey) == "done" {
+		return
+	}
+	priceUpdates := []struct {
+		modelId       string
+		input, output float64
+	}{
+		{"deepseek-chat", 0.20, 0.29},
+		{"deepseek-reasoner", 0.39, 1.53},
+		{"claude-haiku-4-5", 0.70, 3.50},
+		{"claude-sonnet-4-6", 2.10, 10.50},
+		{"gpt-4o-mini", 0.11, 0.42},
+		{"gpt-4o", 1.75, 7.00},
+		{"o3", 7.00, 28.00},
+		{"gemini-2.5-flash", 0.21, 1.75},
+		{"gemini-2.5-pro", 0.88, 7.00},
+		{"qwen-max", 0.23, 0.93},
+	}
+	updated := 0
+	for _, p := range priceUpdates {
+		res := DB.Model(&ModelPrice{}).
+			Where("model_id = ?", p.modelId).
+			Updates(map[string]interface{}{"input_price": p.input, "output_price": p.output})
+		if res.Error == nil && res.RowsAffected > 0 {
+			updated++
+		}
+	}
+	if err := SaveOption(migrationKey, "done"); err != nil {
+		logger.SysError("failed to save price migration marker: " + err.Error())
+		return
+	}
+	logger.SysLog(fmt.Sprintf("model price migration applied: %d models set to 70%% of official USD price", updated))
 }
 
 // ===== Order =====
