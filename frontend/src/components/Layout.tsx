@@ -20,12 +20,12 @@ const navItems = [
   { icon: Settings,        label: '个人设置', to: '/settings' },
 ]
 
-// 移动端底部 TabBar 5 项
+// 移动端底部 TabBar 5 项（日志移到"我的"页里，TabBar 留位给更常用的模型广场）
 const mobileTabs = [
   { icon: LayoutDashboard, label: '控制台', to: '/dashboard' },
   { icon: Key,             label: '令牌',   to: '/tokens' },
   { icon: CreditCard,      label: '充值',   to: '/topup' },
-  { icon: ScrollText,      label: '日志',   to: '/logs' },
+  { icon: Cpu,             label: '模型',   to: '/models' },
   { icon: User,            label: '我的',   to: '/settings' },
 ]
 

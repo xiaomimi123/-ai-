@@ -6,11 +6,17 @@ export default function CustomerService() {
   const [config, setConfig] = useState<any>(null)
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
 
   useEffect(() => {
     axios.get('/api/lingjing/config', { withCredentials: true }).then(r => {
       if (r.data.success) setConfig(r.data.data)
     }).catch(() => {})
+
+    // 响应式：窗口尺寸变化时同步状态
+    const onResize = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
   }, [])
 
   // 不显示：未加载、未启用
@@ -26,11 +32,14 @@ export default function CustomerService() {
 
   return (
     <>
-      {/* 浮动按钮 */}
+      {/* 浮动按钮：移动端 bottom=88 避开 TabBar；桌面 bottom=24 */}
       <button
         onClick={() => setOpen(!open)}
         style={{
-          position: 'fixed', bottom: 24, right: 24, zIndex: 1000,
+          position: 'fixed',
+          bottom: isMobile ? 88 : 24,
+          right: isMobile ? 16 : 24,
+          zIndex: 1000,
           width: 56, height: 56, borderRadius: '50%',
           background: '#07c160', color: '#fff', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -49,7 +58,15 @@ export default function CustomerService() {
           {/* 遮罩 - 点击关闭 */}
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
 
-          <div style={{
+          <div style={isMobile ? {
+            // 移动端：bottom sheet 风格，左右撑满，紧贴 TabBar 上方
+            position: 'fixed', bottom: 152, left: 16, right: 16, zIndex: 1001,
+            background: '#fff', borderRadius: 16,
+            boxShadow: '0 8px 32px rgba(0,0,0,.2)',
+            maxHeight: '60vh', overflowY: 'auto',
+            animation: 'csSlideUp .2s ease',
+          } : {
+            // 桌面端：原样，浮在按钮左上方
             position: 'fixed', bottom: 90, right: 24, zIndex: 1001,
             width: 280, background: '#fff', borderRadius: 16,
             boxShadow: '0 8px 32px rgba(0,0,0,.15)',

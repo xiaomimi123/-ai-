@@ -1,17 +1,43 @@
 import { useEffect, useState } from 'react'
-import { User, Lock, Save } from 'lucide-react'
+import { useNavigate, NavLink } from 'react-router-dom'
+import {
+  User, Lock, Save, LogOut, ChevronRight,
+  ScrollText, Receipt, Gift, Bell, BookOpen,
+} from 'lucide-react'
 import { authApi } from '../api'
 import axios from 'axios'
+
+// 移动端 TabBar 挤不下的入口，集中放到"我的"页面
+const shortcuts = [
+  { icon: ScrollText, label: '用量日志', to: '/logs' },
+  { icon: Receipt,    label: '订单记录', to: '/orders' },
+  { icon: Gift,       label: '邀请返利', to: '/referral' },
+  { icon: Bell,       label: '通知中心', to: '/notifications' },
+  { icon: BookOpen,   label: '接入文档', to: '/docs' },
+]
 
 export default function SettingsPage() {
   const [user, setUser] = useState<any>(null)
   const [passwordForm, setPasswordForm] = useState({ old_password: '', new_password: '', confirm: '' })
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const navigate = useNavigate()
 
   useEffect(() => {
     authApi.getSelf().then(r => { if (r.data.success) setUser(r.data.data) })
   }, [])
+
+  const handleLogout = async () => {
+    if (loggingOut) return
+    setLoggingOut(true)
+    try {
+      await authApi.logout().catch(() => {})
+      navigate('/login')
+    } finally {
+      setLoggingOut(false)
+    }
+  }
 
   const handlePassword = async () => {
     if (passwordForm.new_password !== passwordForm.confirm) {
@@ -87,6 +113,42 @@ export default function SettingsPage() {
         {msg && <div style={{ background: msg.ok ? 'var(--accent-light)' : 'var(--danger-bg)', color: msg.ok ? 'var(--primary)' : 'var(--danger)', padding: '10px 14px', borderRadius: 8, marginBottom: 16, fontSize: 13 }}>{msg.text}</div>}
         <button className="btn btn-primary" onClick={handlePassword} disabled={loading}>
           <Save size={16} />{loading ? '保存中...' : '保存修改'}
+        </button>
+      </div>
+
+      {/* 快捷入口：TabBar 挤不下的放这里，移动端主要入口 */}
+      <div className="card" style={{ marginTop: 20, padding: 0, overflow: 'hidden' }}>
+        {shortcuts.map((s, i) => (
+          <NavLink
+            key={s.to}
+            to={s.to}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '14px 16px',
+              borderTop: i === 0 ? 'none' : '0.5px solid var(--border)',
+              color: 'var(--text)',
+            }}
+          >
+            <s.icon size={18} color="var(--accent)" />
+            <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{s.label}</span>
+            <ChevronRight size={16} color="var(--muted)" />
+          </NavLink>
+        ))}
+      </div>
+
+      {/* 退出登录：TabBar 下方 32px 的 margin 让按钮在移动端充分可见 */}
+      <div style={{ marginTop: 20, marginBottom: 32 }}>
+        <button
+          onClick={handleLogout}
+          disabled={loggingOut}
+          className="btn btn-outline"
+          style={{
+            width: '100%', padding: 13, fontSize: 15, fontWeight: 600,
+            color: 'var(--danger)', borderColor: 'var(--danger)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}
+        >
+          <LogOut size={16} />{loggingOut ? '退出中...' : '退出登录'}
         </button>
       </div>
     </div>

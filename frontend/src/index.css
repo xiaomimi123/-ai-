@@ -257,8 +257,12 @@ tr:hover td { background: var(--bg); }
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar { display: none; }
-  .main-content { margin-left: 0; padding: 16px 16px 80px; }
-  .mobile-tabbar { display: flex; }
+  /* 底部留 TabBar 高度(60) + 安全距离(20) + iOS home 条 safe-area；!important 防子页面内联样式覆盖 */
+  .main-content {
+    margin-left: 0 !important;
+    padding: 16px 16px calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .mobile-tabbar { display: flex; padding-bottom: env(safe-area-inset-bottom, 0px); }
   .container { padding: 0 16px; }
   .card { padding: 16px; }
   .stat-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
