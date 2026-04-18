@@ -10,11 +10,32 @@ const ROLES = [
   { value: 100, label: '超级管理员' },
 ]
 
+interface GroupConfig {
+  key: string
+  name: string
+  description: string
+  priority: number
+  price_ratio: number
+  rpm_limit: number
+  tpm_limit: number
+}
+
+// 分组视觉映射（后端没存颜色，前端按 key 就近匹配）
+const GROUP_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  default:    { bg: '#f3f4f6', color: '#4b5563', border: '#d1d5db' },
+  vip:        { bg: '#fef3c7', color: '#92400e', border: '#fcd34d' },
+  pro:        { bg: '#ede9fe', color: '#5b21b6', border: '#c4b5fd' },
+  enterprise: { bg: '#dbeafe', color: '#1e40af', border: '#93c5fd' },
+}
+const fallbackColor = { bg: '#e0e7ff', color: '#3730a3', border: '#a5b4fc' }
+const pickColor = (k: string) => GROUP_COLORS[k] || fallbackColor
+
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1) // 1-indexed
   const [search, setSearch] = useState('')
+  const [groups, setGroups] = useState<GroupConfig[]>([])
   const [editUser, setEditUser] = useState<any>(null)
   const [editForm, setEditForm] = useState({
     username: '', display_name: '', email: '', password: '',
@@ -35,6 +56,27 @@ export default function UsersPage() {
     } catch {}
   }
   useEffect(() => { load() }, [page])
+
+  // 加载分组列表（动态，不再硬编码）
+  useEffect(() => {
+    groupApi.list().then(r => {
+      if (r.data.success) setGroups(r.data.data || [])
+    }).catch(() => {})
+  }, [])
+
+  // 构造 tooltip 描述一个分组的特权
+  const groupTooltip = (g?: GroupConfig) => {
+    if (!g) return ''
+    const parts = [g.description || g.name]
+    if (g.price_ratio !== 1) parts.push(`价格: ${(g.price_ratio * 100).toFixed(0)}%`)
+    parts.push(`RPM: ${g.rpm_limit || '无限'}`)
+    parts.push(`TPM: ${g.tpm_limit ? g.tpm_limit.toLocaleString() : '无限'}`)
+    return parts.join(' · ')
+  }
+
+  // 按分组统计人数（基于当前页，和 Redemptions stats 一个思路）
+  const groupCounts: Record<string, number> = {}
+  users.forEach(u => { const k = u.group || 'default'; groupCounts[k] = (groupCounts[k] || 0) + 1 })
 
   const toUsd = (q: number) => (q / 500000).toFixed(2)
 
@@ -154,7 +196,7 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div className="page-header" style={{ marginBottom: 0 }}>
           <h1 className="page-title">用户管理</h1>
           <p className="page-desc">共 {total} 名注册用户</p>
@@ -167,6 +209,34 @@ export default function UsersPage() {
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>添加用户</button>
         </div>
       </div>
+
+      {/* 分组统计（当前页） */}
+      {groups.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', marginRight: 4 }}>本页分组分布：</span>
+          {groups.map(g => {
+            const count = groupCounts[g.key] || 0
+            const c = pickColor(g.key)
+            return (
+              <span
+                key={g.key}
+                title={groupTooltip(g)}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  fontSize: 12, fontWeight: 600,
+                  padding: '4px 10px', borderRadius: 999,
+                  background: c.bg, color: c.color,
+                  border: `1px solid ${c.border}`,
+                  cursor: 'help',
+                }}
+              >
+                {g.name}
+                <span style={{ fontFamily: 'monospace', opacity: .85 }}>{count}</span>
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       <div className="table-wrap">
         <table>
@@ -183,17 +253,38 @@ export default function UsersPage() {
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.display_name || '-'}</td>
                     <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.email || '-'}</td>
                     <td>
-                      <select value={u.group || 'default'} onChange={async e => {
-                        try {
-                          const r = await groupApi.updateUser({ user_id: u.id, group: e.target.value })
-                          if (r.data.success) { toast.success('用户组已更新'); load() }
-                          else toast.error(r.data.message)
-                        } catch { toast.error('更新失败') }
-                      }} style={{ fontSize: 12, border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', background: u.group === 'vip' ? '#fef3c7' : u.group === 'pro' ? '#ede9fe' : '#f3f4f6' }}>
-                        <option value="default">普通用户</option>
-                        <option value="vip">VIP</option>
-                        <option value="pro">专业</option>
-                      </select>
+                      {(() => {
+                        const cur = u.group || 'default'
+                        const c = pickColor(cur)
+                        const curGroup = groups.find(g => g.key === cur)
+                        return (
+                          <select
+                            value={cur}
+                            title={groupTooltip(curGroup)}
+                            onChange={async e => {
+                              try {
+                                const r = await groupApi.updateUser({ user_id: u.id, group: e.target.value })
+                                if (r.data.success) { toast.success('用户组已更新'); load() }
+                                else toast.error(r.data.message)
+                              } catch { toast.error('更新失败') }
+                            }}
+                            style={{
+                              fontSize: 12, fontWeight: 600,
+                              padding: '3px 10px', borderRadius: 999,
+                              background: c.bg, color: c.color,
+                              border: `1px solid ${c.border}`,
+                              cursor: 'pointer',
+                              appearance: 'none',
+                              // 从后端动态分组列表渲染选项
+                            }}
+                          >
+                            {groups.length === 0
+                              ? <option value={cur}>{cur}</option>
+                              : groups.map(g => <option key={g.key} value={g.key}>{g.name}</option>)
+                            }
+                          </select>
+                        )
+                      })()}
                     </td>
                     <td><span className={`badge ${role.cls}`}>{role.label}</span></td>
                     <td><span className={`badge ${u.status === 1 ? 'badge-green' : 'badge-red'}`}>{u.status === 1 ? '正常' : '禁用'}</span></td>
@@ -259,7 +350,12 @@ export default function UsersPage() {
               </div>
               <div className="form-group">
                 <label className="form-label">分组</label>
-                <input value={editForm.group} onChange={e => setEditForm(p => ({ ...p, group: e.target.value }))} placeholder="default" />
+                <select value={editForm.group} onChange={e => setEditForm(p => ({ ...p, group: e.target.value }))}>
+                  {groups.length === 0
+                    ? <option value={editForm.group}>{editForm.group}</option>
+                    : groups.map(g => <option key={g.key} value={g.key}>{g.name} · {g.description}</option>)
+                  }
+                </select>
               </div>
             </div>
 
