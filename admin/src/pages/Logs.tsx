@@ -1,23 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Search, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, RefreshCw } from 'lucide-react'
 import { logApi } from '../api'
 import ModelIcon from '../components/ModelIcon'
+import Pagination from '../components/Pagination'
+
+const PAGE_SIZE = 15
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
-  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1) // 1-indexed
   const [filter, setFilter] = useState({ username: '', model_name: '' })
   const [loading, setLoading] = useState(false)
 
   const load = async () => {
     setLoading(true)
-    try { const r = await logApi.list({ p: page, page_size: 30, ...filter }); if (r.data.success) setLogs(r.data.data || []) }
-    finally { setLoading(false) }
+    try {
+      const r = await logApi.list({ p: page - 1, page_size: PAGE_SIZE, ...filter })
+      if (r.data.success) {
+        setLogs(r.data.data || [])
+        setTotal(r.data.total || 0)
+      }
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => { load() }, [page])
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [page])
 
-  const handleSearch = () => { setPage(0); load() }
+  const handleSearch = () => { if (page !== 1) setPage(1); else load() }
 
   return (
     <div>
@@ -62,11 +71,7 @@ export default function LogsPage() {
         </table>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
-        <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page <= 0}><ChevronLeft size={14}/></button>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13, padding: '0 8px' }}>第 {page} 页</span>
-        <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={logs.length < 30}><ChevronRight size={14}/></button>
-      </div>
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
     </div>
   )
 }

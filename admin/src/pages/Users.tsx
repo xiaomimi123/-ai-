@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Search, ChevronLeft, ChevronRight, Edit2, UserX, UserCheck, Trash2, Plus } from 'lucide-react'
+import { Search, Edit2, UserX, UserCheck, Trash2, Plus } from 'lucide-react'
 import { userApi, groupApi } from '../api'
 import toast from 'react-hot-toast'
+import Pagination from '../components/Pagination'
 
 const ROLES = [
   { value: 1, label: '普通用户' },
@@ -12,7 +13,7 @@ const ROLES = [
 export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(0)
+  const [page, setPage] = useState(1) // 1-indexed
   const [search, setSearch] = useState('')
   const [editUser, setEditUser] = useState<any>(null)
   const [editForm, setEditForm] = useState({
@@ -28,7 +29,8 @@ export default function UsersPage() {
 
   const load = async (p = page) => {
     try {
-      const r = await userApi.list({ p, page_size: PAGE_SIZE })
+      // 前端 1-indexed，后端 p 0-indexed
+      const r = await userApi.list({ p: p - 1, page_size: PAGE_SIZE })
       if (r.data.success) { setUsers(r.data.data || []); setTotal(r.data.total || r.data.data?.length || 0) }
     } catch {}
   }
@@ -108,7 +110,6 @@ export default function UsersPage() {
   }
 
   const filtered = search ? users.filter(u => u.username?.toLowerCase().includes(search.toLowerCase()) || u.email?.includes(search)) : users
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   const getRoleLabel = (role: number) => {
     if (role >= 100) return { label: '超管', cls: 'badge-purple' }
@@ -186,14 +187,7 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {/* Pagination */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>第 {page + 1} / {totalPages} 页，共 {total} 条</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page <= 0}><ChevronLeft size={14}/> 上一页</button>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages - 1}>下一页 <ChevronRight size={14}/></button>
-        </div>
-      </div>
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
 
       {/* Edit Modal */}
       {editUser && (

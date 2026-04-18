@@ -33,10 +33,36 @@ func GetAllLogs(c *gin.Context) {
 		})
 		return
 	}
+	// 总数（相同过滤条件），供前端显示总页数
+	var total int64
+	countTx := model.DB.Model(&model.Log{})
+	if logType > 0 {
+		countTx = countTx.Where("type = ?", logType)
+	}
+	if startTimestamp > 0 {
+		countTx = countTx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		countTx = countTx.Where("created_at <= ?", endTimestamp)
+	}
+	if modelName != "" {
+		countTx = countTx.Where("model_name = ?", modelName)
+	}
+	if username != "" {
+		countTx = countTx.Where("username = ?", username)
+	}
+	if tokenName != "" {
+		countTx = countTx.Where("token_name = ?", tokenName)
+	}
+	if channel > 0 {
+		countTx = countTx.Where("channel_id = ?", channel)
+	}
+	countTx.Count(&total)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    logs,
+		"total":   total,
 	})
 	return
 }
@@ -65,10 +91,30 @@ func GetUserLogs(c *gin.Context) {
 		})
 		return
 	}
+	// 总数（按用户 + 过滤条件）
+	var total int64
+	countTx := model.DB.Model(&model.Log{}).Where("user_id = ?", userId)
+	if logType > 0 {
+		countTx = countTx.Where("type = ?", logType)
+	}
+	if startTimestamp > 0 {
+		countTx = countTx.Where("created_at >= ?", startTimestamp)
+	}
+	if endTimestamp > 0 {
+		countTx = countTx.Where("created_at <= ?", endTimestamp)
+	}
+	if modelName != "" {
+		countTx = countTx.Where("model_name = ?", modelName)
+	}
+	if tokenName != "" {
+		countTx = countTx.Where("token_name = ?", tokenName)
+	}
+	countTx.Count(&total)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    logs,
+		"total":   total,
 	})
 	return
 }

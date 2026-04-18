@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, PlayCircle, CheckCircle, XCircle, ToggleLeft, ToggleRight,
-  Loader2, RefreshCw, DollarSign, Search, Edit2, Copy, ChevronLeft, ChevronRight,
+  Loader2, RefreshCw, DollarSign, Search, Edit2, Copy,
   AlertTriangle, Settings,
 } from 'lucide-react'
 import { channelApi } from '../api'
 import toast from 'react-hot-toast'
+import Pagination from '../components/Pagination'
 
 // 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
 // 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
@@ -90,8 +91,9 @@ function StatusCell({ status, onToggle }: { status: number; onToggle: () => void
 
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<any[]>([])
-  const [page, setPage] = useState(0)
-  const [pageSize] = useState(20) // 后端 ItemsPerPage 默认 20
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1) // 1-indexed 与 Pagination 组件对齐
+  const [pageSize] = useState(15)
   const [keyword, setKeyword] = useState('')
   const [searchMode, setSearchMode] = useState(false) // 是否处于搜索结果状态
   const [refreshing, setRefreshing] = useState(false)
@@ -106,8 +108,11 @@ export default function ChannelsPage() {
   // ---- 加载 ----
   const load = async () => {
     try {
-      const r = await channelApi.list({ p: page })
-      if (r.data.success) setChannels(r.data.data || [])
+      const r = await channelApi.list({ p: page - 1, page_size: pageSize })
+      if (r.data.success) {
+        setChannels(r.data.data || [])
+        setTotal(r.data.total || 0)
+      }
     } catch { toast.error('加载失败') }
   }
   const search = async (kw: string) => {
@@ -293,8 +298,6 @@ export default function ChannelsPage() {
     return { total: channels.length, enabled, manualOff, autoOff }
   }, [channels])
 
-  const hasMore = !searchMode && channels.length === pageSize
-
   return (
     <div>
       {/* 标题区 + 统计 */}
@@ -422,18 +425,8 @@ export default function ChannelsPage() {
         </table>
       </div>
 
-      {/* 分页（搜索模式隐藏） */}
-      {!searchMode && (page > 0 || hasMore) && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}>
-            <ChevronLeft size={14} />上一页
-          </button>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page + 1} 页</span>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={!hasMore}>
-            下一页<ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      {/* 分页（搜索模式下不显示） */}
+      {!searchMode && <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} />}
 
       {/* 新建 / 编辑 弹窗 */}
       {modal && (

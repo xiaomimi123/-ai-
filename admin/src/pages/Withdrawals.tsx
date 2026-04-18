@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, X, DollarSign, ChevronLeft, ChevronRight, Wallet, CheckCircle2 } from 'lucide-react'
+import { Check, X, DollarSign, Wallet, CheckCircle2 } from 'lucide-react'
+import Pagination from '../components/Pagination'
 import { withdrawApi } from '../api'
 import toast from 'react-hot-toast'
 
@@ -103,7 +104,6 @@ export default function WithdrawalsPage() {
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   return (
     <div>
@@ -232,17 +232,7 @@ export default function WithdrawalsPage() {
         </table>
       </div>
 
-      {total > 20 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page} / {totalPages} 页，共 {total} 条</span>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}>
-            <ChevronLeft size={14} />
-          </button>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
-            <ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pageSize={20} total={total} onChange={setPage} />
 
       {/* 审核弹窗 */}
       {dialog && (

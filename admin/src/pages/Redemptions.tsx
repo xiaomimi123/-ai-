@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2, Gift, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Copy, Trash2, Gift, Download } from 'lucide-react'
 import { redemptionApi } from '../api'
+import Pagination from '../components/Pagination'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 15
 
 export default function RedemptionsPage() {
   const [list, setList] = useState<any[]>([])
-  const [page, setPage] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1) // 1-indexed
   const [pageLoading, setPageLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', quota: '10', count: '1' })
@@ -16,13 +18,16 @@ export default function RedemptionsPage() {
   const load = async () => {
     setPageLoading(true)
     try {
-      const r = await redemptionApi.list({ p: page, page_size: PAGE_SIZE })
-      if (r.data.success) setList(r.data.data || [])
+      const r = await redemptionApi.list({ p: page - 1, page_size: PAGE_SIZE })
+      if (r.data.success) {
+        setList(r.data.data || [])
+        setTotal(r.data.total || 0)
+      }
     } finally { setPageLoading(false) }
   }
   useEffect(() => { load() /* eslint-disable-next-line */ }, [page])
 
-  const refreshToFirst = () => { if (page === 0) load(); else setPage(0) }
+  const refreshToFirst = () => { if (page === 1) load(); else setPage(1) }
 
   const handleCreate = async () => {
     setLoading(true)
@@ -79,7 +84,7 @@ export default function RedemptionsPage() {
           <thead><tr><th>名称</th><th>兑换码</th><th>面值</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             {list.length === 0
-              ? <tr><td colSpan={6} className="empty-state"><Gift size={32}/><div>{pageLoading ? '加载中...' : (page === 0 ? '暂无兑换码' : '没有更多了')}</div></td></tr>
+              ? <tr><td colSpan={6} className="empty-state"><Gift size={32}/><div>{pageLoading ? '加载中...' : '暂无兑换码'}</div></td></tr>
               : list.map(r => (
                 <tr key={r.id}>
                   <td><strong>{r.name}</strong></td>
@@ -101,17 +106,7 @@ export default function RedemptionsPage() {
         </table>
       </div>
 
-      {(page > 0 || list.length === PAGE_SIZE) && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || pageLoading}>
-            <ChevronLeft size={14} />上一页
-          </button>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page + 1} 页</span>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={list.length < PAGE_SIZE || pageLoading}>
-            下一页<ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
 
       {/* Create Modal */}
       {showCreate && (

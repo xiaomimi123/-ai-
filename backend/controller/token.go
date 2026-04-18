@@ -35,10 +35,14 @@ func GetAllTokens(c *gin.Context) {
 		})
 		return
 	}
+	// 总数：直接 count（不改 model 层签名），用于前端显示 "X / N 页"
+	var total int64
+	model.DB.Model(&model.Token{}).Where("user_id = ?", userId).Count(&total)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    tokens,
+		"total":   total,
 	})
 	return
 }

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { Check, Search } from 'lucide-react'
+import Pagination from '../components/Pagination'
 import { orderApi } from '../api'
 import toast from 'react-hot-toast'
 
@@ -41,10 +42,11 @@ export default function OrdersPage() {
   const [username, setUsername] = useState('')
   const [usernameInput, setUsernameInput] = useState('')
 
+  const PAGE_SIZE = 15
   const load = () => {
     const params: { page?: number; page_size?: number; status?: string; username?: string } = {
       page,
-      page_size: 20,
+      page_size: PAGE_SIZE,
     }
     if (status) params.status = status
     if (username) params.username = username
@@ -66,7 +68,6 @@ export default function OrdersPage() {
     } catch { toast.error('网络错误') }
   }
 
-  const totalPages = Math.max(1, Math.ceil(total / 20))
 
   return (
     <div>
@@ -163,13 +164,7 @@ export default function OrdersPage() {
         </table>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>共 {total} 条，第 {page} / {totalPages} 页</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}><ChevronLeft size={14}/></button>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages}><ChevronRight size={14}/></button>
-        </div>
-      </div>
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
     </div>
   )
 }

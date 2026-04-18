@@ -15,7 +15,11 @@ func GetAllChannels(c *gin.Context) {
 	if p < 0 {
 		p = 0
 	}
-	channels, err := model.GetAllChannels(p*config.ItemsPerPage, config.ItemsPerPage, "limited")
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = config.ItemsPerPage
+	}
+	channels, err := model.GetAllChannels(p*pageSize, pageSize, "limited")
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -23,10 +27,13 @@ func GetAllChannels(c *gin.Context) {
 		})
 		return
 	}
+	var total int64
+	model.DB.Model(&model.Channel{}).Count(&total)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    channels,
+		"total":   total,
 	})
 	return
 }

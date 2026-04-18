@@ -1,29 +1,26 @@
 import { useEffect, useState } from 'react'
-import { ScrollText, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ScrollText } from 'lucide-react'
 import { logApi } from '../api'
 import ModelIcon from '../components/ModelIcon'
+import Pagination from '../components/Pagination'
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 15
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
-  const [page, setPage] = useState(0) // 后端 p 从 0 开始
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1) // 前端 1-indexed，调后端时转 p = page - 1
   const [loading, setLoading] = useState(false)
 
-  const load = async (targetPage: number) => {
+  useEffect(() => {
     setLoading(true)
-    try {
-      const r = await logApi.list({ p: targetPage, page_size: PAGE_SIZE })
-      if (r.data.success) setLogs(r.data.data || [])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { load(page) }, [page])
-
-  // 是否还有下一页：当前返回条数 === 每页条数（无法精确判断最后一页，但足够）
-  const hasMore = logs.length === PAGE_SIZE
+    logApi.list({ p: page - 1, page_size: PAGE_SIZE }).then(r => {
+      if (r.data.success) {
+        setLogs(r.data.data || [])
+        setTotal(r.data.total || 0)
+      }
+    }).finally(() => setLoading(false))
+  }, [page])
 
   return (
     <div>
@@ -40,7 +37,7 @@ export default function LogsPage() {
           <tbody>
             {logs.length === 0 ? (
               <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
-                {loading ? '加载中...' : (page === 0 ? '暂无日志' : '没有更多了')}
+                {loading ? '加载中...' : '暂无日志'}
               </td></tr>
             ) : logs.map(log => (
               <tr key={log.id}>
@@ -56,26 +53,7 @@ export default function LogsPage() {
         </table>
       </div>
 
-      {/* 分页：首页 + 有数据时显示 */}
-      {(page > 0 || hasMore) && (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => setPage(p => Math.max(0, p - 1))}
-            disabled={page === 0 || loading}
-          >
-            <ChevronLeft size={14} />上一页
-          </button>
-          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page + 1} 页</span>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={() => setPage(p => p + 1)}
-            disabled={!hasMore || loading}
-          >
-            下一页<ChevronRight size={14} />
-          </button>
-        </div>
-      )}
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
     </div>
   )
 }

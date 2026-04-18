@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Receipt, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Receipt } from 'lucide-react'
 import axios from 'axios'
+import Pagination from '../components/Pagination'
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
 interface Order {
@@ -43,8 +44,6 @@ export default function OrdersPage() {
     }).catch(() => {})
   }, [page])
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize))
-
   return (
     <div>
       <div className="page-header">
@@ -79,13 +78,7 @@ export default function OrdersPage() {
         </table>
       </div>
 
-      {total > pageSize && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, marginTop: 16 }}>
-          <span style={{ color: 'var(--muted)', fontSize: 13 }}>第 {page} / {totalPages} 页</span>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1}><ChevronLeft size={14}/></button>
-          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}><ChevronRight size={14}/></button>
-        </div>
-      )}
+      <Pagination page={page} pageSize={pageSize} total={total} onChange={setPage} />
     </div>
   )
 }

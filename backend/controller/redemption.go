@@ -28,10 +28,13 @@ func GetAllRedemptions(c *gin.Context) {
 		})
 		return
 	}
+	var total int64
+	model.DB.Model(&model.Redemption{}).Count(&total)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    redemptions,
+		"total":   total,
 	})
 	return
 }

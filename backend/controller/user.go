@@ -205,10 +205,15 @@ func GetAllUsers(c *gin.Context) {
 		return
 	}
 
+	// 总数：不含已删除（软删除 deleted_at IS NULL）
+	var total int64
+	model.DB.Model(&model.User{}).Count(&total)
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",
 		"data":    users,
+		"total":   total,
 	})
 }
 
