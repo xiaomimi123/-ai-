@@ -16,13 +16,6 @@ const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 }
 
 interface Plan { id: number; name: string; price: number; quota: number; bonus_quota: number; description: string; is_available: boolean }
 
-function fmtQuota(q: number): string {
-  if (q >= 100000000) return `${(q / 100000000).toFixed(1)}亿`
-  if (q >= 10000000) return `${(q / 10000000).toFixed(0)}千万`
-  if (q >= 1000000) return `${(q / 1000000).toFixed(0)}百万`
-  return `${q}`
-}
-
 export default function TopupPage() {
   const [plans, setPlans] = useState<Plan[]>([])
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
@@ -162,7 +155,7 @@ export default function TopupPage() {
     <div style={{ maxWidth: 720 }}>
       <div className="page-header">
         <h1 className="page-title">充值</h1>
-        <p className="page-desc">当前余额：<span style={{ color: 'var(--accent)', fontWeight: 600 }}>¥{balance}</span></p>
+        <p className="page-desc">当前余额：<span style={{ color: 'var(--accent)', fontWeight: 600 }}>${balance}</span></p>
       </div>
 
       {payStatus === 1 && (
@@ -268,14 +261,14 @@ export default function TopupPage() {
               >
                 {p.bonus_quota > 0 && (
                   <div style={{ position: 'absolute', top: -10, right: 12, background: 'var(--accent)', color: 'var(--primary)', fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20 }}>
-                    赠 {fmtQuota(p.bonus_quota)}
+                    赠 ${(p.bonus_quota / 500000).toFixed(2)}
                   </div>
                 )}
                 <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>{p.name}</div>
                 <div style={{ fontSize: 26, fontWeight: 700, color: 'var(--primary)', marginBottom: 4 }}>¥{p.price}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-                  {fmtQuota(p.quota)} Token
-                  {p.bonus_quota > 0 && <span style={{ color: 'var(--accent)', marginLeft: 4, fontWeight: 600 }}>+{fmtQuota(p.bonus_quota)}</span>}
+                  到账 ${(p.quota / 500000).toFixed(2)}
+                  {p.bonus_quota > 0 && <span style={{ color: 'var(--accent)', marginLeft: 4, fontWeight: 600 }}>+ ${(p.bonus_quota / 500000).toFixed(2)}</span>}
                 </div>
                 {p.description && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>{p.description}</div>}
                 {selected && <CheckCircle size={16} color="var(--accent)" style={{ position: 'absolute', bottom: 12, right: 12 }} />}
@@ -293,7 +286,7 @@ export default function TopupPage() {
             <span style={{ fontSize: 22, fontWeight: 600, color: 'var(--accent)' }}>¥</span>
             <input type="number" min="1" value={customAmount} onChange={e => setCustomAmount(e.target.value)} placeholder="最低 1" style={{ flex: 1, fontSize: 24, fontWeight: 600, border: 'none', outline: 'none', padding: '8px 0' }} />
           </div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>最低 ¥1 · 1 元 = 50 万 Token</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>最低 ¥1 · ¥1 ≈ $1 额度（按 1:1 汇率到账）</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {[1, 10, 30, 50, 100, 200, 500].map(a => (
               <button key={a} onClick={() => setCustomAmount(String(a))} className={`btn btn-sm ${customAmount === String(a) ? 'btn-accent' : 'btn-outline'}`} style={{ fontSize: 12 }}>
@@ -314,7 +307,7 @@ export default function TopupPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span style={{ color: 'var(--muted)', fontSize: 13 }}>到账额度</span>
-              <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{fmtQuota(curQuota)} Token</span>
+              <span style={{ fontWeight: 600, color: 'var(--accent)' }}>${(curQuota / 500000).toFixed(2)}</span>
             </div>
           </div>
 

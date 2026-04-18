@@ -81,9 +81,9 @@ export default function DashboardPage() {
         }}>
           <AlertTriangle size={20} style={{ flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, marginBottom: 2 }}>余额不足 ¥10</div>
+            <div style={{ fontWeight: 600, marginBottom: 2 }}>余额不足 $10</div>
             <div style={{ fontSize: 13, opacity: .85 }}>
-              当前余额 ¥{balance}，建议及时充值避免中断服务
+              当前余额 ${balance}，建议及时充值避免中断服务
             </div>
           </div>
           <Link to="/topup" className="btn btn-accent" style={{ flexShrink: 0, padding: '8px 16px', fontSize: 13 }}>
@@ -105,8 +105,8 @@ export default function DashboardPage() {
           }} />
           <div style={{ position: 'relative' }}>
             <div style={{ fontSize: 12, opacity: .75, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>账户余额</div>
-            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>¥{balance}</div>
-            <div style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>已消费 ¥{usedBalance}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${balance}</div>
+            <div style={{ fontSize: 12, opacity: .7, marginTop: 4 }}>已消费 ${usedBalance}</div>
             <Link to="/topup" style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: 'var(--accent)', color: 'var(--primary)',
@@ -124,7 +124,7 @@ export default function DashboardPage() {
             <div>
               <div className="stat-label">今日调用</div>
               <div className="stat-value">{stats?.today?.count || 0}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>消费 ¥{(stats?.today?.cost || 0).toFixed(4)}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>消费 ${(stats?.today?.cost || 0).toFixed(4)}</div>
             </div>
             <div style={{ background: 'var(--accent-light)', borderRadius: 8, padding: 9, display: 'flex' }}>
               <Activity size={18} color="var(--accent)" />
@@ -138,7 +138,7 @@ export default function DashboardPage() {
             <div>
               <div className="stat-label">本月调用</div>
               <div className="stat-value">{(stats?.month?.count || 0).toLocaleString()}</div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>消费 ¥{(stats?.month?.cost || 0).toFixed(2)}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>消费 ${(stats?.month?.cost || 0).toFixed(2)}</div>
             </div>
             <div style={{ background: 'var(--accent-light)', borderRadius: 8, padding: 9, display: 'flex' }}>
               <TrendingUp size={18} color="var(--accent)" />
@@ -193,14 +193,14 @@ export default function DashboardPage() {
       {/* 消费 + 模型分布 */}
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
         <div className="card">
-          <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>近 7 天消费（元）</h3>
+          <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>近 7 天消费（$）</h3>
           {stats?.daily_usage?.length ? (
             <ResponsiveContainer width="100%" height={200}>
               <BarChart data={stats.daily_usage} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#E4EBE5"/>
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#7A8A7E' }} axisLine={false} tickLine={false}/>
-                <YAxis tick={{ fontSize: 11, fill: '#7A8A7E' }} tickFormatter={(v: number) => `¥${(v / 500000).toFixed(2)}`} axisLine={false} tickLine={false}/>
-                <Tooltip formatter={(v: any) => [`¥${(Number(v) / 500000).toFixed(4)}`, '消费']} contentStyle={tooltipStyle}/>
+                <YAxis tick={{ fontSize: 11, fill: '#7A8A7E' }} tickFormatter={(v: number) => `$${(v / 500000).toFixed(2)}`} axisLine={false} tickLine={false}/>
+                <Tooltip formatter={(v: any) => [`$${(Number(v) / 500000).toFixed(4)}`, '消费']} contentStyle={tooltipStyle}/>
                 <Bar dataKey="quota" name="消费" fill="#0D1F14" radius={[4, 4, 0, 0]}/>
               </BarChart>
             </ResponsiveContainer>

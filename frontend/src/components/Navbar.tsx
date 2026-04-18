@@ -78,7 +78,7 @@ export default function Navbar() {
                     <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
                       <div style={{ fontSize: 13, fontWeight: 600 }}>{user?.display_name || user?.username}</div>
                       <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
-                        余额：<span style={{ color: 'var(--primary)', fontWeight: 600 }}>¥{((user?.quota || 0) / 500000).toFixed(2)}</span>
+                        余额：<span style={{ color: 'var(--primary)', fontWeight: 600 }}>${((user?.quota || 0) / 500000).toFixed(2)}</span>
                       </div>
                     </div>
                     {/* 菜单项 */}

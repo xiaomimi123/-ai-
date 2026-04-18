@@ -66,7 +66,7 @@ export default function OrdersPage() {
                   <tr key={o.id}>
                     <td><code style={{ fontSize: 12, background: 'var(--bg)', padding: '2px 8px', borderRadius: 4, color: 'var(--text)' }}>{o.order_no}</code></td>
                     <td style={{ fontWeight: 600, color: 'var(--accent)' }}>¥{o.amount?.toFixed(2)}</td>
-                    <td style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{o.quota ? (o.quota / 500000).toFixed(2) : '-'} 元</td>
+                    <td style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{o.quota ? `$${(o.quota / 500000).toFixed(2)}` : '-'}</td>
                     <td>{methodMap[o.payment_method] || o.payment_method || '-'}</td>
                     <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                     <td style={{ color: 'var(--muted)', fontSize: 13 }}>

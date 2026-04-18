@@ -479,7 +479,7 @@ func HupijiaoNotify(c *gin.Context) {
 	model.CreateUserNotification(
 		order.UserId,
 		"充值成功",
-		fmt.Sprintf("¥%.2f 已到账，获得 %.2f 元额度。感谢使用灵镜 AI！", order.Amount, float64(order.Quota)/500000.0),
+		fmt.Sprintf("¥%.2f 已到账，获得 $%.2f 额度。感谢使用灵镜 AI！", order.Amount, float64(order.Quota)/500000.0),
 		"topup_success",
 	)
 
@@ -561,7 +561,7 @@ func AdminManualTopup(c *gin.Context) {
 	model.CreateUserNotification(
 		req.UserId,
 		"充值成功",
-		fmt.Sprintf("管理员为您手动充值 ¥%.2f（%.2f 元额度）。%s", req.Amount, float64(quota)/500000.0, req.Remark),
+		fmt.Sprintf("管理员为您手动充值 ¥%.2f（$%.2f 额度）。%s", req.Amount, float64(quota)/500000.0, req.Remark),
 		"topup_success",
 	)
 	logger.SysLog(fmt.Sprintf("admin manual topup success: admin=%d user=%d(%s) amount=%.2f quota=%d order=%s remark=%q",
@@ -569,7 +569,7 @@ func AdminManualTopup(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"message": fmt.Sprintf("已为用户 %s 补单 ¥%.2f（%.2f 元额度）", user.Username, req.Amount, float64(quota)/500000.0),
+		"message": fmt.Sprintf("已为用户 %s 补单 ¥%.2f（$%.2f 额度）", user.Username, req.Amount, float64(quota)/500000.0),
 	})
 }
 
