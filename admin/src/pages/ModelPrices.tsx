@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { Plus, Trash2, Edit2, Eye, EyeOff, Star, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Plus, Trash2, Edit2, Eye, EyeOff, Star, X, ExternalLink } from 'lucide-react'
 import { modelPriceApi } from '../api'
 import toast from 'react-hot-toast'
 
@@ -31,11 +32,31 @@ export default function ModelPricesPage() {
   const [prices, setPrices] = useState<ModelPrice[]>([])
   const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; data: ModelPrice } | null>(null)
   const [saving, setSaving] = useState(false)
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
 
   const load = () => {
     modelPriceApi.list().then(r => { if (r.data.success) setPrices(r.data.data || []) })
   }
   useEffect(() => { load() }, [])
+
+  // 从模型管理页跳转过来：?model=xxx 高亮目标行并滚动过去
+  useEffect(() => {
+    const target = searchParams.get('model')
+    if (!target || prices.length === 0) return
+    const el = rowRefs.current[target]
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.style.background = 'var(--accent-light, #dbeafe)'
+    el.style.transition = 'background 1.5s ease'
+    const t = setTimeout(() => { if (el) el.style.background = '' }, 1500)
+    return () => clearTimeout(t)
+  }, [prices, searchParams])
+
+  const gotoRatioEditor = (modelId: string) => {
+    navigate(`/model-manage?model=${encodeURIComponent(modelId)}`)
+  }
 
   const openCreate = () => setDialog({ mode: 'create', data: { ...emptyModel } })
   const openEdit = (m: ModelPrice) => setDialog({ mode: 'edit', data: { ...m } })
@@ -138,7 +159,7 @@ export default function ModelPricesPage() {
             {prices.length === 0 ? (
               <tr><td colSpan={11} className="empty-state" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无模型，点击「新增模型」</td></tr>
             ) : prices.map(m => (
-              <tr key={m.id}>
+              <tr key={m.id} ref={el => { rowRefs.current[m.model_id] = el }}>
                 <td style={{ fontFamily: 'monospace', color: 'var(--muted)', fontSize: 12 }}>{m.sort_order}</td>
                 <td>
                   {m.logo ? (
@@ -180,9 +201,17 @@ export default function ModelPricesPage() {
                   </span>
                 </td>
                 <td>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn btn-outline btn-sm" title="编辑" onClick={() => openEdit(m)} style={{ padding: '4px 10px' }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button className="btn btn-outline btn-sm" title="编辑展示字段" onClick={() => openEdit(m)} style={{ padding: '4px 10px' }}>
                       <Edit2 size={12}/>
+                    </button>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      title="跳转到模型管理页调整计费倍率"
+                      onClick={() => gotoRatioEditor(m.model_id)}
+                      style={{ padding: '4px 10px' }}
+                    >
+                      <ExternalLink size={12} style={{ marginRight: 2 }}/>调倍率
                     </button>
                     <button className="btn btn-outline btn-sm" title={m.is_visible ? '隐藏' : '显示'} onClick={() => handleToggle(m)} style={{ padding: '4px 10px' }}>
                       {m.is_visible ? <EyeOff size={12}/> : <Eye size={12}/>}
