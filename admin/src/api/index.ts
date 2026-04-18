@@ -19,12 +19,22 @@ export const userApi = {
   delete: (id: number) => http.delete(`/api/user/${id}`),
 }
 
+// 注意 PUT 后端是 /api/channel/（不是 /:id），更新数据里必须带 id
+// 老代码 http.put(`/api/channel/${id}`) 会 404，toggle 根本没生效 —— 本次一并修复
 export const channelApi = {
-  list: () => http.get('/api/channel/'),
+  list: (params?: { p?: number }) => http.get('/api/channel/', { params }),
+  search: (keyword: string) => http.get('/api/channel/search', { params: { keyword } }),
+  get: (id: number) => http.get(`/api/channel/${id}`),
   create: (data: object) => http.post('/api/channel/', data),
-  update: (id: number, data: object) => http.put(`/api/channel/${id}`, data),
+  update: (id: number, data: object) => http.put('/api/channel/', { id, ...data }),
   delete: (id: number) => http.delete(`/api/channel/${id}`),
-  test: (id: number) => http.get(`/api/channel/test/${id}`),
+  deleteDisabled: () => http.delete('/api/channel/disabled'),
+  test: (id: number, model?: string) =>
+    http.get(`/api/channel/test/${id}`, { params: model ? { model } : {} }),
+  testAll: (scope: 'all' | 'disabled' = 'all') =>
+    http.get('/api/channel/test', { params: { scope } }),
+  updateBalance: (id: number) => http.get(`/api/channel/update_balance/${id}`),
+  updateAllBalance: () => http.get('/api/channel/update_balance'),
 }
 
 export const tokenApi = {
