@@ -1,24 +1,37 @@
 import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2, Key } from 'lucide-react'
+import { Plus, Copy, Trash2, Key, ChevronLeft, ChevronRight } from 'lucide-react'
 import { tokenApi } from '../api'
 
 interface Token { id: number; name: string; key: string; status: number; quota: number; used_quota: number; created_time: number }
 
+const PAGE_SIZE = 10
+
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([])
+  const [page, setPage] = useState(0)
+  const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [newName, setNewName] = useState('')
   const [copied, setCopied] = useState<number | null>(null)
 
-  const load = async () => { const r = await tokenApi.list(); if (r.data.success) setTokens(r.data.data || []) }
-  useEffect(() => { load() }, [])
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await tokenApi.list({ p: page, page_size: PAGE_SIZE })
+      if (r.data.success) setTokens(r.data.data || [])
+    } finally { setLoading(false) }
+  }
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [page])
+
+  // 新建/删除后刷新：如果已在第 0 页就直接 load；否则切到第 0 页（useEffect 会加载）
+  const refreshToFirstPage = () => { if (page === 0) load(); else setPage(0) }
 
   const handleCreate = async () => {
     if (!newName.trim()) return
     // 默认创建无限额度令牌：unlimited_quota=true 让后端 ValidateUserToken 跳过
     // 余额检查；否则后端默认 RemainQuota=0 会让令牌一用就被置为「已耗尽」
     await tokenApi.create({ name: newName, unlimited_quota: true, remain_quota: -1 })
-    setNewName(''); setShowCreate(false); load()
+    setNewName(''); setShowCreate(false); refreshToFirstPage()
   }
 
   const handleDelete = async (id: number) => {
@@ -61,7 +74,9 @@ export default function TokensPage() {
           <thead><tr><th>名称</th><th>密钥</th><th>状态</th><th>用量</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             {tokens.length === 0
-              ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无令牌，点击上方按钮创建</td></tr>
+              ? <tr><td colSpan={6} style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>
+                  {loading ? '加载中...' : (page === 0 ? '暂无令牌，点击上方按钮创建' : '没有更多了')}
+                </td></tr>
               : tokens.map(t => (
                 <tr key={t.id}>
                   <td><strong>{t.name}</strong></td>
@@ -82,6 +97,18 @@ export default function TokensPage() {
           </tbody>
         </table>
       </div>
+
+      {(page > 0 || tokens.length === PAGE_SIZE) && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || loading}>
+            <ChevronLeft size={14} />上一页
+          </button>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page + 1} 页</span>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={tokens.length < PAGE_SIZE || loading}>
+            下一页<ChevronRight size={14} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }

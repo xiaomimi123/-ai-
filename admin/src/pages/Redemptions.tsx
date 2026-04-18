@@ -1,20 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2, Gift, Download } from 'lucide-react'
+import { Plus, Copy, Trash2, Gift, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import { redemptionApi } from '../api'
+
+const PAGE_SIZE = 10
 
 export default function RedemptionsPage() {
   const [list, setList] = useState<any[]>([])
+  const [page, setPage] = useState(0)
+  const [pageLoading, setPageLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ name: '', quota: '10', count: '1' })
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState<number | null>(null)
 
-  const load = async () => { const r = await redemptionApi.list({ p: 0, page_size: 100 }); if (r.data.success) setList(r.data.data || []) }
-  useEffect(() => { load() }, [])
+  const load = async () => {
+    setPageLoading(true)
+    try {
+      const r = await redemptionApi.list({ p: page, page_size: PAGE_SIZE })
+      if (r.data.success) setList(r.data.data || [])
+    } finally { setPageLoading(false) }
+  }
+  useEffect(() => { load() /* eslint-disable-next-line */ }, [page])
+
+  const refreshToFirst = () => { if (page === 0) load(); else setPage(0) }
 
   const handleCreate = async () => {
     setLoading(true)
-    try { await redemptionApi.create({ name: form.name, quota: Math.round(parseFloat(form.quota) * 500000), count: parseInt(form.count) }); setShowCreate(false); setForm({ name: '', quota: '10', count: '1' }); load() }
+    try { await redemptionApi.create({ name: form.name, quota: Math.round(parseFloat(form.quota) * 500000), count: parseInt(form.count) }); setShowCreate(false); setForm({ name: '', quota: '10', count: '1' }); refreshToFirst() }
     finally { setLoading(false) }
   }
 
@@ -22,10 +34,14 @@ export default function RedemptionsPage() {
   const copyKey = (key: string, id: number) => { navigator.clipboard.writeText(key); setCopied(id); setTimeout(() => setCopied(null), 2000) }
 
   const exportAll = () => {
-    const unused = list.filter(r => r.status === 1)
-    const text = unused.map(r => `${r.name}\t${r.key}\t$${(r.quota / 500000).toFixed(2)}`).join('\n')
-    navigator.clipboard.writeText(text)
-    alert(`已复制 ${unused.length} 个未使用兑换码到剪贴板`)
+    // 导出需要一次性拉全部未使用，否则只能导出当前页
+    redemptionApi.list({ p: 0, page_size: 500 }).then(r => {
+      if (!r.data.success) return
+      const unused = (r.data.data || []).filter((x: any) => x.status === 1)
+      const text = unused.map((x: any) => `${x.name}\t${x.key}\t$${(x.quota / 500000).toFixed(2)}`).join('\n')
+      navigator.clipboard.writeText(text)
+      alert(`已复制 ${unused.length} 个未使用兑换码到剪贴板`)
+    })
   }
 
   const usedCount = list.filter(r => r.status !== 1).length
@@ -44,12 +60,12 @@ export default function RedemptionsPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats（本页统计；导出按钮会一次性拉全部做全局统计） */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 24 }}>
         {[
-          { label: '总数', value: list.length, color: 'var(--primary)', bg: 'var(--primary-50)' },
-          { label: '已使用', value: usedCount, color: 'var(--danger)', bg: '#fee2e2' },
-          { label: '未使用', value: unusedCount, color: 'var(--success)', bg: '#dcfce7' },
+          { label: '本页条数', value: list.length, color: 'var(--primary)' },
+          { label: '本页已使用', value: usedCount, color: 'var(--danger)' },
+          { label: '本页未使用', value: unusedCount, color: 'var(--success)' },
         ].map(s => (
           <div className="stat-card" key={s.label}>
             <div className="stat-label">{s.label}</div>
@@ -63,7 +79,7 @@ export default function RedemptionsPage() {
           <thead><tr><th>名称</th><th>兑换码</th><th>面值</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead>
           <tbody>
             {list.length === 0
-              ? <tr><td colSpan={6} className="empty-state"><Gift size={32}/><div>暂无兑换码</div></td></tr>
+              ? <tr><td colSpan={6} className="empty-state"><Gift size={32}/><div>{pageLoading ? '加载中...' : (page === 0 ? '暂无兑换码' : '没有更多了')}</div></td></tr>
               : list.map(r => (
                 <tr key={r.id}>
                   <td><strong>{r.name}</strong></td>
@@ -84,6 +100,18 @@ export default function RedemptionsPage() {
           </tbody>
         </table>
       </div>
+
+      {(page > 0 || list.length === PAGE_SIZE) && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 20 }}>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0 || pageLoading}>
+            <ChevronLeft size={14} />上一页
+          </button>
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>第 {page + 1} 页</span>
+          <button className="btn btn-outline btn-sm" onClick={() => setPage(p => p + 1)} disabled={list.length < PAGE_SIZE || pageLoading}>
+            下一页<ChevronRight size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Create Modal */}
       {showCreate && (

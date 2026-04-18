@@ -32,12 +32,12 @@ export default function CustomerService() {
 
   return (
     <>
-      {/* 浮动按钮：移动端 bottom=88 避开 TabBar；桌面 bottom=24 */}
+      {/* 浮动按钮：移动端 bottom=140 (避开 TabBar + 翻页按钮)；桌面 bottom=90 (避开底部翻页) */}
       <button
         onClick={() => setOpen(!open)}
         style={{
           position: 'fixed',
-          bottom: isMobile ? 88 : 24,
+          bottom: isMobile ? 140 : 90,
           right: isMobile ? 16 : 24,
           zIndex: 1000,
           width: 56, height: 56, borderRadius: '50%',
@@ -59,15 +59,15 @@ export default function CustomerService() {
           <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 999 }} />
 
           <div style={isMobile ? {
-            // 移动端：bottom sheet 风格，左右撑满，紧贴 TabBar 上方
-            position: 'fixed', bottom: 152, left: 16, right: 16, zIndex: 1001,
+            // 移动端：bottom sheet 风格，左右撑满，紧贴客服按钮上方（按钮 bottom=140 + 56 + 8 = 204）
+            position: 'fixed', bottom: 204, left: 16, right: 16, zIndex: 1001,
             background: '#fff', borderRadius: 16,
             boxShadow: '0 8px 32px rgba(0,0,0,.2)',
-            maxHeight: '60vh', overflowY: 'auto',
+            maxHeight: '55vh', overflowY: 'auto',
             animation: 'csSlideUp .2s ease',
           } : {
-            // 桌面端：原样，浮在按钮左上方
-            position: 'fixed', bottom: 90, right: 24, zIndex: 1001,
+            // 桌面端：浮在按钮上方（按钮 bottom=90 + 56 + 8 = 154）
+            position: 'fixed', bottom: 154, right: 24, zIndex: 1001,
             width: 280, background: '#fff', borderRadius: 16,
             boxShadow: '0 8px 32px rgba(0,0,0,.15)',
             overflow: 'hidden', animation: 'csSlideUp .2s ease',

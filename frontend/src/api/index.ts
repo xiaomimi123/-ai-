@@ -31,9 +31,9 @@ export const authApi = {
 }
 
 export const tokenApi = {
-  // page_size 后端默认 ItemsPerPage(10)；前台令牌一般不多，直接拉 100 条覆盖常见场景
+  // 后端分页 p 从 0 开始；调用方自行传 page_size 控制每页
   list: (params?: { p?: number; page_size?: number }) =>
-    http.get('/api/token/', { params: { p: 0, page_size: 100, ...params } }),
+    http.get('/api/token/', { params }),
   // 注意：后端字段名是 remain_quota / unlimited_quota / expired_time（不是 quota）
   // unlimited_quota=true 时 remain_quota 值不影响鉴权；默认建议无限额度
   create: (data: {
