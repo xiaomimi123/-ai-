@@ -112,7 +112,7 @@ export default function OverviewPage() {
               <tbody>
                 {(stats?.user_rank || []).length ? (stats.user_rank || []).map((u: any, i: number) => (
                   <tr key={u.user_id}><td style={{ color: i < 3 ? '#f59e0b' : 'var(--muted)', fontWeight: i < 3 ? 700 : 400 }}>{i + 1}</td>
-                  <td>{u.username}</td><td style={{ textAlign: 'right', color: 'var(--primary)', fontWeight: 600 }}>¥{(u.quota / 500000).toFixed(2)}</td>
+                  <td>{u.username}</td><td style={{ textAlign: 'right', color: 'var(--primary)', fontWeight: 600 }}>${(u.quota / 500000).toFixed(2)}</td>
                   <td style={{ textAlign: 'right', color: 'var(--muted)' }}>{u.count}</td></tr>
                 )) : <tr><td colSpan={4} style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>暂无数据</td></tr>}
               </tbody>

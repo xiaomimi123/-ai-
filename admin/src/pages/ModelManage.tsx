@@ -124,7 +124,7 @@ export default function ModelManagePage() {
               <th>渠道数</th>
               <th>输入倍率</th>
               <th>补全倍率</th>
-              <th>展示价格(¥/M)</th>
+              <th>展示价格($/M)</th>
               <th>供应商</th>
               <th>前台可见</th>
               <th>操作</th>
@@ -151,7 +151,7 @@ export default function ModelManagePage() {
                 <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{m.completion_ratio || <span style={{ color: 'var(--muted)' }}>1x</span>}</td>
                 <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
                   {m.input_price > 0 ? (
-                    <span><span style={{ color: 'var(--success)' }}>¥{m.input_price}</span> / <span style={{ color: 'var(--primary)' }}>¥{m.output_price}</span></span>
+                    <span><span style={{ color: 'var(--success)' }}>${m.input_price}</span> / <span style={{ color: 'var(--primary)' }}>${m.output_price}</span></span>
                   ) : <span style={{ color: 'var(--muted)' }}>未设</span>}
                 </td>
                 <td>{m.provider ? <span className="badge badge-blue">{m.provider}</span> : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
@@ -228,11 +228,11 @@ export default function ModelManagePage() {
               </div>
               <div className="form-row">
                 <div className="form-group">
-                  <label className="form-label">展示输入价格 (¥/百万 Token)</label>
+                  <label className="form-label">展示输入价格 ($/百万 Token)</label>
                   <input type="number" step="0.01" value={editModel.input_price || ''} onChange={e => setEditModel({ ...editModel, input_price: parseFloat(e.target.value) || 0 })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">展示输出价格 (¥/百万 Token)</label>
+                  <label className="form-label">展示输出价格 ($/百万 Token)</label>
                   <input type="number" step="0.01" value={editModel.output_price || ''} onChange={e => setEditModel({ ...editModel, output_price: parseFloat(e.target.value) || 0 })} />
                 </div>
               </div>

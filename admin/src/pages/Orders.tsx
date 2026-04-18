@@ -58,7 +58,7 @@ export default function OrdersPage() {
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [page, status, username])
 
   const handleComplete = async (o: Order) => {
-    if (!confirm(`确认手动补单？\n\n订单号: ${o.order_no}\n用户: ${o.username || `#${o.user_id}`}\n金额: ¥${o.amount?.toFixed(2)}\n额度: ${(o.quota / 500000).toFixed(2)} 元\n\n执行后将：\n• 订单状态改为「已完成」\n• 用户账户余额增加 ${(o.quota / 500000).toFixed(2)} 元\n• 给用户发送「充值成功」通知`)) return
+    if (!confirm(`确认手动补单？\n\n订单号: ${o.order_no}\n用户: ${o.username || `#${o.user_id}`}\n金额: ¥${o.amount?.toFixed(2)}\n额度: $${(o.quota / 500000).toFixed(2)}\n\n执行后将：\n• 订单状态改为「已完成」\n• 用户账户余额增加 $${(o.quota / 500000).toFixed(2)}\n• 给用户发送「充值成功」通知`)) return
     try {
       const r = await orderApi.complete(o.order_no)
       if (r.data.success) { toast.success(r.data.message || '补单成功'); load() }
@@ -113,7 +113,7 @@ export default function OrdersPage() {
               <th>用户</th>
               <th>订单号</th>
               <th>金额 (¥)</th>
-              <th>额度 (元)</th>
+              <th>额度 ($)</th>
               <th>支付方式</th>
               <th>状态</th>
               <th>时间</th>
@@ -134,7 +134,7 @@ export default function OrdersPage() {
                       </td>
                       <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
                       <td style={{ fontWeight: 700, color: 'var(--primary)' }}>¥{o.amount?.toFixed(2)}</td>
-                      <td style={{ fontFamily: 'monospace' }}>{(o.quota / 500000).toFixed(2)}</td>
+                      <td style={{ fontFamily: 'monospace' }}>${(o.quota / 500000).toFixed(2)}</td>
                       <td><span className="badge badge-gray">{o.payment_method || '-'}</span></td>
                       <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                       <td style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
