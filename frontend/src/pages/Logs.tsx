@@ -7,7 +7,7 @@ export default function LogsPage() {
   const [logs, setLogs] = useState<any[]>([])
 
   useEffect(() => {
-    logApi.list({ page: 1, page_size: 50 }).then(r => { if (r.data.success) setLogs(r.data.data || []) })
+    logApi.list({ p: 0, page_size: 100 }).then(r => { if (r.data.success) setLogs(r.data.data || []) })
   }, [])
 
   return (

@@ -42,13 +42,18 @@ func GetUserLogs(c *gin.Context) {
 	if p < 0 {
 		p = 0
 	}
+	// 支持前端传 page_size 覆盖默认 ItemsPerPage（前端原传了但后端没读）
+	pageSize, _ := strconv.Atoi(c.Query("page_size"))
+	if pageSize <= 0 || pageSize > 200 {
+		pageSize = config.ItemsPerPage
+	}
 	userId := c.GetInt(ctxkey.Id)
 	logType, _ := strconv.Atoi(c.Query("type"))
 	startTimestamp, _ := strconv.ParseInt(c.Query("start_timestamp"), 10, 64)
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
 	modelName := c.Query("model_name")
-	logs, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, p*config.ItemsPerPage, config.ItemsPerPage)
+	logs, err := model.GetUserLogs(userId, logType, startTimestamp, endTimestamp, modelName, tokenName, p*pageSize, pageSize)
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,

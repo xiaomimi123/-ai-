@@ -44,7 +44,8 @@ export const tokenApi = {
 }
 
 export const logApi = {
-  list: (params: { page?: number; page_size?: number }) =>
+  // One API 后端日志接口的分页参数是 p（从 0 开始），不是 page；page_size 默认 ItemsPerPage(10)
+  list: (params: { p?: number; page_size?: number }) =>
     http.get('/api/log/self', { params }),
 }
 
