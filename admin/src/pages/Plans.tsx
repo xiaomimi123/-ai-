@@ -7,12 +7,10 @@ const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 }
 
 interface Plan { id: number; name: string; description: string; price: number; quota: number; bonus_quota: number; is_available: boolean; sort_order: number }
 
-function fmtQ(q: number): string {
-  if (q >= 100000000) return `${(q / 100000000).toFixed(1)}亿`
-  if (q >= 10000000) return `${(q / 10000000).toFixed(0)}千万`
-  if (q >= 1000000) return `${(q / 1000000).toFixed(0)}百万`
-  return `${q}`
-}
+// quota ↔ USD 换算（和前台保持一致，1 USD = 500000 quota）
+const QUOTA_PER_USD = 500000
+const quotaToUsd = (q: number) => q / QUOTA_PER_USD
+const usdToQuota = (u: number) => Math.round(u * QUOTA_PER_USD)
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([])
@@ -62,13 +60,16 @@ export default function PlansPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, fontSize: 16 }}>{p.name}</span>
                   <span className={`badge ${p.is_available ? 'badge-green' : 'badge-gray'}`}>{p.is_available ? '已上线' : '已下线'}</span>
-                  {p.bonus_quota > 0 && <span className="badge badge-yellow">赠 {fmtQ(p.bonus_quota)}</span>}
+                  {p.bonus_quota > 0 && <span className="badge badge-yellow">赠 ${quotaToUsd(p.bonus_quota).toFixed(2)}</span>}
                 </div>
                 <div style={{ fontSize: 13, color: 'var(--muted)' }}>{p.description || '暂无描述'}</div>
               </div>
-              <div style={{ textAlign: 'center', minWidth: 80 }}>
+              <div style={{ textAlign: 'center', minWidth: 100 }}>
                 <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)' }}>¥{p.price}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{fmtQ(p.quota)}{p.bonus_quota > 0 && `+${fmtQ(p.bonus_quota)}`}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  到账 ${quotaToUsd(p.quota).toFixed(2)}
+                  {p.bonus_quota > 0 && <span style={{ color: '#f59e0b', fontWeight: 600 }}> + ${quotaToUsd(p.bonus_quota).toFixed(2)}</span>}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                 <button onClick={() => handleToggle(p)} className="btn btn-sm btn-outline" style={{ padding: '6px 10px' }}>{p.is_available ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
@@ -87,11 +88,33 @@ export default function PlansPage() {
             <div className="form-group"><label className="form-label">套餐名称 *</label><input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="如：入门、标准" /></div>
             <div className="form-group"><label className="form-label">描述</label><input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} placeholder="适合个人开发者" /></div>
             <div className="form-row">
-              <div className="form-group"><label className="form-label">价格（元）*</label><input type="number" min="1" value={form.price} onChange={e => setForm(p => ({ ...p, price: parseFloat(e.target.value) || 0 }))} /></div>
-              <div className="form-group"><label className="form-label">额度（Token）*</label><input type="number" min="1" step="1000000" value={form.quota} onChange={e => setForm(p => ({ ...p, quota: parseInt(e.target.value) || 0 }))} /><div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>= {fmtQ(form.quota)}</div></div>
+              <div className="form-group">
+                <label className="form-label">支付金额（¥）*</label>
+                <input type="number" min="1" step="0.01" value={form.price} onChange={e => setForm(p => ({ ...p, price: parseFloat(e.target.value) || 0 }))} />
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>用户实付的人民币金额</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">到账额度（$）*</label>
+                <input
+                  type="number" min="0.01" step="0.01"
+                  value={quotaToUsd(form.quota)}
+                  onChange={e => setForm(p => ({ ...p, quota: usdToQuota(parseFloat(e.target.value) || 0) }))}
+                />
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                  按 1:1 汇率通常填与价格相同的值（如 ¥30 → $30）
+                </div>
+              </div>
             </div>
             <div className="form-row">
-              <div className="form-group"><label className="form-label">赠送额度（0=不赠）</label><input type="number" min="0" step="1000000" value={form.bonus_quota} onChange={e => setForm(p => ({ ...p, bonus_quota: parseInt(e.target.value) || 0 }))} />{form.bonus_quota > 0 && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>赠 {fmtQ(form.bonus_quota)}</div>}</div>
+              <div className="form-group">
+                <label className="form-label">赠送额度（$，0=不赠）</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={quotaToUsd(form.bonus_quota)}
+                  onChange={e => setForm(p => ({ ...p, bonus_quota: usdToQuota(parseFloat(e.target.value) || 0) }))}
+                />
+                {form.bonus_quota > 0 && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>赠送 ${quotaToUsd(form.bonus_quota).toFixed(2)}</div>}
+              </div>
               <div className="form-group"><label className="form-label">排序（小→前）</label><input type="number" min="0" value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}><input type="checkbox" checked={form.is_available} onChange={e => setForm(p => ({ ...p, is_available: e.target.checked }))} style={{ width: 'auto' }} />立即上线</label>
