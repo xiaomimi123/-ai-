@@ -54,6 +54,41 @@ export default function UsersPage() {
 
   const handleSave = async () => {
     if (!editUser) return
+
+    // 关键变动二次确认：防误操作（角色提升/降级、大额 quota、禁用账号、重置密码）
+    const newQuotaUsd = parseFloat(editForm.quota) || 0
+    const oldQuotaUsd = editUser.quota / 500000
+    const quotaDelta = newQuotaUsd - oldQuotaUsd
+    const confirms: string[] = []
+
+    if (editForm.role !== editUser.role) {
+      const oldLabel = ROLES.find(r => r.value === editUser.role)?.label || `role=${editUser.role}`
+      const newLabel = ROLES.find(r => r.value === editForm.role)?.label || `role=${editForm.role}`
+      if (editForm.role > editUser.role) {
+        confirms.push(`⚠️ 角色提升：${oldLabel} → ${newLabel}（将获得更高后台权限）`)
+      } else {
+        confirms.push(`⚠️ 角色降级：${oldLabel} → ${newLabel}（将失去后台管理权限）`)
+      }
+    }
+
+    if (Math.abs(quotaDelta) > 100) {
+      const sign = quotaDelta > 0 ? '+' : ''
+      confirms.push(`⚠️ 额度大幅变动：$${oldQuotaUsd.toFixed(2)} → $${newQuotaUsd.toFixed(2)}（${sign}$${quotaDelta.toFixed(2)}）`)
+    }
+
+    if (editForm.status !== editUser.status && editForm.status === 2) {
+      confirms.push(`⚠️ 账号将被禁用，用户无法登录和调用 API`)
+    }
+
+    if (editForm.password) {
+      confirms.push(`⚠️ 密码将被重置，用户需使用新密码登录`)
+    }
+
+    if (confirms.length > 0) {
+      const msg = `请确认以下关键变动：\n\n${confirms.join('\n')}\n\n目标用户：${editUser.username} (#${editUser.id})\n\n确定提交吗？`
+      if (!confirm(msg)) return
+    }
+
     const data: any = {
       username: editForm.username,
       display_name: editForm.display_name,
