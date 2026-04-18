@@ -22,7 +22,7 @@ export const userApi = {
 // 注意 PUT 后端是 /api/channel/（不是 /:id），更新数据里必须带 id
 // 老代码 http.put(`/api/channel/${id}`) 会 404，toggle 根本没生效 —— 本次一并修复
 export const channelApi = {
-  list: (params?: { p?: number }) => http.get('/api/channel/', { params }),
+  list: (params?: { p?: number; page_size?: number }) => http.get('/api/channel/', { params }),
   search: (keyword: string) => http.get('/api/channel/search', { params: { keyword } }),
   get: (id: number) => http.get(`/api/channel/${id}`),
   create: (data: object) => http.post('/api/channel/', data),
