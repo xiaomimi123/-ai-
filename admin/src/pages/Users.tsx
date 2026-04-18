@@ -288,7 +288,7 @@ export default function UsersPage() {
                     </td>
                     <td><span className={`badge ${role.cls}`}>{role.label}</span></td>
                     <td><span className={`badge ${u.status === 1 ? 'badge-green' : 'badge-red'}`}>{u.status === 1 ? '正常' : '禁用'}</span></td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary)' }}>${toUsd(u.quota - u.used_quota)}</td>
+                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: u.quota < 0 ? 'var(--danger)' : 'var(--primary)' }}>${toUsd(u.quota)}</td>
                     <td style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>${toUsd(u.used_quota)}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{u.request_count?.toLocaleString() || 0}</td>
                     <td>

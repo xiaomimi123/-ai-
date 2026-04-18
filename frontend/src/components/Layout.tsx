@@ -54,7 +54,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const toDollar = (q: number) => (q / 500000).toFixed(2)
-  const balance = user ? toDollar((user.quota || 0) - (user.used_quota || 0)) : '--'
+  // user.quota 本身就是当前余额（调用会减它、充值会加它）
+  // used_quota 是累计消费统计字段，不能再减一次
+  const balance = user ? toDollar(user.quota || 0) : '--'
 
   return (
     <div className="app-shell">
