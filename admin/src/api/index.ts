@@ -11,6 +11,8 @@ http.interceptors.response.use(res => res, err => {
 // One API 原生接口
 export const authApi = {
   login: (username: string, password: string) => http.post('/api/user/login', { username, password }),
+  getSelf: () => http.get('/api/user/self'),
+  updateSelf: (data: { username?: string; display_name?: string; password?: string }) => http.put('/api/user/self', data),
 }
 
 export const userApi = {

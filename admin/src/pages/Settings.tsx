@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle } from 'lucide-react'
-import { optionApi, lingjingConfigApi } from '../api'
+import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle, Lock, KeyRound } from 'lucide-react'
+import { optionApi, lingjingConfigApi, authApi } from '../api'
 import toast from 'react-hot-toast'
 
 // 后端 GetOptions 对 *Token / *Secret 字段返回 sentinel 而不是真值
@@ -20,6 +20,11 @@ export default function SettingsPage() {
   })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+
+  // 当前登录的管理员（改密码要用到）
+  const [meUsername, setMeUsername] = useState('')
+  const [pwdForm, setPwdForm] = useState({ old: '', new: '', confirm: '' })
+  const [changingPwd, setChangingPwd] = useState(false)
 
   useEffect(() => {
     optionApi.get().then(r => {
@@ -52,7 +57,41 @@ export default function SettingsPage() {
         })
       }
     }).catch(() => {})
+    // 拿当前登录管理员的用户名（改密码时要用它走 login 校验旧密码）
+    authApi.getSelf().then(r => {
+      if (r.data.success) setMeUsername(r.data.data?.username || '')
+    }).catch(() => {})
   }, [])
+
+  // 修改自己密码：先用旧密码 login 校验 → 通过后 PUT /user/self 写新密码
+  // （One API 原生 UpdateSelf 不校验旧密码，前端补一步 login 校验更安全）
+  const handleChangePassword = async () => {
+    if (!meUsername) { toast.error('无法识别当前用户，请刷新页面'); return }
+    if (pwdForm.new.length < 8) { toast.error('新密码至少 8 位'); return }
+    if (pwdForm.new !== pwdForm.confirm) { toast.error('两次新密码不一致'); return }
+    if (pwdForm.new === pwdForm.old) { toast.error('新密码不能和当前密码相同'); return }
+    setChangingPwd(true)
+    try {
+      // 1. 用旧密码调 login 验证（失败说明旧密码错）
+      const loginRes = await authApi.login(meUsername, pwdForm.old)
+      if (!loginRes.data.success) {
+        toast.error('当前密码不正确')
+        return
+      }
+      // 2. 调 updateSelf 写新密码
+      const updateRes = await authApi.updateSelf({ password: pwdForm.new })
+      if (updateRes.data.success) {
+        toast.success('密码已修改，下次登录生效')
+        setPwdForm({ old: '', new: '', confirm: '' })
+      } else {
+        toast.error(updateRes.data.message || '修改失败')
+      }
+    } catch {
+      toast.error('网络错误')
+    } finally {
+      setChangingPwd(false)
+    }
+  }
 
   const saveOption = async (key: string, value: string) => {
     try {
@@ -285,9 +324,57 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        <button className="btn btn-primary" onClick={handleSaveAll} disabled={saving} style={{ justifySelf: 'flex-start', padding: '12px 32px' }}>
-          <Save size={16}/>{saving ? '保存中...' : '保存全部设置'}
-        </button>
+        {/* 账号安全：修改管理员密码。独立保存（和"保存全部设置"无关） */}
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title"><Lock size={16} color="var(--danger)"/>账号安全</span>
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16 }}>
+            修改当前登录账号（<code style={{ background: 'var(--bg)', padding: '1px 6px', borderRadius: 4 }}>{meUsername || '加载中...'}</code>）的登录密码。修改后当前会话仍然有效，下次登录时使用新密码。
+          </div>
+          <div className="form-group">
+            <label className="form-label">当前密码</label>
+            <input
+              type="password"
+              value={pwdForm.old}
+              onChange={e => setPwdForm(p => ({ ...p, old: e.target.value }))}
+              placeholder="输入当前正在使用的密码"
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">新密码</label>
+              <input
+                type="password"
+                value={pwdForm.new}
+                onChange={e => setPwdForm(p => ({ ...p, new: e.target.value }))}
+                placeholder="至少 8 位"
+                minLength={8}
+                autoComplete="new-password"
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">确认新密码</label>
+              <input
+                type="password"
+                value={pwdForm.confirm}
+                onChange={e => setPwdForm(p => ({ ...p, confirm: e.target.value }))}
+                placeholder="再输入一次"
+                autoComplete="new-password"
+              />
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={handleChangePassword}
+            disabled={changingPwd || !pwdForm.old || !pwdForm.new || !pwdForm.confirm}
+            style={{ marginTop: 4 }}
+          >
+            <KeyRound size={14}/>{changingPwd ? '修改中...' : '修改密码'}
+          </button>
+        </div>
+
       </div>
     </div>
   )
