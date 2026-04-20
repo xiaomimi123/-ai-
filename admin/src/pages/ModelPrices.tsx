@@ -28,8 +28,17 @@ const emptyModel: ModelPrice = {
   context_window: '', featured: false, is_visible: true, sort_order: 0,
 }
 
+interface AvailableModel {
+  model_name: string
+  display_name: string
+  provider: string
+  channel_count: number
+  price_id: number
+}
+
 export default function ModelPricesPage() {
   const [prices, setPrices] = useState<ModelPrice[]>([])
+  const [available, setAvailable] = useState<AvailableModel[]>([])
   const [dialog, setDialog] = useState<{ mode: 'create' | 'edit'; data: ModelPrice } | null>(null)
   const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
@@ -39,7 +48,10 @@ export default function ModelPricesPage() {
   const load = () => {
     modelPriceApi.list().then(r => { if (r.data.success) setPrices(r.data.data || []) })
   }
-  useEffect(() => { load() }, [])
+  const loadAvailable = () => {
+    modelPriceApi.listAvailable().then(r => { if (r.data.success) setAvailable(r.data.data || []) }).catch(() => {})
+  }
+  useEffect(() => { load(); loadAvailable() }, [])
 
   // 从模型管理页跳转过来：?model=xxx 高亮目标行并滚动过去
   useEffect(() => {
@@ -58,7 +70,7 @@ export default function ModelPricesPage() {
     navigate(`/model-manage?model=${encodeURIComponent(modelId)}`)
   }
 
-  const openCreate = () => setDialog({ mode: 'create', data: { ...emptyModel } })
+  const openCreate = () => { loadAvailable(); setDialog({ mode: 'create', data: { ...emptyModel } }) }
   const openEdit = (m: ModelPrice) => setDialog({ mode: 'edit', data: { ...m } })
 
   const handleSubmit = async () => {
@@ -259,13 +271,42 @@ export default function ModelPricesPage() {
                   模型标识 <span style={{ color: 'var(--danger)' }}>*</span>
                 </label>
                 <input
-                  placeholder="例如 deepseek-chat"
+                  list={dialog.mode === 'create' ? 'lingjing-available-models' : undefined}
+                  placeholder={dialog.mode === 'create' ? '点击下拉选择，或手动输入' : '例如 deepseek-chat'}
                   value={dialog.data.model_id}
-                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, model_id: e.target.value } })}
+                  onChange={e => {
+                    const v = e.target.value
+                    const picked = available.find(a => a.model_name === v)
+                    setDialog(prev => prev ? {
+                      ...prev,
+                      data: {
+                        ...prev.data,
+                        model_id: v,
+                        // 选中已配置模型时自动回填空字段（不覆盖用户已填内容）
+                        name: prev.data.name || picked?.display_name || '',
+                        provider: prev.data.provider || picked?.provider || '',
+                      },
+                    } : prev)
+                  }}
                   disabled={dialog.mode === 'edit'}
                   style={{ fontFamily: 'monospace' }}
                 />
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>API 调用时填的 model 值</div>
+                {dialog.mode === 'create' && (
+                  <datalist id="lingjing-available-models">
+                    {available
+                      .filter(a => !prices.some(p => p.model_id === a.model_name))
+                      .map(a => (
+                        <option key={a.model_name} value={a.model_name}>
+                          {[a.display_name, a.provider, `${a.channel_count}个渠道`].filter(Boolean).join(' · ')}
+                        </option>
+                      ))}
+                  </datalist>
+                )}
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                  {dialog.mode === 'create'
+                    ? `从已配置渠道中选择，或手动输入 API 的 model 值（可选 ${available.filter(a => !prices.some(p => p.model_id === a.model_name)).length} 个）`
+                    : 'API 调用时填的 model 值'}
+                </div>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>

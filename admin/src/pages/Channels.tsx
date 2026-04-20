@@ -408,7 +408,7 @@ export default function ChannelsPage() {
                         {checkingId === ch.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <DollarSign size={14} color="var(--success)" />}
                       </button>
                       <button className="btn btn-ghost btn-icon" title="编辑" onClick={() => openEdit(ch.id)}>
-                        <Edit2 size={14} color="var(--accent)" />
+                        <Edit2 size={14} color="#2ECC71" />
                       </button>
                       <button className="btn btn-ghost btn-icon" title="克隆配置" onClick={() => openClone(ch)}>
                         <Copy size={14} color="var(--muted)" />
@@ -479,7 +479,7 @@ export default function ChannelsPage() {
               <button
                 type="button"
                 onClick={() => setShowAdvanced(v => !v)}
-                style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+                style={{ background: 'none', border: 'none', color: '#2ECC71', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
               >
                 <Settings size={13} />{showAdvanced ? '收起高级选项' : '展开高级选项（优先级 / 权重 / 分组 / 映射 / Config）'}
               </button>

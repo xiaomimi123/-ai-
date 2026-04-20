@@ -71,6 +71,8 @@ export const referralAdminApi = {
 export const modelPriceApi = {
   // 管理员全部列表（含隐藏）
   list: () => http.get('/api/admin/lingjing/model-prices'),
+  // 系统中已配置（abilities 去重）的可用模型，供新增模型广场时下拉选择
+  listAvailable: () => http.get('/api/admin/lingjing/models'),
   create: (data: object) => http.post('/api/admin/lingjing/model-prices', data),
   update: (id: number, data: object) => http.put(`/api/admin/lingjing/model-prices/${id}`, data),
   delete: (id: number) => http.delete(`/api/admin/lingjing/model-prices/${id}`),

@@ -139,6 +139,9 @@ func InitLingjingTables() error {
 	// 已存在的行若 model_id 为空，用 model_name 回填，保证老数据在新 UI 能显示
 	DB.Exec("UPDATE model_prices SET model_id = model_name WHERE (model_id IS NULL OR model_id = '') AND model_name IS NOT NULL AND model_name != ''")
 	DB.Exec("UPDATE model_prices SET name = model_name WHERE (name IS NULL OR name = '') AND model_name IS NOT NULL AND model_name != ''")
+	// 回填完毕后移除旧列，避免 AutoMigrate 留下的僵尸 NOT NULL 列导致 INSERT 报 Error 1364
+	// 列已不存在时 Exec 会 silently 失败，幂等
+	DB.Exec("ALTER TABLE model_prices DROP COLUMN model_name")
 
 	// 空表注入 10 条默认展示模型
 	// 价格单位：$/百万 Token（官方美元定价 × 0.7，下面 applyModelPriceMigration2026April 会把老库统一到这个价）
