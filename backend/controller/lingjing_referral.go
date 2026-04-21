@@ -226,9 +226,11 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 	// 专属比例优先：邀请人 AffiliateRate > 0 则用它，否则 fallback 全局
 	// 约束 0~1 范围（防 DB 脏数据），超出则视作未设置
 	effectiveRate := rate
+	rateSource := "global"
 	if inviter, ierr := model.GetUserById(user.InviterId, false); ierr == nil {
 		if inviter.AffiliateRate > 0 && inviter.AffiliateRate <= 1 {
 			effectiveRate = inviter.AffiliateRate
+			rateSource = "per-user"
 		}
 	}
 	commissionAmount := orderAmount * effectiveRate
@@ -251,8 +253,8 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("commission created: inviter=%d from_user=%d amount=%.2f order=%d",
-		user.InviterId, userId, commissionAmount, orderId))
+	logger.SysLog(fmt.Sprintf("commission created: inviter=%d from_user=%d amount=%.2f rate=%.4f(%s) order=%d",
+		user.InviterId, userId, commissionAmount, effectiveRate, rateSource, orderId))
 }
 
 // ====== 管理员: 分销概览 ======

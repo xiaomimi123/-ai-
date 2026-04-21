@@ -432,6 +432,12 @@ func UpdateUser(c *gin.Context) {
 			return
 		}
 	}
+	// AffiliateRate 范围防御：DB 是 decimal(6,4)、前端虽有 clamp 但请求可被伪造，后端兜底到 [0,1]
+	// 0 表示用全局；>1 一律视作配置错误清零，避免算出 > 订单金额的佣金
+	if updatedUser.AffiliateRate < 0 || updatedUser.AffiliateRate > 1 {
+		updatedUser.AffiliateRate = 0
+	}
+
 	updatePassword := updatedUser.Password != ""
 	if err := updatedUser.Update(updatePassword); err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -440,12 +446,23 @@ func UpdateUser(c *gin.Context) {
 		})
 		return
 	}
+	// AffiliateRate 变动时显式 Update：GORM Updates(struct) 会跳过零值字段，
+	// 所以"从 20% 改回 0（用全局）"走 Updates(user) 不会生效，必须单独 Update
+	if originUser.AffiliateRate != updatedUser.AffiliateRate {
+		if err := model.DB.Model(&model.User{}).Where("id = ?", updatedUser.Id).
+			Update("affiliate_rate", updatedUser.AffiliateRate).Error; err != nil {
+			logger.SysError(fmt.Sprintf("update affiliate_rate failed for user=%d: %v", updatedUser.Id, err))
+		}
+	}
 	// 审计日志：记录关键字段的变动（被谁改、改了什么）
 	adminId := c.GetInt(ctxkey.Id)
 	var changes []string
 	if originUser.Quota != updatedUser.Quota {
 		model.RecordLog(ctx, originUser.Id, model.LogTypeManage, fmt.Sprintf("管理员将用户额度从 %s修改为 %s", common.LogQuota(originUser.Quota), common.LogQuota(updatedUser.Quota)))
 		changes = append(changes, fmt.Sprintf("quota=%d→%d", originUser.Quota, updatedUser.Quota))
+	}
+	if originUser.AffiliateRate != updatedUser.AffiliateRate {
+		changes = append(changes, fmt.Sprintf("affiliate_rate=%.4f→%.4f", originUser.AffiliateRate, updatedUser.AffiliateRate))
 	}
 	if originUser.Role != updatedUser.Role {
 		changes = append(changes, fmt.Sprintf("role=%d→%d", originUser.Role, updatedUser.Role))
