@@ -51,6 +51,9 @@ type User struct {
 	Group            string `json:"group" gorm:"type:varchar(32);default:'default'"`
 	AffCode          string `json:"aff_code" gorm:"type:varchar(32);column:aff_code;uniqueIndex"`
 	InviterId        int    `json:"inviter_id" gorm:"type:int;column:inviter_id;index"`
+	// 专属返利比例（0 = 用全局 referral.commission_rate；>0 表示该用户作为邀请人时的专属分成）
+	// 范围 0~1（例如 0.2 表示 20%）。由后台用户管理编辑；前端输入百分数会做换算
+	AffiliateRate    float64 `json:"affiliate_rate" gorm:"type:decimal(6,4);default:0"`
 	CreatedTime      int64  `json:"created_time" gorm:"bigint;index"`
 }
 

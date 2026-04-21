@@ -223,7 +223,15 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 		return
 	}
 
-	commissionAmount := orderAmount * rate
+	// 专属比例优先：邀请人 AffiliateRate > 0 则用它，否则 fallback 全局
+	// 约束 0~1 范围（防 DB 脏数据），超出则视作未设置
+	effectiveRate := rate
+	if inviter, ierr := model.GetUserById(user.InviterId, false); ierr == nil {
+		if inviter.AffiliateRate > 0 && inviter.AffiliateRate <= 1 {
+			effectiveRate = inviter.AffiliateRate
+		}
+	}
+	commissionAmount := orderAmount * effectiveRate
 
 	commission := &model.Commission{
 		UserId:     user.InviterId,

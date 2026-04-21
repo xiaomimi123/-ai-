@@ -39,7 +39,7 @@ export default function UsersPage() {
   const [editUser, setEditUser] = useState<any>(null)
   const [editForm, setEditForm] = useState({
     username: '', display_name: '', email: '', password: '',
-    quota: '', role: 1, group: 'default', status: 1,
+    quota: '', role: 1, group: 'default', status: 1, affiliate_rate: '',
   })
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({
@@ -91,6 +91,8 @@ export default function UsersPage() {
       role: u.role,
       group: u.group || 'default',
       status: u.status,
+      // 后端存 0~1 的小数，前端显示成百分数（0 视作未设置 → 显示空）
+      affiliate_rate: u.affiliate_rate ? (u.affiliate_rate * 100).toString() : '',
     })
   }
 
@@ -139,6 +141,9 @@ export default function UsersPage() {
       role: editForm.role,
       group: editForm.group,
       status: editForm.status,
+      // 百分数 → 小数；留空/非法输入 → 0（表示用全局比例）
+      // clamp 到 [0, 100]，防手滑输入 2000 把返利算崩
+      affiliate_rate: Math.min(Math.max(parseFloat(editForm.affiliate_rate) || 0, 0), 100) / 100,
     }
     if (editForm.password) data.password = editForm.password
     try {
@@ -372,6 +377,23 @@ export default function UsersPage() {
                   <option value={1}>正常</option>
                   <option value={2}>禁用</option>
                 </select>
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">
+                  专属返利比例 (%)
+                  <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
+                    作为邀请人时使用此比例，留空或 0 则用全局设置
+                  </span>
+                </label>
+                <input
+                  type="number" step="0.1" min="0" max="100"
+                  placeholder="例如 20 表示 20%（留空 = 用全局）"
+                  value={editForm.affiliate_rate}
+                  onChange={e => setEditForm(p => ({ ...p, affiliate_rate: e.target.value }))}
+                />
               </div>
             </div>
 
