@@ -27,6 +27,7 @@ const TYPES: Record<number, { name: string; color: string }> = {
   40: { name: 'Doubao',       color: '#1e40af' },
   44: { name: 'SiliconFlow',  color: '#5e72e4' },
   45: { name: 'xAI',          color: '#000000' },
+  37: { name: 'Cloudflare',   color: '#f38020' },
   50: { name: 'OpenAICompatible', color: '#6b7280' },
 }
 
@@ -514,15 +515,22 @@ export default function ChannelsPage() {
                 <div className="form-group">
                   <label className="form-label">
                     Config JSON
-                    <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 6 }}>AWS / Vertex / Azure 等厂商特定字段</span>
+                    <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 6 }}>AWS / Vertex / Azure / Cloudflare 等厂商特定字段</span>
                   </label>
                   <textarea
                     rows={3}
-                    placeholder='{"region":"us-east-1","ak":"xxx","sk":"xxx"}（AWS Claude 示例）'
+                    placeholder={modal.type === 37
+                      ? '{"user_id":"你的 Cloudflare Account ID"}'
+                      : '{"region":"us-east-1","ak":"xxx","sk":"xxx"}（AWS Claude 示例）'}
                     value={modal.config}
                     onChange={e => setModal(m => m && ({ ...m, config: e.target.value }))}
                     style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace', fontSize: 12 }}
                   />
+                  {modal.type === 37 && (
+                    <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
+                      Cloudflare 必填 <code>user_id</code>（Account ID）。代理地址留空即走官方 <code>api.cloudflare.com</code>。模型名形如 <code>@cf/meta/llama-3.1-8b-instruct</code>。
+                    </div>
+                  )}
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label">System Prompt（可选，该渠道的预设系统提示）</label>
