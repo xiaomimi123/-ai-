@@ -5,10 +5,11 @@ import { authApi } from '../api'
 import AuthBrandPanel from '../components/AuthBrandPanel'
 
 // 由邮箱前缀 + 短随机串生成 username（One API 不允许 username 含 @）
+// 后端 model/user.go 限制 username max=12，所以这里 prefix 6 + '_' + suffix 5 = 12，刚好顶格
 function genUsername(email: string): string {
   const prefix = (email.split('@')[0] || 'user')
     .replace(/[^a-zA-Z0-9_-]/g, '') // 清掉非法字符
-    .slice(0, 10) || 'user'
+    .slice(0, 6) || 'user'
   const suffix = Math.random().toString(36).slice(2, 7)
   return `${prefix}_${suffix}`
 }
