@@ -145,6 +145,8 @@ func Register(c *gin.Context) {
 		return
 	}
 	if config.EmailVerificationEnabled {
+		// 与发码侧 misc.go SendEmailVerification 对齐：邮箱统一小写后再查 Redis key
+		user.Email = strings.ToLower(strings.TrimSpace(user.Email))
 		if user.Email == "" || user.VerificationCode == "" {
 			c.JSON(http.StatusOK, gin.H{
 				"success": false,
@@ -177,6 +179,11 @@ func Register(c *gin.Context) {
 			"message": err.Error(),
 		})
 		return
+	}
+
+	// 注册成功后清验证码：防止同一码在 10 分钟有效期内被重放注册
+	if config.EmailVerificationEnabled {
+		common.DeleteKey(user.Email, common.EmailVerificationPurpose)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

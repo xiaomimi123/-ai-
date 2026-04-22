@@ -23,6 +23,8 @@ export default function RegisterPage() {
 
   const [form, setForm] = useState({ email: '', password: '' })
   const [verifyCode, setVerifyCode] = useState('')
+  // 记录"发码时"的邮箱，用户在倒计时内改邮箱框时仍用原邮箱提交，避免后端 Redis key 不匹配
+  const [codeEmail, setCodeEmail] = useState('')
   const [emailVerifyEnabled, setEmailVerifyEnabled] = useState(false)
   const [loading, setLoading] = useState(false)
   const [codeSending, setCodeSending] = useState(false)
@@ -46,31 +48,45 @@ export default function RegisterPage() {
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
   const sendCode = async () => {
-    const email = form.email.trim()
+    // 早期 return：按钮虽然 disabled，但用户在网络慢的几百 ms 里能连点导致并发请求被自己刷限流
+    if (codeSending || countdown > 0) return
+    const email = form.email.trim().toLowerCase()
     if (!isValidEmail(email)) {
       setError('请先输入有效的邮箱地址')
       return
     }
-    setCodeSending(true); setError('')
+    // 立即上锁 + 起 60s 倒计时（不等 await）：防止 await 期间多次点击产生并发请求
+    setCodeSending(true)
+    setCountdown(60)
+    setError('')
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current)
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
     try {
       const res = await authApi.sendEmailCode(email)
       if (res.data.success) {
-        setCountdown(60)
-        if (timerRef.current) clearInterval(timerRef.current)
-        timerRef.current = setInterval(() => {
-          setCountdown(c => {
-            if (c <= 1) {
-              if (timerRef.current) clearInterval(timerRef.current)
-              return 0
-            }
-            return c - 1
-          })
-        }, 1000)
+        // 记录这次发码时的邮箱：之后提交注册时用这个邮箱，不用 form.email
+        // 防止用户改了邮箱框却还在用旧码，提交后后端查不到
+        setCodeEmail(email)
       } else {
         setError(res.data.message || '验证码发送失败')
+        // 失败时回滚倒计时让用户重试
+        setCountdown(0)
+        if (timerRef.current) clearInterval(timerRef.current)
       }
-    } catch {
-      setError('网络错误，请稍后重试')
+    } catch (err: any) {
+      // 429 限流 / 5xx 等：把后端 message 显示给用户，不再笼统说"网络错误"
+      const msg = err?.response?.data?.message || '网络错误，请稍后重试'
+      setError(msg)
+      setCountdown(0)
+      if (timerRef.current) clearInterval(timerRef.current)
     } finally {
       setCodeSending(false)
     }
@@ -78,9 +94,14 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (loading) return
     setError('')
 
-    const email = form.email.trim()
+    // 启用邮箱验证时，统一用"发码时"记录的邮箱，避免用户在倒计时内改了邮箱框
+    // 不启用时，退回当前表单值
+    const email = emailVerifyEnabled && codeEmail
+      ? codeEmail
+      : form.email.trim().toLowerCase()
     if (!isValidEmail(email)) {
       setError('请输入有效的邮箱地址'); return
     }
@@ -89,6 +110,12 @@ export default function RegisterPage() {
     }
     if (emailVerifyEnabled && !verifyCode.trim()) {
       setError('请输入邮箱验证码'); return
+    }
+    if (emailVerifyEnabled && !codeEmail) {
+      setError('请先点击"获取验证码"'); return
+    }
+    if (emailVerifyEnabled && codeEmail !== form.email.trim().toLowerCase()) {
+      setError('邮箱已修改，请重新获取验证码'); return
     }
 
     setLoading(true)
@@ -125,8 +152,9 @@ export default function RegisterPage() {
           continue
         }
         break
-      } catch {
-        lastErr = '网络错误'
+      } catch (err: any) {
+        // 把后端 429 / 5xx 的 message 透出给用户
+        lastErr = err?.response?.data?.message || '网络错误'
         break
       }
     }

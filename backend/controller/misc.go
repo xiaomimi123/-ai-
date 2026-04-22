@@ -83,7 +83,9 @@ func GetHomePageContent(c *gin.Context) {
 }
 
 func SendEmailVerification(c *gin.Context) {
-	email := c.Query("email")
+	// 邮箱统一小写化：避免用户输入 Test@QQ.com 发码、再用 test@qq.com 注册时
+	// Redis key 大小写不一致导致"验证码错误或已过期"
+	email := strings.ToLower(strings.TrimSpace(c.Query("email")))
 	if err := common.Validate.Var(email, "required,email"); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
@@ -117,7 +119,6 @@ func SendEmailVerification(c *gin.Context) {
 	// 纯数字验证码：前端限制手机 type=tel / inputMode=numeric 只能输数字，
 	// 原来用 uuid 截的十六进制含 a-f 字母，手机端键盘打不出
 	code := common.GenerateNumericCode(6)
-	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
 	subject := fmt.Sprintf("%s 邮箱验证邮件", config.SystemName)
 	content := message.EmailTemplate(
 		subject,
@@ -129,14 +130,15 @@ func SendEmailVerification(c *gin.Context) {
 			<p style="color: #666;">验证码 %d 分钟内有效，如果不是本人操作，请忽略。</p>
 		`, config.SystemName, code, common.VerificationValidMinutes),
 	)
-	err := message.SendEmail(subject, email, content)
-	if err != nil {
+	// 先发邮件、成功后再写 Redis：避免 SMTP 失败但 Redis 已存码（用户收不到却以为还在等）
+	if err := message.SendEmail(subject, email, content); err != nil {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": err.Error(),
 		})
 		return
 	}
+	common.RegisterVerificationCodeWithKey(email, code, common.EmailVerificationPurpose)
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "",

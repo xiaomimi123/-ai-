@@ -51,7 +51,12 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 		// See: https://stackoverflow.com/questions/50970900/why-is-time-since-returning-negative-durations-on-windows
 		if int64(nowTime.Sub(oldTime).Seconds()) < duration {
 			rdb.Expire(ctx, key, config.RateLimitKeyExpirationDuration)
-			c.Status(http.StatusTooManyRequests)
+			// 必须返 JSON：原 c.Status(429) 没 body，前端 axios 抛异常显示"网络错误"
+			// 用户根本不知道是被限流了，会一直重试加重情况
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"success": false,
+				"message": "请求过于频繁，请稍后再试",
+			})
 			c.Abort()
 			return
 		} else {
@@ -65,7 +70,10 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 func memoryRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark string) {
 	key := mark + c.ClientIP()
 	if !inMemoryRateLimiter.Request(key, maxRequestNum, duration) {
-		c.Status(http.StatusTooManyRequests)
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"success": false,
+			"message": "请求过于频繁，请稍后再试",
+		})
 		c.Abort()
 		return
 	}

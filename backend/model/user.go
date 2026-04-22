@@ -280,6 +280,8 @@ func (user *User) FillUserByUsername() error {
 }
 
 func IsEmailAlreadyTaken(email string) bool {
+	// 与 SendEmailVerification / Register 对齐，小写化避免大小写漏判
+	email = strings.ToLower(strings.TrimSpace(email))
 	return DB.Where("email = ?", email).Find(&User{}).RowsAffected == 1
 }
 
