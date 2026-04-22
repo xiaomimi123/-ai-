@@ -17,7 +17,9 @@ export const authApi = {
 
 export const userApi = {
   list: (params: { p?: number; page_size?: number }) => http.get('/api/user/', { params }),
-  update: (id: number, data: object) => http.put(`/api/user/${id}`, data),
+  // 后端是 PUT /api/user/（不带 id），id 必须在 body 里——和 channelApi.update 一样
+  // 旧写法 http.put(`/api/user/${id}`, data) 会 404，禁用/启用/专属返利等更新一直失效
+  update: (id: number, data: object) => http.put('/api/user/', { id, ...data }),
   delete: (id: number) => http.delete(`/api/user/${id}`),
 }
 
