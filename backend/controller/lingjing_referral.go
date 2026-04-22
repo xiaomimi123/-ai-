@@ -84,10 +84,12 @@ func GetReferralInfo(c *gin.Context) {
 		Find(&invitedUsers)
 
 	// 佣金统计：pending = 未结算；settled = 已结算待支付宝提现；quota_spent = 已转余额
+	// status IN (0,1) 必须显式过滤：分销开关 OFF 时会写 status=99 的对账快照，不能进汇总
 	var totalCommission, pendingCommission, settledAvailable, quotaSpent float64
-	model.DB.Model(&model.Commission{}).Where("user_id = ?", userId).
+	model.DB.Model(&model.Commission{}).Where("user_id = ? AND status IN (?, ?)", userId,
+		model.CommissionStatusPending, model.CommissionStatusSettled).
 		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
-	model.DB.Model(&model.Commission{}).Where("user_id = ? AND status = 0", userId).
+	model.DB.Model(&model.Commission{}).Where("user_id = ? AND status = ?", userId, model.CommissionStatusPending).
 		Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
 	model.DB.Model(&model.Commission{}).
 		Where("user_id = ? AND status = 1 AND (settled_via IS NULL OR settled_via = '' OR settled_via = 'withdraw')", userId).
@@ -216,7 +218,8 @@ func WithdrawCommission(c *gin.Context) {
 // 自邀请防护：user.InviterId == userId 时不发（注册流程理论上杜绝此情况，防御性检查）
 func DistributeCommission(userId int, orderAmount float64, orderId int) {
 	rate, enabled, _ := getReferralCfg()
-	if !enabled || orderAmount <= 0 || orderId <= 0 {
+	// 参数无效直接丢弃，不写任何记录
+	if orderAmount <= 0 || orderId <= 0 {
 		return
 	}
 
@@ -253,12 +256,21 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 	}
 	commissionAmount := orderAmount * effectiveRate
 
+	// 分销开启 → 写 Pending 进结算池；分销关闭 → 写 DisabledSnapshot 仅供事后对账
+	// 不再像旧代码那样静默丢弃：管理员临时关分销做活动后再开回，账面不再"凭空消失一段"
+	commissionStatus := model.CommissionStatusPending
+	statusLabel := "pending"
+	if !enabled {
+		commissionStatus = model.CommissionStatusDisabledSnapshot
+		statusLabel = "disabled-snapshot"
+	}
+
 	commission := &model.Commission{
 		UserId:     user.InviterId,
 		FromUserId: userId,
 		OrderId:    orderId,
 		Amount:     commissionAmount,
-		Status:     0,
+		Status:     commissionStatus,
 	}
 
 	if err := model.CreateCommission(commission); err != nil {
@@ -271,8 +283,8 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("commission created: inviter=%d from_user=%d amount=%.2f rate=%.4f(%s) order=%d",
-		user.InviterId, userId, commissionAmount, effectiveRate, rateSource, orderId))
+	logger.SysLog(fmt.Sprintf("commission created [%s]: inviter=%d from_user=%d amount=%.2f rate=%.4f(%s) order=%d",
+		statusLabel, user.InviterId, userId, commissionAmount, effectiveRate, rateSource, orderId))
 }
 
 // ====== 管理员: 分销概览 ======
@@ -285,8 +297,12 @@ func AdminGetReferralStats(c *gin.Context) {
 
 	model.DB.Model(&model.User{}).Count(&totalUsers)
 	model.DB.Model(&model.User{}).Where("inviter_id > 0").Count(&usersWithInviter)
-	model.DB.Model(&model.Commission{}).Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
-	model.DB.Model(&model.Commission{}).Where("status = 0").Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
+	// status IN (0,1) 显式过滤：分销关闭时的 status=99 对账快照不计入"实付佣金"统计
+	model.DB.Model(&model.Commission{}).Where("status IN (?, ?)",
+		model.CommissionStatusPending, model.CommissionStatusSettled).
+		Select("COALESCE(SUM(amount), 0)").Scan(&totalCommission)
+	model.DB.Model(&model.Commission{}).Where("status = ?", model.CommissionStatusPending).
+		Select("COALESCE(SUM(amount), 0)").Scan(&pendingCommission)
 
 	// 除零防护（新环境数据空时）
 	referralRate := "0.0%"

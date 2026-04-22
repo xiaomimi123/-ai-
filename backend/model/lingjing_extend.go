@@ -23,8 +23,18 @@ type Order struct {
 	PaidAt        int64   `json:"paid_at"`
 }
 
+// Commission 状态常量
+//
+// 0/1 是日常业务流转，99 是"分销开关 OFF 时的对账快照"——本应该发但被开关吞掉的佣金，
+// 留一条 99 状态记录用于事后对账，不会进入任何用户/管理员可见的"佣金汇总"统计
+const (
+	CommissionStatusPending          = 0  // 待结算
+	CommissionStatusSettled          = 1  // 已结算
+	CommissionStatusDisabledSnapshot = 99 // 分销开关 OFF 时记下的对账快照（不进汇总、不可提现）
+)
+
 // Commission 佣金记录表
-// status: 0=待结算, 1=已结算
+// status: 见上方常量
 // settled_via: ""（未结算或老数据）/ "quota"（走路径A转余额）/ "withdraw"（走路径B支付宝打款完成）
 // OrderId 加 uniqueIndex 防止同一订单产生多条佣金（并发 / 重试场景的幂等保证）
 type Commission struct {
@@ -286,7 +296,11 @@ func CreateCommission(commission *Commission) error {
 
 func GetCommissionsByUserId(userId int) ([]Commission, error) {
 	var commissions []Commission
-	err := DB.Where("user_id = ?", userId).Order("created_at DESC").Find(&commissions).Error
+	// 排除 DisabledSnapshot：那是分销开关 OFF 时的对账快照，仅供管理员/SQL 查账，
+	// 不应该出现在用户端"我的佣金明细"里（用户看不到任何价值，只会困惑）
+	err := DB.Where("user_id = ? AND status IN (?, ?)", userId,
+		CommissionStatusPending, CommissionStatusSettled).
+		Order("created_at DESC").Find(&commissions).Error
 	return commissions, err
 }
 
