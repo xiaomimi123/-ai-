@@ -21,9 +21,10 @@ func InitRedisClient() (err error) {
 		return nil
 	}
 	if os.Getenv("SYNC_FREQUENCY") == "" {
+		// SYNC_FREQUENCY 未设时不启用 token/user/quota 等缓存（保持原行为），
+		// 但仍初始化 RDB，让 verification 等模块能独立用 Redis 持久化（验证码不丢）。
 		RedisEnabled = false
-		logger.SysLog("SYNC_FREQUENCY not set, Redis is disabled")
-		return nil
+		logger.SysLog("SYNC_FREQUENCY not set, cache features disabled (Redis client still initialized for verification codes)")
 	}
 	redisConnString := os.Getenv("REDIS_CONN_STRING")
 	if os.Getenv("REDIS_MASTER_NAME") == "" {

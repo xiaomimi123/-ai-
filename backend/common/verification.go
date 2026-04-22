@@ -47,7 +47,6 @@ func GenerateNumericCode(length int) string {
 	for i := 0; i < length; i++ {
 		n, err := crand.Int(crand.Reader, max)
 		if err != nil {
-			// crypto/rand 几乎不会失败；万一失败用 UnixNano 兜底，至少保证能出码
 			n = big.NewInt(time.Now().UnixNano() % int64(len(digits)))
 		}
 		b[i] = digits[n.Int64()]
@@ -55,7 +54,19 @@ func GenerateNumericCode(length int) string {
 	return string(b)
 }
 
+// 验证码 Redis key 形如 verification:v:user@example.com，TTL 由 Redis 自己管。
+// Redis 不可用时降级到进程内 map，进程一重启就丢。
+func verificationRedisKey(purpose, key string) string {
+	return "verification:" + purpose + ":" + key
+}
+
 func RegisterVerificationCodeWithKey(key string, code string, purpose string) {
+	if RDB != nil {
+		ttl := time.Duration(VerificationValidMinutes) * time.Minute
+		if err := RedisSet(verificationRedisKey(purpose, key), code, ttl); err == nil {
+			return
+		}
+	}
 	verificationMutex.Lock()
 	defer verificationMutex.Unlock()
 	verificationMap[purpose+key] = verificationValue{
@@ -68,6 +79,11 @@ func RegisterVerificationCodeWithKey(key string, code string, purpose string) {
 }
 
 func VerifyCodeWithKey(key string, code string, purpose string) bool {
+	if RDB != nil {
+		if stored, err := RedisGet(verificationRedisKey(purpose, key)); err == nil {
+			return stored == code
+		}
+	}
 	verificationMutex.Lock()
 	defer verificationMutex.Unlock()
 	value, okay := verificationMap[purpose+key]
@@ -79,6 +95,9 @@ func VerifyCodeWithKey(key string, code string, purpose string) bool {
 }
 
 func DeleteKey(key string, purpose string) {
+	if RDB != nil {
+		_ = RedisDel(verificationRedisKey(purpose, key))
+	}
 	verificationMutex.Lock()
 	defer verificationMutex.Unlock()
 	delete(verificationMap, purpose+key)
