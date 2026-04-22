@@ -136,6 +136,12 @@ func GetCommissionList(c *gin.Context) {
 func WithdrawCommission(c *gin.Context) {
 	userId := c.GetInt("id")
 
+	// 兜底：禁用/删除的用户不应能继续提现（中间件理论上拦掉，但旧 session 或缓存场景仍可能漏）
+	if user, uerr := model.GetUserById(userId, false); uerr != nil || user.Status != model.UserStatusEnabled {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户状态异常，无法提现"})
+		return
+	}
+
 	_, enabled, minQuota := getReferralCfg()
 	if !enabled {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "分销功能未启用"})
@@ -223,15 +229,27 @@ func DistributeCommission(userId int, orderAmount float64, orderId int) {
 		return
 	}
 
+	// 必须先把 inviter 取出来：既要拿 AffiliateRate，也要做"上级是否可用"的状态校验，
+	// 否则禁用/删除状态的上级也会拿到佣金，形成"僵尸佣金"（钱卡死、提不出来）
+	inviter, ierr := model.GetUserById(user.InviterId, false)
+	if ierr != nil {
+		logger.SysError(fmt.Sprintf("commission skipped: inviter not found user=%d inviter_id=%d err=%v",
+			userId, user.InviterId, ierr))
+		return
+	}
+	if inviter.Status != model.UserStatusEnabled {
+		logger.SysWarn(fmt.Sprintf("commission skipped: inviter not enabled user=%d inviter=%d status=%d order=%d",
+			userId, inviter.Id, inviter.Status, orderId))
+		return
+	}
+
 	// 专属比例优先：邀请人 AffiliateRate > 0 则用它，否则 fallback 全局
 	// 约束 0~1 范围（防 DB 脏数据），超出则视作未设置
 	effectiveRate := rate
 	rateSource := "global"
-	if inviter, ierr := model.GetUserById(user.InviterId, false); ierr == nil {
-		if inviter.AffiliateRate > 0 && inviter.AffiliateRate <= 1 {
-			effectiveRate = inviter.AffiliateRate
-			rateSource = "per-user"
-		}
+	if inviter.AffiliateRate > 0 && inviter.AffiliateRate <= 1 {
+		effectiveRate = inviter.AffiliateRate
+		rateSource = "per-user"
 	}
 	commissionAmount := orderAmount * effectiveRate
 
@@ -409,6 +427,12 @@ func GetWithdrawInfo(c *gin.Context) {
 
 func CreateWithdrawRequest(c *gin.Context) {
 	userId := c.GetInt("id")
+
+	// 兜底：禁用/删除的用户不应能发起支付宝提现
+	if user, uerr := model.GetUserById(userId, false); uerr != nil || user.Status != model.UserStatusEnabled {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "账户状态异常，无法提现"})
+		return
+	}
 
 	var req struct {
 		Amount        float64 `json:"amount" binding:"required"`

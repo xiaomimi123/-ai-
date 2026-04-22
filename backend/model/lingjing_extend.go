@@ -126,6 +126,17 @@ func InitLingjingTables() error {
 		return err
 	}
 
+	// 强制保证 commissions.order_id 唯一索引存在：DistributeCommission 的幂等
+	// 完全依赖这个索引（webhook 重试 / 管理员重复补单时靠 duplicate-key 错误吞掉）
+	// 一旦索引被误删，重复 webhook 会写入多条返佣（同一笔充值给上级返多次）
+	if !DB.Migrator().HasIndex(&Commission{}, "idx_commission_order") {
+		if cerr := DB.Migrator().CreateIndex(&Commission{}, "OrderId"); cerr != nil {
+			logger.SysError(fmt.Sprintf("force create commissions.order_id unique index failed: %v", cerr))
+		} else {
+			logger.SysLog("commissions.order_id unique index re-created")
+		}
+	}
+
 	// 一次性迁移：把历史 status=1 的 commission 全部标记为 settled_via='quota'
 	// 理由：旧代码里只有 WithdrawCommission（路径 A，转余额）会把 status 0→1，
 	// 所以历史 status=1 的记录都是"已转余额"的，必须排除在路径 B 的可提现池外
