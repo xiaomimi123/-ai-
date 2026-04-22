@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { UserPlus } from 'lucide-react'
+import { UserPlus, Eye, EyeOff } from 'lucide-react'
 import { authApi } from '../api'
 import AuthBrandPanel from '../components/AuthBrandPanel'
 
@@ -23,6 +23,8 @@ export default function RegisterPage() {
     searchParams.get('referral') || ''
 
   const [form, setForm] = useState({ email: '', password: '' })
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [verifyCode, setVerifyCode] = useState('')
   // 记录"发码时"的邮箱，用户在倒计时内改邮箱框时仍用原邮箱提交，避免后端 Redis key 不匹配
   const [codeEmail, setCodeEmail] = useState('')
@@ -47,6 +49,28 @@ export default function RegisterPage() {
   }, [])
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+
+  // 简易密码强度：长度+字符多样性，对应 0(空)/1(弱)/2(中)/3(强)
+  // 不严格、不卡注册，只做颜色提示帮助用户感知
+  const passwordStrength = (() => {
+    const pwd = form.password
+    if (!pwd) return 0
+    let score = 0
+    if (pwd.length >= 8) score++
+    if (pwd.length >= 12) score++
+    const variety = [/[a-z]/, /[A-Z]/, /\d/, /[^a-zA-Z0-9]/].filter(r => r.test(pwd)).length
+    if (variety >= 2) score++
+    if (variety >= 3) score++
+    return Math.min(score, 3) || 1
+  })()
+  const strengthMeta = [
+    { label: '', color: 'transparent' },
+    { label: '弱',  color: '#ef4444' },
+    { label: '中',  color: '#f59e0b' },
+    { label: '强',  color: '#10b981' },
+  ][passwordStrength]
+  const passwordsMatch = confirmPassword.length > 0 && form.password === confirmPassword
+  const passwordsMismatch = confirmPassword.length > 0 && form.password !== confirmPassword
 
   const sendCode = async () => {
     // 早期 return：按钮虽然 disabled，但用户在网络慢的几百 ms 里能连点导致并发请求被自己刷限流
@@ -109,6 +133,9 @@ export default function RegisterPage() {
     if (form.password.length < 8) {
       setError('密码至少 8 位'); return
     }
+    if (form.password !== confirmPassword) {
+      setError('两次输入的密码不一致'); return
+    }
     if (emailVerifyEnabled && !verifyCode.trim()) {
       setError('请输入邮箱验证码'); return
     }
@@ -142,6 +169,9 @@ export default function RegisterPage() {
         const res = await authApi.register(payload)
         if (res.data.success) {
           setSuccess('注册成功！正在跳转到登录页...')
+          // 成功后立刻清空密码，避免 React DevTools / 浏览器内存里残留明文
+          setForm(p => ({ ...p, password: '' }))
+          setConfirmPassword('')
           setTimeout(() => navigate('/login'), 1200)
           setLoading(false)
           return
@@ -208,15 +238,78 @@ export default function RegisterPage() {
 
             <div className="form-group">
               <label className="form-label">密码</label>
-              <input
-                type="password"
-                placeholder="至少 8 位"
-                value={form.password}
-                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="至少 8 位"
+                  value={form.password}
+                  onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  style={{ paddingRight: 40 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(s => !s)}
+                  aria-label={showPassword ? '隐藏密码' : '显示密码'}
+                  style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', padding: 4,
+                    color: 'var(--muted)', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  }}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {form.password && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                  <div style={{ flex: 1, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${(passwordStrength / 3) * 100}%`,
+                      height: '100%',
+                      background: strengthMeta.color,
+                      transition: 'width 0.2s, background 0.2s',
+                    }} />
+                  </div>
+                  <span style={{ fontSize: 12, color: strengthMeta.color, minWidth: 24 }}>
+                    {strengthMeta.label}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">确认密码</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="再次输入密码"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  style={{
+                    paddingRight: 40,
+                    borderColor: passwordsMismatch ? 'var(--danger)'
+                      : passwordsMatch ? 'var(--accent)'
+                      : undefined,
+                  }}
+                />
+                {confirmPassword && (
+                  <span style={{
+                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)',
+                    fontSize: 12,
+                    color: passwordsMatch ? 'var(--accent)' : 'var(--danger)',
+                  }}>
+                    {passwordsMatch ? '✓' : '✗'}
+                  </span>
+                )}
+              </div>
+              {passwordsMismatch && (
+                <p className="form-hint" style={{ color: 'var(--danger)' }}>两次输入的密码不一致</p>
+              )}
             </div>
 
             {emailVerifyEnabled && (
