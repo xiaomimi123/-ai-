@@ -21,8 +21,12 @@ export default function TokensPage() {
     try {
       const r = await tokenApi.list({ p: page - 1, page_size: PAGE_SIZE })
       if (r.data.success) {
-        setTokens(r.data.data || [])
-        setTotal(r.data.total || 0)
+        // 过滤广场内部自动建的系统 token（name 以双下划线开头，如 __playground__）
+        // 对用户完全不可见：既不想让他们困惑，也防止误删导致广场失效
+        const rawList = (r.data.data || []) as Token[]
+        const visible = rawList.filter(t => !t.name.startsWith('__'))
+        setTokens(visible)
+        setTotal(Math.max(0, (r.data.total || 0) - (rawList.length - visible.length)))
       }
     } finally { setLoading(false) }
   }

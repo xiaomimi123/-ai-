@@ -82,6 +82,110 @@ export const notificationApi = {
   markRead: (id: number | 'all') => http.put(`/api/lingjing/notifications/${id}/read`),
 }
 
+// 模型广场 Playground
+export interface PlaygroundModel {
+  id: string
+  name: string
+  provider: string
+  description: string
+  logo: string
+  input_price?: number
+  output_price?: number
+  context_window?: string
+  featured: boolean
+}
+
+export interface PlaygroundChatSummary {
+  id: number
+  title: string
+  model: string
+  created_at: number
+  updated_at: number
+}
+
+export interface PlaygroundMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+}
+
+export const playgroundApi = {
+  listModels: () => http.get('/api/lingjing/playground/models'),
+  listChats: (params?: { page?: number; page_size?: number }) =>
+    http.get('/api/lingjing/playground/chats', { params }),
+  getChat: (id: number) => http.get(`/api/lingjing/playground/chats/${id}`),
+  deleteChat: (id: number) => http.delete(`/api/lingjing/playground/chats/${id}`),
+  // 画图同步接口，返回 data:image/... base64 数组
+  generateImage: (data: {
+    model: string
+    prompt: string
+    size?: string
+    n?: number
+  }) => http.post('/api/lingjing/playground/generate-image', data),
+}
+
+// 聊天走 fetch 以支持 SSE 流式读取。
+// 返回 AsyncGenerator<string>，每 yield 一次新 token；结束时自动落盘到后端
+// chat_id 为空 → 后端新建；响应头 X-Playground-Chat-Id 回传新 id
+export async function* playgroundChatStream(body: {
+  chat_id?: number
+  model: string
+  messages: PlaygroundMessage[]
+  stream?: boolean
+}, onChatId?: (id: number) => void, signal?: AbortSignal): AsyncGenerator<string> {
+  const resp = await fetch('/api/lingjing/playground/chat', {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal,
+  })
+  const chatIdHeader = resp.headers.get('X-Playground-Chat-Id')
+  if (chatIdHeader && onChatId) onChatId(Number(chatIdHeader))
+
+  if (!resp.ok || !resp.body) {
+    const text = await resp.text()
+    throw new Error(text || `请求失败 (${resp.status})`)
+  }
+
+  // 后端 JSON 错误兜底：非 SSE 响应
+  const contentType = resp.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    const j = await resp.json()
+    if (j.success === false) throw new Error(j.message || '请求失败')
+    // 理论上不该走到这里（stream=true），但兜底
+    if (j?.choices?.[0]?.message?.content) {
+      yield j.choices[0].message.content
+    }
+    return
+  }
+
+  const reader = resp.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    // SSE 按双换行分割事件
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() || ''
+    for (const part of parts) {
+      for (const line of part.split('\n')) {
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (!payload || payload === '[DONE]') continue
+        try {
+          const obj = JSON.parse(payload)
+          const delta = obj?.choices?.[0]?.delta?.content
+          if (typeof delta === 'string' && delta) yield delta
+        } catch {
+          // 忽略非 JSON 行
+        }
+      }
+    }
+  }
+}
+
 export const referralApi = {
   getInfo: () => http.get('/api/lingjing/referral'),
   getCommissions: () => http.get('/api/lingjing/referral/commissions'),

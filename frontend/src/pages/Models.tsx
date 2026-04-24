@@ -183,13 +183,22 @@ export default function ModelsPage() {
               </div>
 
               {/* 按钮 */}
-              <button
-                className="btn btn-primary btn-sm"
-                style={{ width: '100%' }}
-                onClick={e => { e.stopPropagation(); navigate('/tokens') }}
-              >
-                获取 API 令牌
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  className="btn btn-outline btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={e => { e.stopPropagation(); navigate('/tokens') }}
+                >
+                  获取令牌
+                </button>
+                <button
+                  className="btn btn-accent btn-sm"
+                  style={{ flex: 1 }}
+                  onClick={e => { e.stopPropagation(); navigate('/playground') }}
+                >
+                  立即体验
+                </button>
+              </div>
             </div>
           ))}
         </div>

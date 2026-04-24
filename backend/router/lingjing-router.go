@@ -52,6 +52,25 @@ func SetLingjingRouter(router *gin.Engine) {
 
 		// 分组
 		user.GET("/group/my", controller.GetMyGroup)
+
+		// 模型广场 Playground
+		// - models 不需要余额（用户未充值也能看有哪些模型）
+		// - chat / generate-image 需要余额 > 0（PlaygroundBalanceCheck）
+		// - chats CRUD 只要登录即可（让零余额用户也能看/删历史）
+		user.GET("/playground/models", controller.GetPlaygroundModels)
+		// 限流顺序：先算余额（免费拦截），再算 RPM（防并发刷）
+		// 聊天 60/分钟（平均 1s 一次，正常人够用）；画图 10/分钟（画图本身慢，打不满）
+		user.POST("/playground/chat",
+			middleware.PlaygroundBalanceCheck(),
+			middleware.PlaygroundUserRateLimit(60),
+			controller.PlaygroundChat)
+		user.POST("/playground/generate-image",
+			middleware.PlaygroundBalanceCheck(),
+			middleware.PlaygroundUserRateLimit(10),
+			controller.PlaygroundGenerateImage)
+		user.GET("/playground/chats", controller.ListPlaygroundChats)
+		user.GET("/playground/chats/:id", controller.GetPlaygroundChat)
+		user.DELETE("/playground/chats/:id", controller.DeletePlaygroundChatHandler)
 	}
 
 	// ===== 管理员接口 =====

@@ -2,7 +2,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Key, CreditCard, Receipt, ScrollText,
-  Cpu, BookOpen, Gift, Settings, LogOut, User, Bell,
+  Cpu, BookOpen, Gift, Settings, LogOut, User, Bell, Sparkles,
 } from 'lucide-react'
 import { authApi, notificationApi } from '../api'
 import Avatar from './Avatar'
@@ -15,6 +15,7 @@ const navItems = [
   { icon: Receipt,         label: '订单记录', to: '/orders' },
   { icon: ScrollText,      label: '用量日志', to: '/logs' },
   { icon: Cpu,             label: '模型广场', to: '/models' },
+  { icon: Sparkles,        label: '体验广场', to: '/playground' },
   { icon: BookOpen,        label: '接入文档', to: '/docs' },
   { icon: Gift,            label: '邀请返利', to: '/referral' },
   { icon: Settings,        label: '个人设置', to: '/settings' },

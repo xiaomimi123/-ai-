@@ -193,6 +193,10 @@ func migrateDB() error {
 	if err = InitLingjingTables(); err != nil {
 		return err
 	}
+	// 模型广场（Playground）表
+	if err = InitPlaygroundTables(); err != nil {
+		return err
+	}
 	return nil
 }
 

@@ -21,6 +21,7 @@ const SettingsPage      = lazy(() => import('./pages/Settings'))
 const OrdersPage        = lazy(() => import('./pages/Orders'))
 const ReferralPage      = lazy(() => import('./pages/Referral'))
 const NotificationsPage = lazy(() => import('./pages/Notifications'))
+const PlaygroundPage    = lazy(() => import('./pages/Playground'))
 
 // 切页时下载新 chunk 的过渡态
 const PageFallback = () => (
@@ -53,6 +54,7 @@ const App = () => (
           <Route path="/orders"           element={<Layout><OrdersPage /></Layout>} />
           <Route path="/referral"         element={<Layout><ReferralPage /></Layout>} />
           <Route path="/notifications"    element={<Layout><NotificationsPage /></Layout>} />
+          <Route path="/playground"       element={<Layout><PlaygroundPage /></Layout>} />
         </Routes>
       </Suspense>
       <CustomerService />
