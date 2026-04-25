@@ -1,6 +1,13 @@
 import axios from 'axios'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+// 生产填 https://api.aitoken.homes（绕 CF 直连后端，保证 SSE 流式 + 大文件上传）
+// dev 留空走 vite 代理（vite.config.ts 已配 /api → localhost:3000）
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+
+// 给 fetch 调用拼接 base 用（axios 已经通过 baseURL 自动拼）
+export const apiUrl = (path: string) => API_BASE + path
+
+const http = axios.create({ baseURL: API_BASE, withCredentials: true, timeout: 15000 })
 
 http.interceptors.response.use(
   (res) => res,
@@ -132,7 +139,7 @@ export async function* playgroundChatStream(body: {
   messages: PlaygroundMessage[]
   stream?: boolean
 }, onChatId?: (id: number) => void, signal?: AbortSignal): AsyncGenerator<string> {
-  const resp = await fetch('/api/lingjing/playground/chat', {
+  const resp = await fetch(apiUrl('/api/lingjing/playground/chat'), {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },

@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
+import { apiUrl } from '../api'
 
 interface ModelPrice {
   id: number
@@ -37,10 +38,11 @@ export default function ModelDetailPage() {
   const [model, setModel] = useState<ModelPrice | null>(null)
   const [activeTab, setActiveTab] = useState('python')
   const [loading, setLoading] = useState(true)
-  const BASE_URL = 'https://aitoken.homes/v1'
+  // 给用户文档展示用：API 调用走 api 子域名（绕 CF，保流式 + 高速）
+  const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://api.aitoken.homes').replace(/\/$/, '') + '/v1'
 
   useEffect(() => {
-    fetch('/api/lingjing/model-prices').then(r => r.json()).then(r => {
+    fetch(apiUrl('/api/lingjing/model-prices')).then(r => r.json()).then(r => {
       if (r.success) setModel((r.data || []).find((m: ModelPrice) => m.model_id === modelName) || null)
     }).finally(() => setLoading(false))
   }, [modelName])

@@ -174,6 +174,12 @@ func CreatePayOrder(c *gin.Context) {
 	if serverAddr == "" {
 		serverAddr = "https://aitoken.homes"
 	}
+	// notify_url 走独立域名直连（绕开 CF，避免 WAF/缓冲拦截支付回调）
+	// 未配置 ApiServerAddress 时降级到 ServerAddress，向后兼容
+	apiAddr := strings.TrimRight(model.GetOptionValue("ApiServerAddress"), "/")
+	if apiAddr == "" {
+		apiAddr = serverAddr
+	}
 
 	siteName := model.GetOptionValue("site_name")
 	if siteName == "" {
@@ -189,7 +195,7 @@ func CreatePayOrder(c *gin.Context) {
 		"total_fee":      fmt.Sprintf("%.2f", amount),
 		"title":          orderName,
 		"time":           fmt.Sprintf("%d", time.Now().Unix()),
-		"notify_url":     serverAddr + "/api/lingjing/pay/notify/hupijiao",
+		"notify_url":     apiAddr + "/api/lingjing/pay/notify/hupijiao",
 		"return_url":     serverAddr + "/topup?order=" + orderNo,
 		"nonce_str":      hupijiaoNonce(),
 		"wap_name":       siteName,

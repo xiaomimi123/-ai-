@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"fmt"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
@@ -119,7 +120,21 @@ func main() {
 	server.Use(middleware.Language())
 	middleware.SetUpLogger(server)
 	// Initialize session store
+	// COOKIE_DOMAIN 用于跨子域共享 session（生产填 .aitoken.homes，
+	// 让 aitoken.homes / api.aitoken.homes / admin.aitoken.homes 共用登录态）
+	// 留空则走默认行为（写到当前 host），本地开发不受影响
 	store := cookie.NewStore([]byte(config.SessionSecret))
+	sessionOptions := sessions.Options{
+		Path:     "/",
+		MaxAge:   86400 * 30,
+		HttpOnly: true,
+	}
+	if domain := os.Getenv("COOKIE_DOMAIN"); domain != "" {
+		sessionOptions.Domain = domain
+		sessionOptions.Secure = true
+		sessionOptions.SameSite = http.SameSiteNoneMode
+	}
+	store.Options(sessionOptions)
 	server.Use(sessions.Sessions("session", store))
 
 	router.SetRouter(server, buildFS)

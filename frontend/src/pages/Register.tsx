@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { UserPlus, Eye, EyeOff } from 'lucide-react'
-import { authApi } from '../api'
+import { authApi, apiUrl } from '../api'
 import AuthBrandPanel from '../components/AuthBrandPanel'
 
 // 由邮箱前缀 + 短随机串生成 username（One API 不允许 username 含 @）
@@ -39,7 +39,7 @@ export default function RegisterPage() {
 
   // 启动时拉取平台配置：是否启用邮箱验证码
   useEffect(() => {
-    fetch('/api/lingjing/config', { credentials: 'include' })
+    fetch(apiUrl('/api/lingjing/config'), { credentials: 'include' })
       .then(r => r.json())
       .then(r => {
         if (r.success) setEmailVerifyEnabled(!!r.data?.email_verify_enabled)

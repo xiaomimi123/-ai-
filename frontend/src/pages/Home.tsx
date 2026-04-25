@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ModelIcon from '../components/ModelIcon'
+import { apiUrl } from '../api'
 
 interface Notice { id: number; title: string; content: string }
 interface ModelPrice { model_id: string; name: string; provider: string; input_price: number; output_price: number; description: string; logo?: string }
@@ -13,12 +14,12 @@ export default function HomePage() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    fetch('/api/user/self', { credentials: 'include' })
+    fetch(apiUrl('/api/user/self'), { credentials: 'include' })
       .then(r => r.json())
       .then(r => { if (r.success && r.data?.username) setUser(r.data) })
       .catch(() => {})
-    fetch('/api/lingjing/notices').then(r => r.json()).then(r => r.success && setNotices(r.data || [])).catch(() => {})
-    fetch('/api/lingjing/model-prices').then(r => r.json()).then(r => r.success && setModels(r.data || [])).catch(() => {})
+    fetch(apiUrl('/api/lingjing/notices')).then(r => r.json()).then(r => r.success && setNotices(r.data || [])).catch(() => {})
+    fetch(apiUrl('/api/lingjing/model-prices')).then(r => r.json()).then(r => r.success && setModels(r.data || [])).catch(() => {})
   }, [])
 
   // 按 provider 归组取前 8 个流行模型
