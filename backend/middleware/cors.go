@@ -24,7 +24,23 @@ func CORS() gin.HandlerFunc {
 		return false
 	}
 	config.AllowCredentials = true
-	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	config.AllowHeaders = []string{"*"}
+	config.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"}
+	// gin-contrib/cors 不把 "*" 当通配符，必须明确列出
+	// 否则 preflight 响应缺 Access-Control-Allow-Headers 导致 Content-Type 等被拦
+	config.AllowHeaders = []string{
+		"Origin",
+		"Content-Type",
+		"Content-Length",
+		"Accept",
+		"Accept-Encoding",
+		"Accept-Language",
+		"Authorization",
+		"X-Requested-With",
+		"X-CSRF-Token",
+		"Cache-Control",
+		"Pragma",
+	}
+	config.ExposeHeaders = []string{"Content-Length", "X-Playground-Chat-Id"}
+	config.MaxAge = 12 * 60 * 60 // 12h preflight 缓存，减少重复 OPTIONS
 	return cors.New(config)
 }
