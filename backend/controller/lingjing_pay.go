@@ -95,6 +95,23 @@ var httpClientHupijiao = &http.Client{Timeout: 10 * time.Second}
 // 仅用于展示 / 记录，真正的渠道由虎皮椒后台应用决定。
 func CreatePayOrder(c *gin.Context) {
 	userId := c.GetInt("id")
+
+	// audit + 防御：拒绝同名 session_v2 cookie 多份的请求（cookie 串号事故的兜底防护）
+	sessionCookieCount := 0
+	for _, ck := range c.Request.Cookies() {
+		if ck.Name == "session_v2" {
+			sessionCookieCount++
+		}
+	}
+	logger.SysLogf("[CreatePayOrder] audit: user_id=%d session_cookie_count=%d ip=%s ua=%q",
+		userId, sessionCookieCount, c.ClientIP(), c.GetHeader("User-Agent"))
+	if sessionCookieCount > 1 {
+		logger.SysLogf("[CreatePayOrder] REJECT: multiple session_v2 cookies user_id=%d cookie=%q",
+			userId, c.GetHeader("Cookie"))
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "登录状态异常，请清除浏览器 Cookie 后重新登录"})
+		return
+	}
+
 	var req struct {
 		PlanId  int     `json:"plan_id"`
 		Amount  float64 `json:"amount"`

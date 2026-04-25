@@ -135,7 +135,10 @@ func main() {
 		sessionOptions.SameSite = http.SameSiteNoneMode
 	}
 	store.Options(sessionOptions)
-	server.Use(sessions.Sessions("session", store))
+	// cookie 名带版本号 session_v2：避免与 2026-04-25 改造前残留的旧 "session" cookie 同名共存
+	// 旧 cookie 残留会导致浏览器同时发两份，后端只读第一个 → 串号到别人的 user_id（已发生订单 34 事故）
+	// 详见 memory: feedback_cookie_session_collision.md
+	server.Use(sessions.Sessions("session_v2", store))
 
 	router.SetRouter(server, buildFS)
 	var port = os.Getenv("PORT")
