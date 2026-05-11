@@ -181,6 +181,11 @@ func InitLingjingTables() error {
 			{ModelId: "gemini-2.5-pro", Name: "Gemini 2.5 Pro", Provider: "Google", Description: "多模态旗舰，原生视频理解，长上下文处理卓越", Tags: "对话,推理,海外", Logo: "google", InputPrice: 0.88, OutputPrice: 7.00, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 8},
 			{ModelId: "gemini-2.5-flash", Name: "Gemini 2.5 Flash", Provider: "Google", Description: "高性价比，速度极快，支持超长上下文，适合批量任务", Tags: "对话,海外", Logo: "google", InputPrice: 0.21, OutputPrice: 1.75, ContextWindow: "1M", Featured: false, IsVisible: true, SortOrder: 9},
 			{ModelId: "o3", Name: "o3", Provider: "OpenAI", Description: "顶级推理模型，竞赛数学和复杂分析场景首选", Tags: "推理,海外", Logo: "openai", InputPrice: 7.00, OutputPrice: 28.00, ContextWindow: "200K", Featured: false, IsVisible: true, SortOrder: 10},
+			// 图像生成模型（InputPrice 用于展示，单位 $/张；OutputPrice 留 0）
+			{ModelId: "gpt-image-1", Name: "GPT Image 1", Provider: "OpenAI", Description: "OpenAI 最新图像生成模型，文字渲染清晰，支持透明背景，质量旗舰", Tags: "画图,海外", Logo: "openai", InputPrice: 0.084, OutputPrice: 0, ContextWindow: "1024×1024", Featured: true, IsVisible: true, SortOrder: 20},
+			{ModelId: "dall-e-3", Name: "DALL·E 3", Provider: "OpenAI", Description: "经典稳定的图像生成模型，理解力强，prompt 跟随度高", Tags: "画图,海外", Logo: "openai", InputPrice: 0.04, OutputPrice: 0, ContextWindow: "1024×1024", Featured: false, IsVisible: true, SortOrder: 21},
+			{ModelId: "gemini-2.5-flash-image", Name: "Gemini Nano Banana", Provider: "Google", Description: "Google 原生多模态图像生成，速度极快，性价比首选", Tags: "画图,海外", Logo: "google", InputPrice: 0.078, OutputPrice: 0, ContextWindow: "1024×1024", Featured: true, IsVisible: true, SortOrder: 22},
+			{ModelId: "imagen-3.0-generate-001", Name: "Imagen 3", Provider: "Google", Description: "Google Imagen 3 独立模型，写实风格擅长，色彩还原好", Tags: "画图,海外", Logo: "google", InputPrice: 0.06, OutputPrice: 0, ContextWindow: "1024×1024", Featured: false, IsVisible: true, SortOrder: 23},
 		}
 		if err := DB.Create(&defaults).Error; err != nil {
 			logger.SysError("failed to seed default model prices: " + err.Error())

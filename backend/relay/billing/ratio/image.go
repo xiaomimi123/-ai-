@@ -38,6 +38,28 @@ var ImageSizeRatios = map[string]map[string]float64{
 		"1280x800":  1,
 		"800x1280":  1,
 	},
+	"gpt-image-1": {
+		"1024x1024": 1,
+		"1024x1536": 1.5,
+		"1536x1024": 1.5,
+		"auto":      1,
+	},
+	"gemini-2.5-flash-image": {
+		"1024x1024": 1,
+	},
+	"nano-banana": {
+		"1024x1024": 1,
+	},
+	"imagen-3.0-generate-001": {
+		"1024x1024": 1,
+		"1024x768":  1,
+		"768x1024":  1,
+	},
+	"imagen-3.0-generate": {
+		"1024x1024": 1,
+		"1024x768":  1,
+		"768x1024":  1,
+	},
 }
 
 var ImageGenerationAmounts = map[string][2]int{
@@ -48,6 +70,11 @@ var ImageGenerationAmounts = map[string][2]int{
 	"wanx-v1":                   {1, 4}, // Ali
 	"cogview-3":                 {1, 1},
 	"step-1x-medium":            {1, 1},
+	"gpt-image-1":               {1, 10},
+	"gemini-2.5-flash-image":    {1, 4},
+	"nano-banana":               {1, 4},
+	"imagen-3.0-generate-001":   {1, 4},
+	"imagen-3.0-generate":       {1, 4},
 }
 
 var ImagePromptLengthLimitations = map[string]int{
@@ -58,6 +85,11 @@ var ImagePromptLengthLimitations = map[string]int{
 	"wanx-v1":                   4000,
 	"cogview-3":                 833,
 	"step-1x-medium":            4000,
+	"gpt-image-1":               32000, // gpt-image-1 支持超长 prompt
+	"gemini-2.5-flash-image":    4000,
+	"nano-banana":               4000,
+	"imagen-3.0-generate-001":   4000,
+	"imagen-3.0-generate":       4000,
 }
 
 var ImageOriginModelName = map[string]string{

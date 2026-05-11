@@ -87,6 +87,11 @@ var ModelRatio = map[string]float64{
 	"text-moderation-latest":  0.1,
 	"dall-e-2":                0.02 * USD, // $0.016 - $0.020 / image
 	"dall-e-3":                0.04 * USD, // $0.040 - $0.120 / image
+	"gpt-image-1":             0.084 * USD, // medium quality 1024² 上游 $0.042，2x 转售
+	"gemini-2.5-flash-image":  0.078 * USD, // 上游 $0.039/张（1290 tok × $30/M），2x 转售
+	"nano-banana":             0.078 * USD, // gemini-2.5-flash-image 别名，价格一致
+	"imagen-3.0-generate-001": 0.06 * USD,  // 上游 $0.03/张，2x 转售
+	"imagen-3.0-generate":     0.06 * USD,  // 不带版本号的便利别名
 	// https://docs.anthropic.com/en/docs/about-claude/models
 	"claude-instant-1.2":         0.8 / 1000 * USD,
 	"claude-2.0":                 8.0 / 1000 * USD,
