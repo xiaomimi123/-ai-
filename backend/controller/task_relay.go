@@ -138,8 +138,14 @@ func RelayTaskImage(c *gin.Context) {
 	// 5. Pre-consume quota. Stub today (always nil); F1 will reject when
 	//    user/token quota is insufficient. We compute the estimate here so
 	//    F1 can swap the stub body without changing callers.
+	//
+	//    preLogID is the audit-log row id PreConsumeTaskQuota wrote. The
+	//    row is created BEFORE we know taskUUID (since CreateTask runs
+	//    later), so we backfill task_id on it after CreateTask succeeds.
+	//    preLogID==0 means no log row exists (no-op path or insert failed).
 	estimatedQuota := estimateImageQuota(req)
-	if err := billing.PreConsumeTaskQuota(userID, tokenID, channelID, estimatedQuota, req.Model); err != nil {
+	preLogID, err := billing.PreConsumeTaskQuota(userID, tokenID, channelID, estimatedQuota, req.Model)
+	if err != nil {
 		errResp(c, http.StatusPaymentRequired, "insufficient_quota", err.Error())
 		return
 	}
@@ -171,6 +177,16 @@ func RelayTaskImage(c *gin.Context) {
 		_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "create_task_failed")
 		errResp(c, http.StatusInternalServerError, "internal", "create task: "+err.Error())
 		return
+	}
+
+	// Backfill task_id on the pre-consume audit row now that taskUUID exists.
+	// Best-effort: a failed UPDATE must not fail the request — the quota debit
+	// and task row are already committed, and the audit row is still queryable
+	// via user_id + channel_id + content + timestamp.
+	if preLogID > 0 {
+		if err := model.LOG_DB.Model(&model.Log{}).Where("id = ?", preLogID).Update("task_id", taskUUID).Error; err != nil {
+			logger.SysError("backfill pre-consume task_id failed: " + err.Error())
+		}
 	}
 
 	// 7. Submit to upstream.

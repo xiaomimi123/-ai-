@@ -18,20 +18,27 @@ import (
 
 func TestPreConsumeTaskQuota_input_guards(t *testing.T) {
 	Convey("PreConsumeTaskQuota rejects userID=0", t, func() {
-		err := PreConsumeTaskQuota(0, 0, 0, 100, "m")
+		logID, err := PreConsumeTaskQuota(0, 0, 0, 100, "m")
 		So(err, ShouldNotBeNil)
+		So(logID, ShouldEqual, 0)
 	})
 
 	Convey("PreConsumeTaskQuota is a no-op when quota<=0", t, func() {
 		// No DB calls happen because the guard returns early.
-		So(PreConsumeTaskQuota(1, 0, 0, 0, "m"), ShouldBeNil)
-		So(PreConsumeTaskQuota(1, 0, 0, -5, "m"), ShouldBeNil)
+		logID, err := PreConsumeTaskQuota(1, 0, 0, 0, "m")
+		So(err, ShouldBeNil)
+		So(logID, ShouldEqual, 0)
+
+		logID, err = PreConsumeTaskQuota(1, 0, 0, -5, "m")
+		So(err, ShouldBeNil)
+		So(logID, ShouldEqual, 0)
 	})
 
 	Convey("PreConsumeTaskQuota rejects tokenID=0 when quota>0", t, func() {
-		err := PreConsumeTaskQuota(1, 0, 0, 100, "m")
+		logID, err := PreConsumeTaskQuota(1, 0, 0, 100, "m")
 		So(err, ShouldNotBeNil)
 		So(err.Error(), ShouldContainSubstring, "token_id required")
+		So(logID, ShouldEqual, 0)
 	})
 }
 

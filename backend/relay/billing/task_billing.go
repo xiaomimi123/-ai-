@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/songquanpeng/one-api/common/helper"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
 )
@@ -47,27 +48,48 @@ func NewTaskBilling() *TaskBilling { return &TaskBilling{} }
 // double-counting against usage dashboards once the settle log lands.
 //
 // quota <= 0 is treated as a no-op (free model / preview path).
-func PreConsumeTaskQuota(userID, tokenID, channelID, quota int, modelName string) error {
+//
+// Returns the inserted audit-log id so the caller can backfill task_id after
+// CreateTask assigns it. Returns log_id=0 on no-op paths or when the audit
+// insert fails (best-effort: quota debit already happened, request must not
+// fail just because the log row didn't land).
+func PreConsumeTaskQuota(userID, tokenID, channelID, quota int, modelName string) (int, error) {
 	if userID == 0 {
-		return errors.New("user_id required")
+		return 0, errors.New("user_id required")
 	}
 	if quota <= 0 {
-		return nil
+		return 0, nil
 	}
 	if tokenID == 0 {
 		// Defensive: PreConsumeTokenQuota requires a real token row.
 		// Task submit always provides one via ctxkey.TokenId; reject otherwise.
-		return errors.New("token_id required")
+		return 0, errors.New("token_id required")
 	}
 	if err := model.PreConsumeTokenQuota(tokenID, int64(quota)); err != nil {
-		return err
+		return 0, err
 	}
 	// Audit row. LogTypeManage so SumUsedQuota(LogTypeConsume) is not
-	// inflated before settle lands in OnSuccess.
-	model.RecordLog(context.Background(), userID, model.LogTypeManage,
-		fmt.Sprintf("[async task pre-consume] model=%s channel=%d quota=%d",
-			modelName, channelID, quota))
-	return nil
+	// inflated before settle lands in OnSuccess. We Create directly (rather
+	// than via model.RecordLog) so gorm populates auditLog.Id for backfill.
+	// TaskId is intentionally empty here; the controller updates it after
+	// CreateTask succeeds.
+	auditLog := &model.Log{
+		UserId:    userID,
+		Username:  model.GetUsernameById(userID),
+		ChannelId: channelID,
+		CreatedAt: helper.GetTimestamp(),
+		Type:      model.LogTypeManage,
+		ModelName: modelName,
+		Quota:     -quota,
+		Content: fmt.Sprintf("[async task pre-consume] model=%s channel=%d quota=%d",
+			modelName, channelID, quota),
+	}
+	if err := model.LOG_DB.Create(auditLog).Error; err != nil {
+		// Don't fail the request — quota debit already happened.
+		logger.SysError("pre-consume audit log: " + err.Error())
+		return 0, nil
+	}
+	return auditLog.Id, nil
 }
 
 // RefundTaskQuota credits back predicted quota when an async task fails to
