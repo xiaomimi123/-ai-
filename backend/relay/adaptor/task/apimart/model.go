@@ -1,5 +1,7 @@
 package apimart
 
+import "encoding/json"
+
 // SubmitRequest 提交任务请求体（apimart 格式）
 type SubmitRequest struct {
 	Model      string   `json:"model"`
@@ -43,7 +45,10 @@ type FetchResponse struct {
 }
 
 type APIError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Type    string `json:"type"`
+	// Code is intentionally json.RawMessage because apimart inconsistently returns
+	// integer codes (e.g., 400) or empty string ("") in the same field. We don't
+	// surface Code in error messages; only Message and Type are used.
+	Code    json.RawMessage `json:"code,omitempty"`
+	Message string          `json:"message"`
+	Type    string          `json:"type"`
 }

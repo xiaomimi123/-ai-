@@ -304,3 +304,21 @@ func TestApiMart_E2E_submit_then_poll_to_completed(t *testing.T) {
 		So(fetchCount, ShouldEqual, 3)
 	})
 }
+
+func TestDoRequest_apimart_string_error_code(t *testing.T) {
+	Convey("DoRequest tolerates apimart's `code:''` (empty string) in error", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(401)
+			w.Write([]byte(`{"error":{"code":"","message":"invalid API key","type":"apimart_error"}}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		body, _ := a.BuildRequestBody(info)
+		_, _, err := a.DoRequest(info, body)
+		So(err, ShouldNotBeNil)
+		So(err.Error(), ShouldContainSubstring, "invalid API key")
+	})
+}
