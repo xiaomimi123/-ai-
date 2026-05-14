@@ -77,3 +77,79 @@ func TestJimeng_E2E_signed_request(t *testing.T) {
 		So(gotXSha, ShouldNotBeBlank)
 	})
 }
+
+func TestJimeng_FetchTask_signed_and_status_mapping(t *testing.T) {
+	Convey("FetchTask sends signed request and maps each upstream status", t, func() {
+		Convey("upstream 'done' → FetchResult.Status='completed'", func() {
+			var gotAuth, gotAction string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				gotAuth = r.Header.Get("Authorization")
+				gotAction = r.URL.Query().Get("Action")
+				w.Write([]byte(`{"code":10000,"message":"ok","data":{"status":"done","image_urls":["https://x/done.png"]}}`))
+			}))
+			defer srv.Close()
+
+			a := &Adaptor{}
+			info := newInfo()
+			info.BaseURL = srv.URL
+			a.Init(info)
+
+			res, err := a.FetchTask(info, "j_task_001")
+			So(err, ShouldBeNil)
+			So(gotAction, ShouldEqual, "CVSync2AsyncGetResult")
+			So(gotAuth, ShouldStartWith, "HMAC-SHA256 Credential=AK_TEST/")
+			So(res.Status, ShouldEqual, "completed")
+			So(res.Progress, ShouldEqual, "100")
+		})
+
+		Convey("upstream 'generating' → FetchResult.Status='processing'", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"code":10000,"message":"ok","data":{"status":"generating"}}`))
+			}))
+			defer srv.Close()
+
+			a := &Adaptor{}
+			info := newInfo()
+			info.BaseURL = srv.URL
+			a.Init(info)
+
+			res, err := a.FetchTask(info, "j_task_001")
+			So(err, ShouldBeNil)
+			So(res.Status, ShouldEqual, "processing")
+			So(res.Progress, ShouldEqual, "50")
+		})
+
+		Convey("upstream 'failed' → FetchResult.Status='failed' with FailReason", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"code":10000,"message":"ok","data":{"status":"failed","fail_reason":"content blocked"}}`))
+			}))
+			defer srv.Close()
+
+			a := &Adaptor{}
+			info := newInfo()
+			info.BaseURL = srv.URL
+			a.Init(info)
+
+			res, err := a.FetchTask(info, "j_task_001")
+			So(err, ShouldBeNil)
+			So(res.Status, ShouldEqual, "failed")
+			So(res.FailReason, ShouldEqual, "content blocked")
+		})
+
+		Convey("upstream business error code → returns error", func() {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Write([]byte(`{"code":50000,"message":"server error","data":{}}`))
+			}))
+			defer srv.Close()
+
+			a := &Adaptor{}
+			info := newInfo()
+			info.BaseURL = srv.URL
+			a.Init(info)
+
+			_, err := a.FetchTask(info, "j_task_001")
+			So(err, ShouldNotBeNil)
+			So(err.Error(), ShouldContainSubstring, "50000")
+		})
+	})
+}
