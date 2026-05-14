@@ -1,6 +1,9 @@
 package apimart
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -66,5 +69,86 @@ func TestBuildRequestHeader(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(h["Authorization"], ShouldEqual, "Bearer sk-test")
 		So(h["Content-Type"], ShouldEqual, "application/json")
+	})
+}
+
+func TestBuildRequestBody(t *testing.T) {
+	Convey("BuildRequestBody marshals to apimart SubmitRequest", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gpt-image-2"
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+
+		var req SubmitRequest
+		So(json.Unmarshal(body, &req), ShouldBeNil)
+		So(req.Model, ShouldEqual, "gpt-image-2")
+		So(req.Prompt, ShouldEqual, "a cat")
+		So(req.Size, ShouldEqual, "16:9")
+		So(req.Resolution, ShouldEqual, "2k")
+		So(req.N, ShouldEqual, 1)
+	})
+}
+
+func TestDoRequest_success(t *testing.T) {
+	Convey("DoRequest extracts task_id from successful async response", t, func() {
+		// Capture request path/auth from handler goroutine for assertion in main goroutine
+		// (GoConvey's So() cannot be called from a goroutine outside the Convey stack).
+		var gotPath, gotAuth string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			gotAuth = r.Header.Get("Authorization")
+			w.WriteHeader(200)
+			w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_xxx"}]}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		body, _ := a.BuildRequestBody(info)
+		taskID, raw, err := a.DoRequest(info, body)
+		So(err, ShouldBeNil)
+		So(taskID, ShouldEqual, "task_xxx")
+		So(string(raw), ShouldContainSubstring, "submitted")
+		So(gotPath, ShouldEqual, "/v1/images/generations")
+		So(gotAuth, ShouldEqual, "Bearer sk-test")
+	})
+}
+
+func TestDoRequest_upstream_html_error(t *testing.T) {
+	Convey("DoRequest detects HTML error page (regression: 2026-05-13 invalid character '<' bug)", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(404)
+			w.Write([]byte("<html>not found</html>"))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		body, _ := a.BuildRequestBody(info)
+		_, _, err := a.DoRequest(info, body)
+		So(err, ShouldNotBeNil)
+		So(err.Error(), ShouldContainSubstring, "non-JSON")
+	})
+}
+
+func TestDoRequest_upstream_business_error(t *testing.T) {
+	Convey("DoRequest surfaces upstream business error (400 with structured error JSON)", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(400)
+			w.Write([]byte(`{"error":{"code":400,"message":"invalid prompt","type":"invalid_request_error"}}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		body, _ := a.BuildRequestBody(info)
+		_, _, err := a.DoRequest(info, body)
+		So(err, ShouldNotBeNil)
+		So(err.Error(), ShouldContainSubstring, "invalid prompt")
 	})
 }
