@@ -54,10 +54,17 @@ var ChannelBaseURLs = []string{
 	"",                                          // 50
 
 	"https://generativelanguage.googleapis.com/v1beta/openai/", // 51
+	"",                                          // 52
+	"",                                          // 53
+	"",                                          // 54
+	"",                                          // 55
+	"",                                          // 56 - Dummy
+	"",                                          // 57 - ApiMart
+	"",                                          // 58 - Jimeng
 }
 
 func init() {
-	if len(ChannelBaseURLs) != Dummy {
+	if len(ChannelBaseURLs) != Jimeng+1 {
 		panic("channel base urls length not match")
 	}
 }

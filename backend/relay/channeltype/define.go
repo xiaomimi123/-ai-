@@ -53,5 +53,7 @@ const (
 	AliBailian
 	OpenAICompatible
 	GeminiOpenAICompatible
-	Dummy
+	Dummy = 56
+	ApiMart = 57 // 异步任务图像中转（apimart.ai 协议）
+	Jimeng  = 58 // 字节即梦异步图像/视频
 )

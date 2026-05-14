@@ -29,6 +29,9 @@ type Log struct {
 	ElapsedTime       int64  `json:"elapsed_time" gorm:"default:0"` // unit is ms
 	IsStream          bool   `json:"is_stream" gorm:"default:false"`
 	SystemPromptReset bool   `json:"system_prompt_reset" gorm:"default:false"`
+	// 异步任务关联（feature: async task system）
+	// 同步消费记录此字段为空字符串
+	TaskId            string `json:"task_id" gorm:"type:varchar(191);index;default:''"`
 }
 
 const (

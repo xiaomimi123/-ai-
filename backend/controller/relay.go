@@ -27,6 +27,14 @@ func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
 	var err *model.ErrorWithStatusCode
 	switch relayMode {
 	case relaymode.ImagesGenerations:
+		// === Async task dispatch (feature: ENABLE_TASK_SYSTEM) ===
+		// When the flag is off, or the channel is not an async task type, this
+		// is a no-op and the sync path below remains byte-level equivalent to
+		// pre-feature behavior. See controller/task_relay.go for the predicate.
+		if shouldDispatchToTaskRelayFromConfig(c) {
+			RelayTaskImage(c)
+			return nil
+		}
 		err = controller.RelayImageHelper(c, relayMode)
 	case relaymode.AudioSpeech:
 		fallthrough

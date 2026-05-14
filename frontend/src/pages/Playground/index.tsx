@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
-import { MessageSquare, Image as ImageIcon } from 'lucide-react'
+import { MessageSquare, Image as ImageIcon, Sparkles } from 'lucide-react'
 import { authApi, playgroundApi, type PlaygroundModel } from '../../api'
 import BalanceBar from './BalanceBar'
 import ModelSelector from './ModelSelector'
 import ChatTab from './ChatTab'
 import ImageTab from './ImageTab'
+import AsyncTaskTab from './AsyncTaskTab'
 
-type Tab = 'chat' | 'image'
+type Tab = 'chat' | 'image' | 'async'
 
 export default function Playground() {
   const [tab, setTab] = useState<Tab>('chat')
@@ -62,10 +63,16 @@ export default function Playground() {
       <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', marginBottom: 20 }}>
         <TabButton active={tab === 'chat'} onClick={() => setTab('chat')} icon={<MessageSquare size={16} />} label="聊天" />
         <TabButton active={tab === 'image'} onClick={() => setTab('image')} icon={<ImageIcon size={16} />} label="文生图" />
+        <TabButton active={tab === 'async'} onClick={() => setTab('async')} icon={<Sparkles size={16} />} label="异步生成" />
       </div>
 
       {loading ? (
         <div style={{ padding: 60, textAlign: 'center', color: 'var(--muted)' }}>加载中...</div>
+      ) : tab === 'async' ? (
+        // 异步任务 Tab：G1 脚手架，先不复用左侧 ModelSelector，G2 会接入自己的模型选择
+        <div style={{ minHeight: 'calc(100vh - 280px)' }}>
+          <AsyncTaskTab />
+        </div>
       ) : (
         <div style={{
           display: 'grid',
