@@ -29,6 +29,8 @@ const TYPES: Record<number, { name: string; color: string }> = {
   45: { name: 'xAI',          color: '#000000' },
   37: { name: 'Cloudflare',   color: '#f38020' },
   50: { name: 'OpenAICompatible', color: '#6b7280' },
+  57: { name: 'ApiMart',      color: '#8b5cf6' },
+  58: { name: 'Jimeng',       color: '#e6184c' },
 }
 
 // ---- 表单类型 ----
