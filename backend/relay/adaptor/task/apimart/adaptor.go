@@ -139,11 +139,17 @@ func (a *Adaptor) DoRequest(info *common.TaskRelayInfo, body []byte) (string, []
 	return sr.Data[0].TaskID, raw, nil
 }
 
+// truncate returns the first n runes of s plus "...", preserving UTF-8 boundaries.
+// We use rune-count (not byte-count) so multi-byte sequences (Chinese, emoji) are not split.
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	runes := []rune(s)
+	if len(runes) <= n {
+		return s
+	}
+	return string(runes[:n]) + "..."
 }
 
 // FetchTask — implemented in Task B4. Stub here so we satisfy the interface.

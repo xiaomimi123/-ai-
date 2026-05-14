@@ -152,3 +152,22 @@ func TestDoRequest_upstream_business_error(t *testing.T) {
 		So(err.Error(), ShouldContainSubstring, "invalid prompt")
 	})
 }
+
+func TestTruncate_utf8_safe(t *testing.T) {
+	Convey("truncate preserves UTF-8 boundaries", t, func() {
+		Convey("ASCII short", func() {
+			So(truncate("hello", 10), ShouldEqual, "hello")
+		})
+		Convey("ASCII long", func() {
+			So(truncate("abcdefghij", 5), ShouldEqual, "abcde...")
+		})
+		Convey("Chinese characters not split", func() {
+			out := truncate("一只可爱的橘猫", 3)
+			So(out, ShouldEqual, "一只可...")
+		})
+		Convey("Emoji not split", func() {
+			out := truncate("🐶🐱🐰🦊", 2)
+			So(out, ShouldEqual, "🐶🐱...")
+		})
+	})
+}
