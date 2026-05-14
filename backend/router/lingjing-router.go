@@ -2,6 +2,7 @@ package router
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/middleware"
 )
@@ -71,6 +72,19 @@ func SetLingjingRouter(router *gin.Engine) {
 		user.GET("/playground/chats", controller.ListPlaygroundChats)
 		user.GET("/playground/chats/:id", controller.GetPlaygroundChat)
 		user.DELETE("/playground/chats/:id", controller.DeletePlaygroundChatHandler)
+
+		// 异步任务（gpt-image-2 / jimeng 等）- session-auth 入口
+		// 业务侧 /v1/tasks/* 走 TokenAuth（给第三方 SDK 用），保留不动；
+		// 广场前端用 Cookie，所以在这里复用同一批控制器（auth 中间件不同，控制器读 ctxkey 都一致）。
+		if config.EnableTaskSystem {
+			user.POST("/playground/async-submit",
+				middleware.PlaygroundBalanceCheck(),
+				middleware.PlaygroundUserRateLimit(10),
+				controller.PlaygroundAsyncSubmit)
+			user.GET("/playground/async-tasks/:id", controller.GetTask)
+			user.POST("/playground/async-tasks/batch", controller.GetTasksBatch)
+			user.POST("/playground/async-tasks/:id/cancel", controller.CancelTask)
+		}
 	}
 
 	// ===== 管理员接口 =====
