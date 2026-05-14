@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/middleware"
 
@@ -16,6 +17,17 @@ func SetRelayRouter(router *gin.Engine) {
 	{
 		modelsRouter.GET("", controller.ListModels)
 		modelsRouter.GET("/:model", controller.RetrieveModel)
+	}
+	if config.EnableTaskSystem {
+		// Async task system endpoints. Lookups by task_id — no Distribute
+		// middleware because there is no model to route on.
+		taskV1Router := router.Group("/v1/tasks")
+		taskV1Router.Use(middleware.RelayPanicRecover(), middleware.TokenAuth())
+		{
+			taskV1Router.GET("/:id", controller.GetTask)
+			taskV1Router.POST("/batch", controller.GetTasksBatch)
+			taskV1Router.POST("/:id/cancel", controller.CancelTask)
+		}
 	}
 	relayV1Router := router.Group("/v1")
 	relayV1Router.Use(middleware.RelayPanicRecover(), middleware.TokenAuth(), middleware.Distribute())

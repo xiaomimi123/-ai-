@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/controller"
 	"github.com/songquanpeng/one-api/controller/auth"
 	"github.com/songquanpeng/one-api/middleware"
@@ -116,6 +117,16 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+		}
+		if config.EnableTaskSystem {
+			taskAdminRoute := apiRouter.Group("/admin/tasks")
+			taskAdminRoute.Use(middleware.AdminAuth())
+			{
+				taskAdminRoute.GET("", controller.AdminListTasks)
+				taskAdminRoute.GET("/:id", controller.AdminGetTask)
+				taskAdminRoute.POST("/:id/retry", controller.AdminRetryTask)
+				taskAdminRoute.POST("/:id/refund", controller.AdminRefundTask)
+			}
 		}
 	}
 }
