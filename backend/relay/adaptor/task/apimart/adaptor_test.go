@@ -254,3 +254,53 @@ func TestTruncate_utf8_safe(t *testing.T) {
 		})
 	})
 }
+
+func TestApiMart_E2E_submit_then_poll_to_completed(t *testing.T) {
+	Convey("E2E: submit returns task_id, then 3 fetches transition processing→completed", t, func() {
+		var fetchCount int
+		var unexpectedPath string
+
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/v1/images/generations" {
+				w.Write([]byte(`{"code":200,"data":[{"status":"submitted","task_id":"task_999"}]}`))
+				return
+			}
+			if r.URL.Path == "/v1/tasks/task_999" {
+				fetchCount++
+				if fetchCount < 3 {
+					w.Write([]byte(`{"code":200,"data":{"id":"task_999","status":"processing","progress":30}}`))
+					return
+				}
+				w.Write([]byte(`{
+					"code":200,
+					"data":{"id":"task_999","status":"completed","progress":100,
+					        "result":{"images":[{"url":["https://cdn.x/done.png"]}]}}
+				}`))
+				return
+			}
+			unexpectedPath = r.URL.Path
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+
+		// 1. Submit
+		body, _ := a.BuildRequestBody(info)
+		taskID, _, err := a.DoRequest(info, body)
+		So(err, ShouldBeNil)
+		So(taskID, ShouldEqual, "task_999")
+
+		// 2. Poll 3 times: processing, processing, completed
+		var last *common.FetchResult
+		for i := 0; i < 3; i++ {
+			last, err = a.FetchTask(info, taskID)
+			So(err, ShouldBeNil)
+		}
+
+		So(unexpectedPath, ShouldBeBlank)  // server only got the expected 4 paths total
+		So(last.Status, ShouldEqual, "completed")
+		So(fetchCount, ShouldEqual, 3)
+	})
+}
