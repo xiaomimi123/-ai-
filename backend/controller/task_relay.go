@@ -1,25 +1,250 @@
 package controller
 
 import (
+	"encoding/json"
+	"io"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/ctxkey"
+	"github.com/songquanpeng/one-api/common/logger"
+	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/adaptor/task"
+	taskcommon "github.com/songquanpeng/one-api/relay/adaptor/task/common"
+	"github.com/songquanpeng/one-api/relay/billing"
 )
 
-// RelayTaskImage handles async task image generation (ApiMart / Jimeng).
-// Full implementation lands in Task E2; for E1 this is a stub so the
-// dispatcher branch in relayHelper compiles and the route is reachable.
+// taskRequestBody is the subset of OpenAI-compatible image-generation fields
+// the task framework cares about. Unknown fields stay in OriginalRequestBody
+// for the adaptor to read directly if needed.
+type taskRequestBody struct {
+	Model      string   `json:"model"`
+	Prompt     string   `json:"prompt"`
+	N          int      `json:"n"`
+	Size       string   `json:"size"`
+	Resolution string   `json:"resolution"`
+	ImageURLs  []string `json:"image_urls"`
+}
+
+// RelayTaskImage handles POST /v1/images/generations for async (task-based)
+// channels. The dispatcher in controller.relay routes here when
+// ENABLE_TASK_SYSTEM is on AND the selected channel.Type is async
+// (task.IsAsyncTaskType). The sync path is untouched.
+//
+// Flow:
+//  1. Read request body + middleware-set context (user/token/channel/group)
+//  2. Look up channel for BaseURL/Key (selectAll=true so we get the Key)
+//  3. Resolve adaptor via platform name
+//  4. Build TaskRelayInfo, init + validate against the adaptor
+//  5. Pre-consume quota (stub today; F1 makes it real)
+//  6. Insert task row in NOT_START
+//  7. BuildRequestBody → DoRequest → upstream task_id
+//  8. Update task to SUBMITTED with upstream_task_id + raw response
+//  9. Respond OpenAI-style {data: [{task_id, status}]}
+//
+// On any failure after pre-consume we refund (no-op today) and either fail
+// the task row or skip creating it. Errors are best-effort logged; we never
+// double-deduct quota.
 func RelayTaskImage(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": gin.H{
-			"message": "async task relay not implemented yet (Task E2)",
-			"type":    "not_implemented",
-			"code":    "task_relay_stub",
+	ctx := c.Request.Context()
+
+	// 1. Parse request body. We keep the raw bytes so the adaptor can re-read
+	//    any fields beyond our struct (e.g. quality, response_format).
+	raw, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		errResp(c, http.StatusBadRequest, "invalid_request_error", "read body: "+err.Error())
+		return
+	}
+	var req taskRequestBody
+	if err := json.Unmarshal(raw, &req); err != nil {
+		errResp(c, http.StatusBadRequest, "invalid_request_error", "bad json: "+err.Error())
+		return
+	}
+
+	// 2. Read context (set by middleware.Distribute / TokenAuth).
+	//    ctxkey constants verified in common/ctxkey/key.go:
+	//      Id        → user id
+	//      TokenId   → token id
+	//      ChannelId → channel.Id
+	//      Channel   → channel.Type
+	//      Group     → user group
+	userID := c.GetInt(ctxkey.Id)
+	tokenID := c.GetInt(ctxkey.TokenId)
+	channelID := c.GetInt(ctxkey.ChannelId)
+	channelType := c.GetInt(ctxkey.Channel)
+	group := c.GetString(ctxkey.Group)
+
+	if channelID == 0 {
+		errResp(c, http.StatusBadRequest, "no_channel",
+			"no channel selected (middleware missing or model unsupported)")
+		return
+	}
+
+	// 3. Look up the full channel row (selectAll=true → includes Key).
+	channel, err := model.GetChannelById(channelID, true)
+	if err != nil {
+		errResp(c, http.StatusBadRequest, "channel_not_found", err.Error())
+		return
+	}
+
+	// 4. Resolve adaptor. Should never be nil here because the dispatcher
+	//    only routes us in when IsAsyncTaskType returned true, but be defensive.
+	platform := task.PlatformOf(channelType)
+	adaptor := task.AdaptorOf(platform)
+	if adaptor == nil {
+		errResp(c, http.StatusInternalServerError, "internal",
+			"no adaptor for channel type "+strconv.Itoa(channelType))
+		return
+	}
+
+	// Apply channel-level model_mapping (client model → upstream model). Reuse
+	// the existing Channel.GetModelMapping() helper so we stay in sync with the
+	// sync relay path and don't duplicate JSON parsing logic.
+	upstreamModel := req.Model
+	if mapping := channel.GetModelMapping(); mapping != nil {
+		if mapped, ok := mapping[req.Model]; ok && mapped != "" {
+			upstreamModel = mapped
+		}
+	}
+
+	info := &taskcommon.TaskRelayInfo{
+		UserID:              userID,
+		TokenID:             tokenID,
+		ChannelID:           channelID,
+		BaseURL:             channel.GetBaseURL(),
+		APIKey:              channel.Key,
+		OriginModelName:     req.Model,
+		UpstreamModelName:   upstreamModel,
+		Prompt:              req.Prompt,
+		Size:                req.Size,
+		Resolution:          req.Resolution,
+		N:                   req.N,
+		ImageURLs:           req.ImageURLs,
+		Group:               group,
+		OriginalRequestBody: raw,
+	}
+
+	adaptor.Init(info)
+	if err := adaptor.ValidateRequest(info); err != nil {
+		errResp(c, http.StatusBadRequest, "invalid_request_error", err.Error())
+		return
+	}
+
+	// 5. Pre-consume quota. Stub today (always nil); F1 will reject when
+	//    user/token quota is insufficient. We compute the estimate here so
+	//    F1 can swap the stub body without changing callers.
+	estimatedQuota := estimateImageQuota(req)
+	if err := billing.PreConsumeTaskQuota(userID, tokenID, channelID, estimatedQuota, req.Model); err != nil {
+		errResp(c, http.StatusPaymentRequired, "insufficient_quota", err.Error())
+		return
+	}
+
+	// 6. Create the task record up-front in NOT_START. We commit before
+	//    talking to upstream so a slow/failed upstream call still leaves an
+	//    audit trail the user can query (and the worker can timeout-reclaim).
+	taskUUID := "task_" + uuid.New().String()
+	timeoutAt := time.Now().Add(time.Duration(config.TaskTimeoutMinutes) * time.Minute).Unix()
+	taskRecord := &model.Task{
+		TaskID:    taskUUID,
+		Platform:  platform,
+		UserId:    userID,
+		Group:     group,
+		ChannelId: channelID,
+		Quota:     estimatedQuota,
+		Action:    "image_generations",
+		Status:    model.TaskStatusNotStart,
+		Properties: model.TaskProperties{
+			Input:             req.Prompt,
+			OriginModelName:   req.Model,
+			UpstreamModelName: upstreamModel,
+		},
+		PrivateData: model.TaskPrivateData{TokenId: tokenID},
+		TimeoutAt:   timeoutAt,
+	}
+	if err := model.CreateTask(taskRecord); err != nil {
+		// Refund best-effort; today this is a no-op since PreConsume is a stub.
+		_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "create_task_failed")
+		errResp(c, http.StatusInternalServerError, "internal", "create task: "+err.Error())
+		return
+	}
+
+	// 7. Submit to upstream.
+	body, err := adaptor.BuildRequestBody(info)
+	if err != nil {
+		_ = model.UpdateTaskStatus(model.DB, taskUUID, map[string]interface{}{
+			"status":      model.TaskStatusFailure,
+			"fail_reason": "build_body: " + err.Error(),
+			"finish_time": time.Now().Unix(),
+		})
+		_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "build_body_failed")
+		errResp(c, http.StatusInternalServerError, "internal", err.Error())
+		return
+	}
+	upstreamTaskID, rawResp, err := adaptor.DoRequest(info, body)
+	if err != nil {
+		_ = model.UpdateTaskStatus(model.DB, taskUUID, map[string]interface{}{
+			"status":      model.TaskStatusFailure,
+			"fail_reason": err.Error(),
+			"finish_time": time.Now().Unix(),
+		})
+		_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "submit_failed")
+		errResp(c, http.StatusBadGateway, "upstream_error", err.Error())
+		return
+	}
+
+	// 8. Update task to SUBMITTED with upstream task_id + raw response.
+	taskRecord.PrivateData.UpstreamTaskID = upstreamTaskID
+	updates := map[string]interface{}{
+		"status":       model.TaskStatusSubmitted,
+		"submit_time":  time.Now().Unix(),
+		"private_data": taskRecord.PrivateData,
+	}
+	if len(rawResp) > 0 && json.Valid(rawResp) {
+		updates["data"] = json.RawMessage(rawResp)
+	}
+	if err := model.UpdateTaskStatus(model.DB, taskUUID, updates); err != nil {
+		// Update failure is non-fatal: the task row exists, the worker will
+		// pick it up via timeout/poll, and we have the upstream id logged.
+		logger.Errorf(ctx, "RelayTaskImage update SUBMITTED failed task_id=%s err=%s", taskUUID, err.Error())
+	}
+
+	logger.SysLog("task submit task_id=" + taskUUID +
+		" user_id=" + strconv.Itoa(userID) +
+		" channel=" + strconv.Itoa(channelID) +
+		" platform=" + platform +
+		" upstream_task_id=" + upstreamTaskID +
+		" quota=" + strconv.Itoa(estimatedQuota))
+
+	// 9. Respond OpenAI-style.
+	c.JSON(http.StatusOK, gin.H{
+		"created": time.Now().Unix(),
+		"data": []gin.H{
+			{"task_id": taskUUID, "status": "submitted"},
 		},
 	})
+}
+
+// errResp writes a structured OpenAI-style error response.
+func errResp(c *gin.Context, code int, typ, msg string) {
+	c.JSON(code, gin.H{"error": gin.H{"message": msg, "type": typ}})
+}
+
+// estimateImageQuota returns a rough quota estimate for the request before
+// upstream submit. F1 will replace with model-aware pricing; today we just
+// use a flat per-image cost so the row has a sensible non-zero quota for
+// audit purposes.
+func estimateImageQuota(req taskRequestBody) int {
+	n := req.N
+	if n <= 0 {
+		n = 1
+	}
+	const perImage = 1024
+	return perImage * n
 }
 
 // shouldDispatchToTaskRelay decides whether the current image-generation

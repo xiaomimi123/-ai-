@@ -60,3 +60,17 @@ func TestShouldDispatchToTaskRelay(t *testing.T) {
 		So(shouldDispatchToTaskRelay(c, true), ShouldBeFalse)
 	})
 }
+
+// TestEstimateImageQuota covers the per-N scaling and zero-defaulting of the
+// pre-consume estimator. F1 will replace the body with model-aware pricing;
+// this test guards against accidental regression of the “n defaults to 1”
+// invariant which protects against zero-quota rows.
+func TestEstimateImageQuota(t *testing.T) {
+	Convey("estimateImageQuota scales with n and defaults to 1", t, func() {
+		So(estimateImageQuota(taskRequestBody{N: 0}), ShouldEqual, 1024)
+		So(estimateImageQuota(taskRequestBody{N: 1}), ShouldEqual, 1024)
+		So(estimateImageQuota(taskRequestBody{N: 3}), ShouldEqual, 3072)
+		So(estimateImageQuota(taskRequestBody{N: -1}), ShouldEqual, 1024)
+		So(estimateImageQuota(taskRequestBody{N: 10}), ShouldEqual, 10240)
+	})
+}
