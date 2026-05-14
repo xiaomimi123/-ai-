@@ -74,11 +74,13 @@ func PreConsumeTaskQuota(userID, tokenID, channelID, quota int, modelName string
 // reach a successful terminal state (submit error, build-body error, user
 // cancel, worker timeout, admin manual refund).
 //
-// Idempotency: callers may invoke this multiple times for the same task
-// (e.g. submit-failed path + worker timeout reclaim if records cross).
-// We dedupe via tasks.refund_log_id — the field is set to the audit log
-// id on the first successful refund. Subsequent calls return nil without
-// touching quota.
+// Idempotency / Race Safety: callers may invoke this multiple times for the
+// same task (e.g. submit-failed path + worker timeout reclaim, or admin
+// double-click the refund button). To prevent double refunds, we use an
+// atomic UPDATE to claim the refund slot under the condition refund_log_id==0.
+// Only the caller whose UPDATE succeeds (RowsAffected==1) proceeds to issue
+// the credit. Others see RowsAffected==0 and bail (already claimed/refunded
+// by another goroutine).
 //
 // quota is credited via model.PostConsumeTokenQuota with negative delta
 // (mirroring relay/billing.ReturnPreConsumedQuota), so both user.quota and
@@ -88,16 +90,36 @@ func RefundTaskQuota(userID, channelID, quota int, taskID, reason string) error 
 		return nil
 	}
 
-	// Look up task to (a) get tokenID for full credit, (b) check idempotency.
+	// Look up task to (a) get tokenID for full credit, (b) check if row exists.
 	t, err := model.GetTaskByTaskID(taskID)
-	if err != nil || t == nil {
-		// Task row not yet created (very early failure in submit path,
-		// before model.CreateTask succeeds). PreConsumeTokenQuota already
-		// debited both user.quota and token.remain_quota, but we have no
-		// task row to find tokenID — best-effort credit user.quota only.
-		// This is a known edge case: the submit-failed callers happen
-		// AFTER CreateTask in the controller, so this branch only fires
-		// when CreateTask itself failed.
+	hasTask := err == nil && t != nil
+
+	if hasTask {
+		// === Atomic claim: only the first caller succeeds ===
+		// Set refund_log_id = -1 (sentinel) under the condition refund_log_id == 0.
+		// Whoever wins RowsAffected==1 proceeds to issue the credit;
+		// losers see RowsAffected==0 and bail (already refunded by another goroutine).
+		claim := model.DB.Model(&model.Task{}).
+			Where("task_id = ? AND refund_log_id = 0", taskID).
+			Update("refund_log_id", -1)
+		if claim.Error != nil {
+			return fmt.Errorf("claim refund slot: %w", claim.Error)
+		}
+		if claim.RowsAffected == 0 {
+			// Another caller already claimed (or finished) the refund.
+			logger.SysLog(fmt.Sprintf("task refund skipped (already claimed) task_id=%s", taskID))
+			return nil
+		}
+	}
+
+	// Task row not yet created (very early failure in submit path,
+	// before model.CreateTask succeeds). PreConsumeTokenQuota already
+	// debited both user.quota and token.remain_quota, but we have no
+	// task row to find tokenID — best-effort credit user.quota only.
+	// This is a known edge case: the submit-failed callers happen
+	// AFTER CreateTask in the controller, so this branch only fires
+	// when CreateTask itself failed.
+	if !hasTask {
 		if err := model.IncreaseUserQuota(userID, int64(quota)); err != nil {
 			return fmt.Errorf("refund (user-only): %w", err)
 		}
@@ -107,28 +129,24 @@ func RefundTaskQuota(userID, channelID, quota int, taskID, reason string) error 
 		return nil
 	}
 
-	if t.RefundLogId > 0 {
-		// Already refunded — no-op.
-		logger.SysLog(fmt.Sprintf("task refund skipped (already refunded) task_id=%s refund_log_id=%d",
-			taskID, t.RefundLogId))
-		return nil
-	}
-
+	// === Issue the credit ===
 	tokenID := t.PrivateData.TokenId
 	if tokenID > 0 {
 		// Negative delta restores both user and token quota.
 		if err := model.PostConsumeTokenQuota(tokenID, int64(-quota)); err != nil {
+			// Critical: claim succeeded but credit failed — revert claim to allow retry.
+			model.DB.Model(&model.Task{}).Where("task_id = ?", taskID).Update("refund_log_id", 0)
 			return fmt.Errorf("refund quota: %w", err)
 		}
 	} else {
 		if err := model.IncreaseUserQuota(userID, int64(quota)); err != nil {
+			// Critical: claim succeeded but credit failed — revert claim to allow retry.
+			model.DB.Model(&model.Task{}).Where("task_id = ?", taskID).Update("refund_log_id", 0)
 			return fmt.Errorf("refund user quota: %w", err)
 		}
 	}
 
-	// Audit row — write directly so we can capture the row id and stamp
-	// it onto tasks.refund_log_id for idempotency. LogTypeManage so the
-	// refund doesn't inflate consumption dashboards.
+	// === Write audit log, capture id ===
 	logRow := &model.Log{
 		UserId:    userID,
 		ChannelId: channelID,
@@ -142,14 +160,17 @@ func RefundTaskQuota(userID, channelID, quota int, taskID, reason string) error 
 	}
 	logRow.Username = model.GetUsernameById(userID)
 	if dbErr := model.LOG_DB.Create(logRow).Error; dbErr != nil {
+		// Log write failed — but credit already issued. Best-effort fix:
+		// stamp -1 stays so future retries skip. Operator can investigate.
 		logger.SysError("task refund: failed to record audit log: " + dbErr.Error())
-	} else {
-		// Stamp the refund_log_id on the task for idempotency on retries.
-		if err := model.UpdateTaskStatus(model.DB, taskID, map[string]interface{}{
-			"refund_log_id": logRow.Id,
-		}); err != nil {
-			logger.SysError("task refund: failed to stamp refund_log_id: " + err.Error())
-		}
+		return nil
+	}
+
+	// === Finalize: replace sentinel with real log id ===
+	if err := model.UpdateTaskStatus(model.DB, taskID, map[string]interface{}{
+		"refund_log_id": logRow.Id,
+	}); err != nil {
+		logger.SysError("task refund: failed to stamp refund_log_id: " + err.Error())
 	}
 	return nil
 }
