@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/songquanpeng/one-api/common/ctxkey"
+	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/channeltype"
 )
 
@@ -72,5 +73,54 @@ func TestEstimateImageQuota(t *testing.T) {
 		So(estimateImageQuota(taskRequestBody{N: 3}), ShouldEqual, 3072)
 		So(estimateImageQuota(taskRequestBody{N: -1}), ShouldEqual, 1024)
 		So(estimateImageQuota(taskRequestBody{N: 10}), ShouldEqual, 10240)
+	})
+}
+
+// TestTaskToOpenAIView locks the OpenAI-shape projection for the read
+// endpoints (E3): status flattening, progress parsing, and which optional
+// keys (result/usage/error) appear in which states.
+func TestTaskToOpenAIView(t *testing.T) {
+	Convey("taskToOpenAIView maps internal Task to OpenAI shape", t, func() {
+		Convey("SUCCESS includes result and usage", func() {
+			task := &model.Task{
+				TaskID:     "task_abc",
+				Status:     model.TaskStatusSuccess,
+				Quota:      1024,
+				Progress:   "100",
+				Data:       []byte(`{"foo":"bar"}`),
+				Properties: model.TaskProperties{OriginModelName: "gpt-image-1"},
+			}
+			v := taskToOpenAIView(task)
+			So(v["id"], ShouldEqual, "task_abc")
+			So(v["status"], ShouldEqual, "completed")
+			So(v["progress"], ShouldEqual, 100)
+			So(v["model"], ShouldEqual, "gpt-image-1")
+			So(v["result"], ShouldNotBeNil)
+			So(v["usage"], ShouldNotBeNil)
+		})
+
+		Convey("FAILURE includes error", func() {
+			task := &model.Task{
+				TaskID:     "task_xyz",
+				Status:     model.TaskStatusFailure,
+				FailReason: "upstream broke",
+			}
+			v := taskToOpenAIView(task)
+			So(v["status"], ShouldEqual, "failed")
+			So(v["error"], ShouldNotBeNil)
+		})
+
+		Convey("SUBMITTED returns 'submitted'", func() {
+			task := &model.Task{TaskID: "task_q", Status: model.TaskStatusSubmitted}
+			v := taskToOpenAIView(task)
+			So(v["status"], ShouldEqual, "submitted")
+		})
+
+		Convey("TIMEOUT maps to 'failed'", func() {
+			task := &model.Task{TaskID: "task_t", Status: model.TaskStatusTimeout, FailReason: "timeout"}
+			v := taskToOpenAIView(task)
+			So(v["status"], ShouldEqual, "failed")
+			So(v["error"], ShouldNotBeNil)
+		})
 	})
 }
