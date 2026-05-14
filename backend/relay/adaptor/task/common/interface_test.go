@@ -1,6 +1,8 @@
 package common
 
 import (
+	"net/http"
+	"sync"
 	"testing"
 
 	. "github.com/smartystreets/goconvey/convey"
@@ -27,5 +29,26 @@ func TestStubImplementsTaskAdaptor(t *testing.T) {
 	Convey("stubAdaptor must satisfy TaskAdaptor interface", t, func() {
 		var a TaskAdaptor = &stubAdaptor{}
 		So(a, ShouldNotBeNil)
+	})
+}
+
+func TestHTTPClient_concurrent_safe(t *testing.T) {
+	Convey("concurrent calls to HTTPClient must return identical instance", t, func() {
+		var clients [10]*http.Client
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			wg.Add(1)
+			go func(idx int) {
+				defer wg.Done()
+				clients[idx] = HTTPClient()
+			}(i)
+		}
+		wg.Wait()
+
+		first := clients[0]
+		So(first, ShouldNotBeNil)
+		for _, c := range clients {
+			So(c, ShouldEqual, first)
+		}
 	})
 }

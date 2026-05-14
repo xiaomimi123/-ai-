@@ -2,18 +2,23 @@ package common
 
 import (
 	"net/http"
+	"sync"
 	"time"
 )
 
-var sharedClient *http.Client
-
-// DefaultHTTPTimeout 兜底（Phase D 会改成从 env 读取）
+// DefaultHTTPTimeout is the default timeout for upstream HTTP requests.
 const DefaultHTTPTimeout = 30 * time.Second
 
-// HTTPClient 返回共享 HTTP 客户端
+var (
+	sharedClient *http.Client
+	initOnce     sync.Once
+)
+
+// HTTPClient returns a process-wide shared HTTP client with the default timeout.
+// Initialization is goroutine-safe via sync.Once.
 func HTTPClient() *http.Client {
-	if sharedClient == nil {
+	initOnce.Do(func() {
 		sharedClient = &http.Client{Timeout: DefaultHTTPTimeout}
-	}
+	})
 	return sharedClient
 }
