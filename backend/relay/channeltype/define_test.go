@@ -1,12 +1,13 @@
 package channeltype
 
 import (
+	. "github.com/smartystreets/goconvey/convey"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 func TestAsyncTaskChannelTypes(t *testing.T) {
-	assert.Equal(t, 57, ApiMart, "ApiMart channel type must be 57")
-	assert.Equal(t, 58, Jimeng, "Jimeng channel type must be 58")
+	Convey("async task channel types", t, func() {
+		So(ApiMart, ShouldEqual, 57)
+		So(Jimeng, ShouldEqual, 58)
+	})
 }
