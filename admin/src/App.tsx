@@ -17,6 +17,7 @@ import SettingsPage from './pages/Settings'
 import ModelRatiosPage from './pages/ModelRatios'
 import PaymentSettingsPage from './pages/PaymentSettings'
 import PlansPage from './pages/Plans'
+import TasksPage from './pages/Tasks'
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="channels" element={<ChannelsPage />} />
           <Route path="redemptions" element={<RedemptionsPage />} />
           <Route path="logs" element={<LogsPage />} />
+          <Route path="tasks" element={<TasksPage />} />
           <Route path="orders" element={<OrdersPage />} />
           <Route path="referrals" element={<ReferralsPage />} />
           <Route path="withdrawals" element={<WithdrawalsPage />} />
