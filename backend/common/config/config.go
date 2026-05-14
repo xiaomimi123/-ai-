@@ -167,3 +167,26 @@ var UserContentRequestTimeout = env.Int("USER_CONTENT_REQUEST_TIMEOUT", 30)
 
 var EnforceIncludeUsage = env.Bool("ENFORCE_INCLUDE_USAGE", false)
 var TestPrompt = env.String("TEST_PROMPT", "Output only your specific model name with no additional text.")
+
+// ===== Async task system =====
+var (
+	EnableTaskSystem        = false
+	TaskWorkerInterval      = 5 * time.Second
+	TaskWorkerBatchSize     = 50
+	TaskTimeoutMinutes      = 10
+	TaskRetentionDays       = 30
+	TaskUpstreamHTTPTimeout = 30 * time.Second
+	TaskMaxFetchErrors      = 5
+)
+
+// InitTaskConfig reads ENABLE_TASK_SYSTEM and related env vars.
+// Call after env.* package is loaded.
+func InitTaskConfig() {
+	EnableTaskSystem = env.Bool("ENABLE_TASK_SYSTEM", false)
+	TaskWorkerInterval = env.Duration("TASK_WORKER_INTERVAL", 5*time.Second)
+	TaskWorkerBatchSize = env.Int("TASK_WORKER_BATCH_SIZE", 50)
+	TaskTimeoutMinutes = env.Int("TASK_TIMEOUT_MINUTES", 10)
+	TaskRetentionDays = env.Int("TASK_RETENTION_DAYS", 30)
+	TaskUpstreamHTTPTimeout = env.Duration("TASK_UPSTREAM_HTTP_TIMEOUT", 30*time.Second)
+	TaskMaxFetchErrors = env.Int("TASK_MAX_FETCH_ERRORS", 5)
+}

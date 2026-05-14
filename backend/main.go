@@ -30,6 +30,7 @@ var buildFS embed.FS
 
 func main() {
 	common.Init()
+	config.InitTaskConfig()
 	logger.SetupLogger()
 	logger.SysLogf("One API %s started", common.Version)
 
