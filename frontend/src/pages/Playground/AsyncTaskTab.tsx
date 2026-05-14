@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Send, Loader2, Sparkles } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { taskApi, type TaskInfo, type TaskSubmitPayload } from './api/taskApi'
+import TaskCard, { type SessionTask } from './TaskCard'
 
-// 异步任务 Tab（G2：提交表单 + 会话内任务占位列表；G3 接入轮询/进度条/下载）
+// 异步任务 Tab（G3：提交表单 + 会话内任务列表；卡片轮询/进度/下载/取消见 TaskCard）
 // 主题严格遵循森林科技风：仅用 CSS 变量；禁蓝紫；禁 AI emoji。
 
 // Loader2 旋转动画样式（与 ImageTab 同款，按需注入一次）
@@ -32,13 +33,7 @@ const RESOLUTIONS = ['1k', '2k', '4k']
 const N_OPTIONS = [1, 2, 3, 4]
 const MAX_SESSION_TASKS = 20
 
-interface SessionTask {
-  taskId: string
-  model: string
-  prompt: string
-  status: string
-  createdAt: number
-}
+// SessionTask 类型在 ./TaskCard 中定义（单一来源）
 
 // 后端响应可能形如 { task_id, status, ... } 或 OpenAI 兼容 { data: [{ task_id }] }
 // 这里两种都兼容提取 task_id
@@ -75,6 +70,11 @@ export default function AsyncTaskTab() {
     () => MODELS.find(m => m.id === model) ?? MODELS[0],
     [model],
   )
+
+  // G3：子卡片用 onUpdate 推回状态；useCallback 稳定引用避免 useEffect 多次触发
+  const updateTask = useCallback((taskId: string, patch: Partial<SessionTask>) => {
+    setTasks(prev => prev.map(t => t.taskId === taskId ? { ...t, ...patch } : t))
+  }, [])
 
   const onSubmit = async () => {
     const trimmed = prompt.trim()
@@ -227,7 +227,7 @@ export default function AsyncTaskTab() {
         </button>
       </div>
 
-      {/* 任务列表（G3 将替换为带轮询/下载/取消的 TaskCard） */}
+      {/* 任务列表（每张卡自身轮询、显示进度、下载、取消） */}
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
         当前会话任务（最多 {MAX_SESSION_TASKS} 个，刷新后丢失）
       </div>
@@ -243,39 +243,11 @@ export default function AsyncTaskTab() {
           </div>
         )}
         {tasks.map(t => (
-          <div
+          <TaskCard
             key={t.taskId}
-            style={{
-              background: 'var(--card)',
-              border: '1px solid var(--border)',
-              borderLeft: '3px solid var(--accent)',
-              padding: 14,
-              borderRadius: 'var(--radius-sm)',
-            }}
-          >
-            <div style={{
-              fontFamily: 'monospace',
-              fontSize: 12,
-              color: 'var(--text)',
-              wordBreak: 'break-all',
-            }}>
-              {t.taskId}
-            </div>
-            <div style={{
-              color: 'var(--text-secondary)',
-              fontSize: 13,
-              marginTop: 4,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
-            }}>
-              {t.prompt}
-            </div>
-            <div style={{ color: 'var(--accent)', fontSize: 12, marginTop: 6 }}>
-              状态：{t.status}（G3 将加入轮询 / 进度 / 下载）
-            </div>
-          </div>
+            task={t}
+            onUpdate={(patch) => updateTask(t.taskId, patch)}
+          />
         ))}
       </div>
     </div>
