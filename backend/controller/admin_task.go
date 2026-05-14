@@ -132,5 +132,17 @@ func AdminRefundTask(c *gin.Context) {
 		errResp(c, http.StatusInternalServerError, "internal", err.Error())
 		return
 	}
+
+	// Reverse the used_quota counters that OnSuccess incremented.
+	// These must be reversed here because admin manual refund flips a SUCCESS
+	// task to FAILURE, and used_quota was only incremented during OnSuccess,
+	// not during other failure paths (submit_failed, cancel, etc.).
+	// RefundTaskQuota itself cannot reverse these because it is called from
+	// non-SUCCESS paths where used_quota was never incremented in the first place.
+	if t.Quota > 0 {
+		model.UpdateUserUsedQuotaAndRequestCount(t.UserId, -int64(t.Quota))
+		model.UpdateChannelUsedQuota(t.ChannelId, -int64(t.Quota))
+	}
+
 	c.JSON(http.StatusOK, gin.H{"id": t.TaskID, "status": "refunded"})
 }
