@@ -3,6 +3,7 @@ package model
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -32,7 +33,16 @@ func (p *TaskProperties) Scan(v interface{}) error {
 	if v == nil {
 		return nil
 	}
-	return json.Unmarshal(v.([]byte), p)
+	var data []byte
+	switch val := v.(type) {
+	case []byte:
+		data = val
+	case string:
+		data = []byte(val)
+	default:
+		return fmt.Errorf("unsupported type for TaskProperties.Scan: %T", v)
+	}
+	return json.Unmarshal(data, p)
 }
 func (p TaskProperties) Value() (driver.Value, error) { return json.Marshal(p) }
 
@@ -48,7 +58,16 @@ func (p *TaskPrivateData) Scan(v interface{}) error {
 	if v == nil {
 		return nil
 	}
-	return json.Unmarshal(v.([]byte), p)
+	var data []byte
+	switch val := v.(type) {
+	case []byte:
+		data = val
+	case string:
+		data = []byte(val)
+	default:
+		return fmt.Errorf("unsupported type for TaskPrivateData.Scan: %T", v)
+	}
+	return json.Unmarshal(data, p)
 }
 func (p TaskPrivateData) Value() (driver.Value, error) { return json.Marshal(p) }
 
