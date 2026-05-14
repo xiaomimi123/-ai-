@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/songquanpeng/one-api/relay/adaptor/task/common"
@@ -152,7 +153,45 @@ func truncate(s string, n int) string {
 	return string(runes[:n]) + "..."
 }
 
-// FetchTask — implemented in Task B4. Stub here so we satisfy the interface.
 func (a *Adaptor) FetchTask(info *common.TaskRelayInfo, taskID string) (*common.FetchResult, error) {
-	return nil, errors.New("not implemented (Task B4)")
+	url := fmt.Sprintf("%s/v1/tasks/%s", normalizeBaseURL(info.BaseURL), taskID)
+
+	httpReq, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build fetch request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+info.APIKey)
+
+	resp, err := common.HTTPClient().Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("fetch upstream: %w", err)
+	}
+	defer resp.Body.Close()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read fetch body: %w", err)
+	}
+
+	// Same HTML-error guard as DoRequest (defensive parity)
+	trimmed := bytes.TrimLeft(raw, " \t\r\n")
+	if len(trimmed) > 0 && trimmed[0] == '<' {
+		return nil, fmt.Errorf("upstream returned non-JSON on fetch (status=%d): %s",
+			resp.StatusCode, truncate(string(raw), 200))
+	}
+
+	var fr FetchResponse
+	if err := json.Unmarshal(raw, &fr); err != nil {
+		return nil, fmt.Errorf("unmarshal fetch response: %w", err)
+	}
+
+	out := &common.FetchResult{
+		Status:   fr.Data.Status,
+		Progress: strconv.Itoa(fr.Data.Progress),
+		Result:   raw, // 完整原文存到 tasks.data
+	}
+	if fr.Data.Error != nil {
+		out.FailReason = fr.Data.Error.Message
+	}
+	return out, nil
 }

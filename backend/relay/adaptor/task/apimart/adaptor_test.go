@@ -153,6 +153,89 @@ func TestDoRequest_upstream_business_error(t *testing.T) {
 	})
 }
 
+func TestFetchTask_submitted(t *testing.T) {
+	Convey("FetchTask returns submitted status", t, func() {
+		var gotPath string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			gotPath = r.URL.Path
+			w.Write([]byte(`{"code":200,"data":{"id":"task_xxx","status":"submitted","progress":0}}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(gotPath, ShouldEqual, "/v1/tasks/task_xxx")
+		So(res.Status, ShouldEqual, "submitted")
+	})
+}
+
+func TestFetchTask_processing(t *testing.T) {
+	Convey("FetchTask returns processing with progress", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"code":200,"data":{"id":"task_xxx","status":"processing","progress":50}}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(res.Status, ShouldEqual, "processing")
+		So(res.Progress, ShouldEqual, "50")
+	})
+}
+
+func TestFetchTask_completed(t *testing.T) {
+	Convey("FetchTask returns completed with full result body", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{
+				"code":200,
+				"data":{
+					"id":"task_xxx",
+					"status":"completed",
+					"progress":100,
+					"actual_time":52,
+					"cost":0.05279,
+					"result":{"images":[{"url":["https://cdn.x/abc.png"],"expires_at":1747243204}]}
+				}
+			}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(res.Status, ShouldEqual, "completed")
+		So(res.Result, ShouldNotBeEmpty)
+	})
+}
+
+func TestFetchTask_failed(t *testing.T) {
+	Convey("FetchTask returns failed with reason", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{
+				"code":200,
+				"data":{"id":"task_xxx","status":"failed","error":{"code":500,"message":"upstream timeout","type":"server_error"}}
+			}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(res.Status, ShouldEqual, "failed")
+		So(res.FailReason, ShouldContainSubstring, "upstream timeout")
+	})
+}
+
 func TestTruncate_utf8_safe(t *testing.T) {
 	Convey("truncate preserves UTF-8 boundaries", t, func() {
 		Convey("ASCII short", func() {
