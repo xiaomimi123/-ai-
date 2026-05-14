@@ -1,11 +1,14 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-contrib/sessions"
@@ -22,7 +25,9 @@ import (
 	"github.com/songquanpeng/one-api/middleware"
 	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/adaptor/openai"
+	"github.com/songquanpeng/one-api/relay/billing"
 	"github.com/songquanpeng/one-api/router"
+	"github.com/songquanpeng/one-api/service"
 )
 
 //go:embed web/build/*
@@ -106,6 +111,35 @@ func main() {
 	// 分销配置持久化：启动时从 options 加载，避免重启后回到默认值
 	controller.InitReferralConfig()
 	client.Init()
+
+	// === Async task system (feature flag: ENABLE_TASK_SYSTEM) ===
+	if config.EnableTaskSystem {
+		taskErrorCounter := service.NewTaskErrorCounter(common.RDB) // shared Redis client
+		billingStub := billing.NewTaskBilling()                      // Task F1 will replace
+		tickCtx := &service.TickContext{
+			ErrorCounter: taskErrorCounter,
+			BillingFn:    billingStub,
+		}
+		worker := service.NewTaskWorker(
+			config.TaskWorkerInterval,
+			config.TaskWorkerBatchSize,
+			func(ctx context.Context) { service.Tick(ctx, tickCtx) },
+		)
+		worker.Start()
+		logger.SysLog("task system enabled, worker started")
+
+		// SIGTERM/SIGINT → graceful shutdown
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGTERM, syscall.SIGINT)
+		go func() {
+			<-sigCh
+			logger.SysLog("received shutdown signal, stopping task worker")
+			worker.Stop()
+			os.Exit(0)
+		}()
+	} else {
+		logger.SysLog("task system disabled (set ENABLE_TASK_SYSTEM=true to enable)")
+	}
 
 	// Initialize i18n
 	if err := i18n.Init(); err != nil {
