@@ -42,6 +42,9 @@ export default function ModelManagePage() {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [search, setSearch] = useState('')
   const [editModel, setEditModel] = useState<ModelInfo | null>(null)
+  // 倍率输入框用 string 保存编辑中文本，避免 `value={x.input_ratio || ''}` 把 "0." 渲染成 ""
+  // 也避免 onChange 里 parseFloat("0.") = 0 让用户没法连续敲小数
+  const [ratioStr, setRatioStr] = useState({ input: '', completion: '' })
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
@@ -69,6 +72,17 @@ export default function ModelManagePage() {
     return () => clearTimeout(t)
   }, [models, searchParams])
 
+  // 打开编辑时把当前倍率"转字符串"，作为输入框初始值
+  const openEdit = (m: ModelInfo) => {
+    setRatioStr({
+      input: m.input_ratio ? String(m.input_ratio) : '',
+      completion: m.completion_ratio ? String(m.completion_ratio) : '',
+    })
+    setEditModel({ ...m })
+  }
+
+  const closeEdit = () => { setEditModel(null); setRatioStr({ input: '', completion: '' }) }
+
   const handleSave = async () => {
     if (!editModel) return
     setSaving(true)
@@ -76,10 +90,16 @@ export default function ModelManagePage() {
       // 后端 AdminUpdateModel 是全量覆盖 —— 必须把 editModel 里的完整字段透传回去
       // （包括 input_price/output_price/provider/description/is_visible 这些展示字段的"原值"）
       // 否则后端会把没传的字段当成零值写回，把模型广场数据清空
-      const r = await http.put('/api/admin/lingjing/models', editModel)
+      // 倍率从 ratioStr 解析（用户编辑时存的是 string，保存时一次性转 number）
+      const payload = {
+        ...editModel,
+        input_ratio: parseFloat(ratioStr.input) || 0,
+        completion_ratio: parseFloat(ratioStr.completion) || 0,
+      }
+      const r = await http.put('/api/admin/lingjing/models', payload)
       if (r.data.success) {
         toast.success(`${editModel.model_name} 倍率已更新`)
-        setEditModel(null)
+        closeEdit()
         load()
       } else toast.error(r.data.message)
     } catch { toast.error('保存失败') } finally { setSaving(false) }
@@ -210,7 +230,7 @@ export default function ModelManagePage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                      <button className="btn btn-primary btn-sm" onClick={() => setEditModel({ ...m })} title="调整计费倍率">
+                      <button className="btn btn-primary btn-sm" onClick={() => openEdit(m)} title="调整计费倍率">
                         调倍率
                       </button>
                       <button
@@ -243,8 +263,11 @@ export default function ModelManagePage() {
       {/* Edit Modal — 只改倍率 */}
       {editModel && (() => {
         const isImg = isImageModel(editModel.tags, editModel.model_name)
+        // 倍率换算预览实时跟随输入框 string；空串当 0 处理
+        const inputRatioNum = parseFloat(ratioStr.input) || 0
+        const completionRatioNum = parseFloat(ratioStr.completion) || 0
         return (
-          <div className="modal-overlay" onClick={() => setEditModel(null)}>
+          <div className="modal-overlay" onClick={closeEdit}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520 }}>
               <div className="modal-title">调整倍率 — {editModel.model_name}</div>
 
@@ -258,14 +281,14 @@ export default function ModelManagePage() {
                     <label className="form-label">{isImg ? '计费倍率' : '输入倍率'}</label>
                     <input
                       type="number" step="0.001" placeholder="例：0.14"
-                      value={editModel.input_ratio || ''}
-                      onChange={e => setEditModel({ ...editModel, input_ratio: parseFloat(e.target.value) || 0 })}
+                      value={ratioStr.input}
+                      onChange={e => setRatioStr(s => ({ ...s, input: e.target.value }))}
                     />
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
                       {isImg ? (
-                        <>倍率 × input_price ($/张) → 当前: <strong>${((editModel.input_ratio || 0) * (editModel.input_price || 0)).toFixed(4)}/张</strong></>
+                        <>倍率 × input_price ($/张) → 当前: <strong>${(inputRatioNum * (editModel.input_price || 0)).toFixed(4)}/张</strong></>
                       ) : (
-                        <>倍率 × 2 = $/M input → 当前: <strong>${((editModel.input_ratio || 0) * 2).toFixed(3)}/M</strong></>
+                        <>倍率 × 2 = $/M input → 当前: <strong>${(inputRatioNum * 2).toFixed(3)}/M</strong></>
                       )}
                     </div>
                   </div>
@@ -274,11 +297,11 @@ export default function ModelManagePage() {
                       <label className="form-label">补全倍率</label>
                       <input
                         type="number" step="0.01" placeholder="例：1.5"
-                        value={editModel.completion_ratio || ''}
-                        onChange={e => setEditModel({ ...editModel, completion_ratio: parseFloat(e.target.value) || 0 })}
+                        value={ratioStr.completion}
+                        onChange={e => setRatioStr(s => ({ ...s, completion: e.target.value }))}
                       />
                       <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                        输出 / 输入 比 → 输出: <strong>${((editModel.input_ratio || 0) * (editModel.completion_ratio || 1) * 2).toFixed(3)}/M</strong>
+                        输出 / 输入 比 → 输出: <strong>${(inputRatioNum * (completionRatioNum || 1) * 2).toFixed(3)}/M</strong>
                       </div>
                     </div>
                   )}
@@ -291,7 +314,7 @@ export default function ModelManagePage() {
                   <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>前台展示（只读）</h4>
                   <button
                     className="btn btn-outline btn-sm"
-                    onClick={() => { setEditModel(null); gotoPriceEditor(editModel.model_name) }}
+                    onClick={() => { closeEdit(); gotoPriceEditor(editModel.model_name) }}
                     style={{ padding: '4px 10px', fontSize: 12 }}
                   >
                     <ExternalLink size={12} style={{ marginRight: 4 }}/>去「模型价格」页修改
@@ -326,7 +349,7 @@ export default function ModelManagePage() {
               </div>
 
               <div className="modal-actions">
-                <button className="btn btn-outline" onClick={() => setEditModel(null)}>取消</button>
+                <button className="btn btn-outline" onClick={closeEdit}>取消</button>
                 <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
                   <Save size={14}/>{saving ? '保存中...' : '保存倍率'}
                 </button>

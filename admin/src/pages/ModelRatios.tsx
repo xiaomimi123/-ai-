@@ -18,6 +18,11 @@ function isLikelyImageModel(modelName: string): boolean {
 export default function ModelRatiosPage() {
   const [modelRatio, setModelRatio] = useState<Record<string, number>>({})
   const [completionRatio, setCompletionRatio] = useState<Record<string, number>>({})
+  // draft = 输入框正在编辑的文本（string），允许 "0." / "" 这种中间态；
+  // 没在 draft 里的字段就 fallback 到 modelRatio/completionRatio 的数字
+  // 老版本 onChange 直接 parseFloat 写回 number，导致 "0." 立即被清成 0，无法输入小数
+  const [inputDraft, setInputDraft] = useState<Record<string, string>>({})
+  const [completionDraft, setCompletionDraft] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
@@ -47,13 +52,25 @@ export default function ModelRatiosPage() {
   }
 
   const handleUpdateRatio = (model: string, value: string) => {
+    // 先记下原文本（允许 "0." / "" 等中间态）
+    setInputDraft(prev => ({ ...prev, [model]: value }))
+    // 同步合法的 number 进 modelRatio，保存逻辑无需改变
     const num = parseFloat(value)
+    if (value === '') {
+      setModelRatio(prev => { const n = { ...prev }; delete n[model]; return n })
+      return
+    }
     if (isNaN(num)) return
     setModelRatio(prev => ({ ...prev, [model]: num }))
   }
 
   const handleUpdateCompletion = (model: string, value: string) => {
+    setCompletionDraft(prev => ({ ...prev, [model]: value }))
     const num = parseFloat(value)
+    if (value === '') {
+      setCompletionRatio(prev => { const n = { ...prev }; delete n[model]; return n })
+      return
+    }
     if (isNaN(num)) return
     setCompletionRatio(prev => ({ ...prev, [model]: num }))
   }
@@ -69,6 +86,9 @@ export default function ModelRatiosPage() {
       delete next[model]
       return next
     })
+    // 同步清掉 draft，避免删完之后输入框还残留旧文本
+    setInputDraft(prev => { const n = { ...prev }; delete n[model]; return n })
+    setCompletionDraft(prev => { const n = { ...prev }; delete n[model]; return n })
   }
 
   const handleAdd = () => {
@@ -160,7 +180,8 @@ export default function ModelRatiosPage() {
                         <input
                           type="number"
                           step="0.001"
-                          value={modelRatio[model] ?? ''}
+                          // 优先 draft（用户输入中的原文本），否则用已保存的数字
+                          value={inputDraft[model] ?? (modelRatio[model] ?? '')}
                           onChange={e => handleUpdateRatio(model, e.target.value)}
                           style={{ width: 120, padding: '6px 10px', fontSize: 13, fontFamily: 'monospace' }}
                         />
@@ -168,7 +189,7 @@ export default function ModelRatiosPage() {
                         <input
                           type="number"
                           step="0.01"
-                          value={completionRatio[model] ?? ''}
+                          value={completionDraft[model] ?? (completionRatio[model] ?? '')}
                           onChange={e => handleUpdateCompletion(model, e.target.value)}
                           placeholder="默认1"
                           style={{ width: 120, padding: '6px 10px', fontSize: 13, fontFamily: 'monospace' }}

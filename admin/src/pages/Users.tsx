@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Edit2, UserX, UserCheck, Trash2, Plus } from 'lucide-react'
+import { Search, Edit2, UserX, UserCheck, Trash2, Plus, X } from 'lucide-react'
 import { userApi, groupApi } from '../api'
 import toast from 'react-hot-toast'
 import Pagination from '../components/Pagination'
@@ -35,6 +35,9 @@ export default function UsersPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1) // 1-indexed
   const [search, setSearch] = useState('')
+  // searchKeyword 是真正提交给后端的关键字（按下回车/搜索按钮才更新）；
+  // search 是输入框 controlled value。分开两个 state 防止打字过程中疯狂请求
+  const [searchKeyword, setSearchKeyword] = useState('')
   const [groups, setGroups] = useState<GroupConfig[]>([])
   const [editUser, setEditUser] = useState<any>(null)
   const [editForm, setEditForm] = useState({
@@ -48,14 +51,29 @@ export default function UsersPage() {
   })
   const PAGE_SIZE = 15
 
-  const load = async (p = page) => {
+  const load = async (p = page, kw = searchKeyword) => {
     try {
       // 前端 1-indexed，后端 p 0-indexed
-      const r = await userApi.list({ p: p - 1, page_size: PAGE_SIZE })
+      const params: any = { p: p - 1, page_size: PAGE_SIZE }
+      if (kw) params.keyword = kw
+      const r = await userApi.list(params)
       if (r.data.success) { setUsers(r.data.data || []); setTotal(r.data.total || r.data.data?.length || 0) }
     } catch {}
   }
-  useEffect(() => { load() }, [page])
+  useEffect(() => { load() }, [page, searchKeyword])
+
+  // 提交搜索：回到第一页，触发后端过滤
+  const submitSearch = () => {
+    const kw = search.trim()
+    setSearchKeyword(kw)
+    if (page !== 1) setPage(1)
+    // 如果 page 已经是 1，setPage(1) 不会触发 useEffect；用 searchKeyword 变更兜底
+  }
+  const clearSearch = () => {
+    setSearch('')
+    setSearchKeyword('')
+    if (page !== 1) setPage(1)
+  }
 
   // 加载分组列表（动态，不再硬编码）
   useEffect(() => {
@@ -191,7 +209,8 @@ export default function UsersPage() {
     } catch { toast.error('网络错误') }
   }
 
-  const filtered = search ? users.filter(u => u.username?.toLowerCase().includes(search.toLowerCase()) || u.email?.includes(search)) : users
+  // 后端已按 keyword 过滤；前端不再做二次 filter，否则翻页时拿到的就是当前 page 的子集，毫无意义
+  const filtered = users
 
   const getRoleLabel = (role: number) => {
     if (role >= 100) return { label: '超管', cls: 'badge-purple' }
@@ -207,10 +226,26 @@ export default function UsersPage() {
           <p className="page-desc">共 {total} 名注册用户</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ position: 'relative', width: 220 }}>
+          <div style={{ position: 'relative', width: 260 }}>
             <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-            <input placeholder="搜索用户名/邮箱..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 34 }}/>
+            <input
+              placeholder="搜索用户名/邮箱/ID，回车确认..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') submitSearch() }}
+              style={{ paddingLeft: 34, paddingRight: search ? 34 : 14 }}
+            />
+            {search && (
+              <button
+                onClick={clearSearch}
+                title="清除搜索"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4, lineHeight: 0 }}
+              >
+                <X size={14} />
+              </button>
+            )}
           </div>
+          <button className="btn btn-outline" onClick={submitSearch}>搜索</button>
           <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>添加用户</button>
         </div>
       </div>

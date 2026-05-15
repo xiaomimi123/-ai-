@@ -64,8 +64,24 @@ func GetMaxUserId() int {
 }
 
 func GetAllUsers(startIdx int, num int, order string) (users []*User, err error) {
+	return GetAllUsersWithKeyword(startIdx, num, order, "")
+}
+
+// GetAllUsersWithKeyword 支持后端关键字搜索（用户名/显示名/邮箱/ID）
+// keyword 为空时等价于 GetAllUsers，正常按分页 + 排序返回
+// keyword 非空时按 LIKE 模糊匹配 + ID 精确匹配，仍然分页
+func GetAllUsersWithKeyword(startIdx int, num int, order, keyword string) (users []*User, err error) {
 	// 同时 Omit access_token：它是 32 位管理 API Key，列表返回会被抓包/日志泄露 → 提权风险
 	query := DB.Limit(num).Offset(startIdx).Omit("password", "access_token").Where("status != ?", UserStatusDeleted)
+
+	if keyword != "" {
+		// 与 SearchUsers 保持一致的匹配策略：username/email/display_name 前缀匹配 + ID 精确
+		if !common.UsingPostgreSQL {
+			query = query.Where("id = ? or username LIKE ? or email LIKE ? or display_name LIKE ?", keyword, keyword+"%", keyword+"%", keyword+"%")
+		} else {
+			query = query.Where("username LIKE ? or email LIKE ? or display_name LIKE ?", keyword+"%", keyword+"%", keyword+"%")
+		}
+	}
 
 	switch order {
 	case "quota":
@@ -80,6 +96,21 @@ func GetAllUsers(startIdx int, num int, order string) (users []*User, err error)
 
 	err = query.Find(&users).Error
 	return users, err
+}
+
+// CountUsersWithKeyword 配合 GetAllUsersWithKeyword 返回过滤后总数，用于前端分页
+func CountUsersWithKeyword(keyword string) (int64, error) {
+	q := DB.Model(&User{}).Where("status != ?", UserStatusDeleted)
+	if keyword != "" {
+		if !common.UsingPostgreSQL {
+			q = q.Where("id = ? or username LIKE ? or email LIKE ? or display_name LIKE ?", keyword, keyword+"%", keyword+"%", keyword+"%")
+		} else {
+			q = q.Where("username LIKE ? or email LIKE ? or display_name LIKE ?", keyword+"%", keyword+"%", keyword+"%")
+		}
+	}
+	var total int64
+	err := q.Count(&total).Error
+	return total, err
 }
 
 func SearchUsers(keyword string) (users []*User, err error) {

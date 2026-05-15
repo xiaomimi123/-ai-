@@ -384,8 +384,9 @@ export default function ModelPricesPage() {
                 </label>
                 <input
                   type="number" step="0.0001" min="0"
-                  value={dialog.data.input_price}
-                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, input_price: parseFloat(e.target.value) || 0 } })}
+                  // 存原字符串，保存时 handleSubmit 用 Number() 转。直接 parseFloat||0 会让 "0." 立即被改写成 0
+                  value={(dialog.data as any).input_price ?? ''}
+                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, input_price: (e.target.value as unknown) as number } })}
                 />
               </div>
               {!isImageModel(dialog.data.tags) && (
@@ -393,8 +394,9 @@ export default function ModelPricesPage() {
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输出 $/百万 Token</label>
                   <input
                     type="number" step="0.0001" min="0"
-                    value={dialog.data.output_price}
-                    onChange={e => setDialog({ ...dialog, data: { ...dialog.data, output_price: parseFloat(e.target.value) || 0 } })}
+                    // 与 input_price 同理：保留原字符串，handleSubmit 用 Number() 统一转
+                    value={(dialog.data as any).output_price ?? ''}
+                    onChange={e => setDialog({ ...dialog, data: { ...dialog.data, output_price: (e.target.value as unknown) as number } })}
                   />
                 </div>
               )}
@@ -421,8 +423,8 @@ export default function ModelPricesPage() {
                 <input
                   type="number" min="0"
                   placeholder="数字越小越靠前"
-                  value={dialog.data.sort_order}
-                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, sort_order: parseInt(e.target.value) || 0 } })}
+                  value={(dialog.data as any).sort_order ?? ''}
+                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, sort_order: (e.target.value as unknown) as number } })}
                 />
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, justifyContent: 'flex-end', paddingBottom: 4 }}>

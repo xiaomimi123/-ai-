@@ -204,7 +204,9 @@ func GetAllUsers(c *gin.Context) {
 	}
 
 	order := c.DefaultQuery("order", "")
-	users, err := model.GetAllUsers(p*pageSize, pageSize, order)
+	// 支持后端关键字搜索：keyword 非空时翻页要走过滤后的总数，否则用户搜索后翻页会失效
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	users, err := model.GetAllUsersWithKeyword(p*pageSize, pageSize, order, keyword)
 
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{
@@ -214,9 +216,8 @@ func GetAllUsers(c *gin.Context) {
 		return
 	}
 
-	// 总数：不含已删除（软删除 deleted_at IS NULL）
-	var total int64
-	model.DB.Model(&model.User{}).Count(&total)
+	// 总数：和列表查询用同一个过滤条件（含 keyword），保证前端 Pagination 显示正确
+	total, _ := model.CountUsersWithKeyword(keyword)
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,

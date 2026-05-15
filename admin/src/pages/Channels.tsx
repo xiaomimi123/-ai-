@@ -219,14 +219,25 @@ export default function ChannelsPage() {
         // 编辑时 key 留空 = 不修改（GORM Updates 不写入零值）
         if (modal.key.trim()) payload.key = modal.key.trim()
         const r = await channelApi.update(modal.id, payload)
-        if (r.data.success) { toast.success('已保存'); setModal(null); load() }
-        else toast.error(r.data.message || '保存失败')
+        if (r.data.success) {
+          // 顺序很重要：先关 modal 再 load()。原顺序 setModal(null) + load() 是同步触发的
+          // 两次 setState，React 18 在并发渲染里可能把 setChannels 引起的重渲染
+          // 跟仍处于 open 状态的 modal 状态合批，期间 onClick handler 重新绑定会
+          // 莫名触发 overlay 的关闭路径（用户报"自动退出"现象）。
+          // 现在改成 await load()，让数据回来之后再 finally 解锁 modalLoading
+          toast.success('已保存')
+          setModal(null)
+          await load()
+        } else toast.error(r.data.message || '保存失败')
       } else {
         // 新建：key 可多行，后端按 \n 分隔批量创建
         payload.key = modal.key.trim()
         const r = await channelApi.create(payload)
-        if (r.data.success) { toast.success('已创建'); setModal(null); load() }
-        else toast.error(r.data.message || '创建失败')
+        if (r.data.success) {
+          toast.success('已创建')
+          setModal(null)
+          await load()
+        } else toast.error(r.data.message || '创建失败')
       }
     } catch { toast.error('网络错误') } finally { setModalLoading(false) }
   }
