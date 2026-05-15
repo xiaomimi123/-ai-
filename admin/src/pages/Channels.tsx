@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, PlayCircle, CheckCircle, XCircle, ToggleLeft, ToggleRight,
-  Loader2, RefreshCw, DollarSign, Search, Edit2, Copy,
+  Loader2, RefreshCw, DollarSign, Edit2, Copy,
   AlertTriangle, Settings, Image as ImageIcon, Network,
 } from 'lucide-react'
 import { channelApi } from '../api'
@@ -9,6 +9,7 @@ import toast from 'react-hot-toast'
 import Pagination from '../components/Pagination'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
+import { SearchInput } from '../components/SearchInput'
 
 // 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
 // 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
@@ -374,20 +375,12 @@ export default function ChannelsPage() {
 
       {/* 搜索 + 清理按钮 */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 420 }}>
-          <Search size={14} color="var(--muted)" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            value={keyword}
-            onChange={e => setKeyword(e.target.value)}
-            placeholder="按 ID 或名称搜索..."
-            style={{ paddingLeft: 34, paddingRight: keyword ? 34 : 14 }}
-          />
-          {keyword && (
-            <button onClick={() => setKeyword('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4 }}>
-              <XCircle size={14} />
-            </button>
-          )}
-        </div>
+        <SearchInput
+          value={keyword}
+          onChange={setKeyword}
+          placeholder="按 ID 或名称搜索..."
+          width={320}
+        />
         {(stats.manualOff + stats.autoOff) > 0 && (
           <button className="btn btn-ghost" onClick={handleDeleteDisabled} style={{ color: 'var(--danger)', fontSize: 13 }}>
             <Trash2 size={13} />清理禁用渠道 ({stats.manualOff + stats.autoOff})
