@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Search, Save, Eye, EyeOff, Radio, Sliders, Trash2, ExternalLink } from 'lucide-react'
+import { Save, Eye, EyeOff, Radio, Sliders, Trash2, ExternalLink, CheckCircle, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
+import { SearchInput } from '../components/SearchInput'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -50,6 +55,7 @@ export default function ModelManagePage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const [removeTarget, setRemoveTarget] = useState<ModelInfo | null>(null)
 
   const load = () => {
     setLoading(true)
@@ -105,17 +111,21 @@ export default function ModelManagePage() {
     } catch { toast.error('保存失败') } finally { setSaving(false) }
   }
 
-  const handleRemove = async (m: ModelInfo) => {
-    if (!confirm(`确认从列表移除「${m.model_name}」？\n将清除其定价配置和残留的 ability 记录。\n此操作仅对渠道数=0 的「僵尸模型」有效，不影响正在使用的渠道。`)) return
+  const handleRemove = (m: ModelInfo) => {
+    setRemoveTarget(m)
+  }
+
+  const doRemove = async () => {
+    if (!removeTarget) return
     try {
-      const r = await http.delete(`/api/admin/lingjing/models?model_name=${encodeURIComponent(m.model_name)}`)
+      const r = await http.delete(`/api/admin/lingjing/models?model_name=${encodeURIComponent(removeTarget.model_name)}`)
       if (r.data.success) {
         toast.success(r.data.message || '已移除')
         load()
       } else {
         toast.error(r.data.message || '移除失败')
       }
-    } catch { toast.error('移除失败') }
+    } catch { toast.error('移除失败') } finally { setRemoveTarget(null) }
   }
 
   const gotoPriceEditor = (modelName: string) => {
@@ -126,47 +136,43 @@ export default function ModelManagePage() {
     ? models.filter(m => m.model_name.toLowerCase().includes(search.toLowerCase()) || m.provider?.toLowerCase().includes(search.toLowerCase()))
     : models
 
-  const activeModels = models.filter(m => m.channel_count > 0)
-  const visibleModels = models.filter(m => m.is_visible === 1)
-  const providers = Array.from(new Set(models.map(m => m.provider).filter(Boolean)))
+  const activeModels = useMemo(() => models.filter(m => m.channel_count > 0), [models])
+  const visibleModels = useMemo(() => models.filter(m => m.is_visible === 1), [models])
+  const topProviders = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const m of models) {
+      if (!m.provider) continue
+      counts.set(m.provider, (counts.get(m.provider) || 0) + 1)
+    }
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+  }, [models])
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sliders size={22} color="var(--primary)" />模型管理
-          </h1>
-          <p className="page-desc">专注计费倍率和渠道关联 · 展示相关（图标/描述/标签）请去「模型价格」页</p>
-        </div>
-      </div>
+      <PageHeader
+        title="模型管理"
+        description="专注计费倍率和渠道关联 · 展示相关（图标/描述/标签）请去「模型价格」页"
+        icon={Sliders}
+      />
 
       {/* Stats */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        <div className="stat-card" style={{ padding: '14px 20px', minWidth: 100 }}>
-          <div className="stat-label">全部模型</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--primary)' }}>{models.length}</div>
-        </div>
-        <div className="stat-card" style={{ padding: '14px 20px', minWidth: 100 }}>
-          <div className="stat-label">有渠道</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--success)' }}>{activeModels.length}</div>
-        </div>
-        <div className="stat-card" style={{ padding: '14px 20px', minWidth: 100 }}>
-          <div className="stat-label">前台可见</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{visibleModels.length}</div>
-        </div>
-        {providers.slice(0, 5).map(p => (
-          <div key={p} className="stat-card" style={{ padding: '14px 20px', minWidth: 100 }}>
-            <div className="stat-label">{p}</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{models.filter(m => m.provider === p).length}</div>
-          </div>
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatCard label="全部模型" value={models.length}        icon={Sliders}      color="info"    />
+        <StatCard label="有渠道"   value={activeModels.length}  icon={CheckCircle}  color="success" />
+        <StatCard label="前台可见" value={visibleModels.length} icon={Eye}          color="warning" />
+        {topProviders.map(([provider, count]) => (
+          <StatCard key={provider} label={provider} value={count} icon={Globe} color="accent" />
         ))}
       </div>
 
       {/* Search */}
-      <div style={{ position: 'relative', maxWidth: 360, marginBottom: 16 }}>
-        <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-        <input placeholder="搜索模型名称或供应商..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 34 }} />
+      <div style={{ marginBottom: 16 }}>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="搜索模型名称或供应商..."
+          width={360}
+        />
       </div>
 
       {/* Info */}
@@ -191,12 +197,16 @@ export default function ModelManagePage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={8} className="empty-state">
-                {loading ? '加载中...' : search ? '未找到匹配模型' : '暂无模型，请先在渠道管理中添加渠道'}
+              <tr><td colSpan={8} style={{ padding: 0 }}>
+                <EmptyCard
+                  icon={Sliders}
+                  title={loading ? '加载中...' : search ? '未找到匹配模型' : '暂无模型'}
+                  description={search ? '试试别的关键字' : (!loading ? '请先在渠道管理中添加渠道' : '')}
+                />
               </td></tr>
             ) : filtered.map(m => {
               return (
-                <tr key={m.model_name} ref={el => { rowRefs.current[m.model_name] = el }} style={{ background: m.channel_count === 0 ? '#fefce8' : undefined }}>
+                <tr key={m.model_name} ref={el => { rowRefs.current[m.model_name] = el }} style={{ background: m.channel_count === 0 ? 'var(--warning-bg)' : undefined }}>
                   <td>
                     <strong style={{ fontSize: 13 }}>{m.model_name}</strong>
                     {m.description && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{m.description}</div>}
@@ -259,6 +269,23 @@ export default function ModelManagePage() {
           </tbody>
         </table>
       </div>
+
+      <ConfirmDialog
+        open={!!removeTarget}
+        title="确认移除僵尸模型"
+        description={
+          <>
+            将清除「<strong>{removeTarget?.model_name}</strong>」的定价配置和残留 ability 记录。
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              此操作仅对渠道数=0 的「僵尸模型」有效，不影响正在使用的渠道。
+            </div>
+          </>
+        }
+        confirmLabel="移除"
+        confirmVariant="danger"
+        onConfirm={doRemove}
+        onCancel={() => setRemoveTarget(null)}
+      />
 
       {/* Edit Modal — 只改倍率 */}
       {editModel && (() => {
