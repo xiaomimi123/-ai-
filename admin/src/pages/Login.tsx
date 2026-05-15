@@ -22,7 +22,7 @@ export default function LoginPage() {
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: '100%', maxWidth: 380, padding: '0 20px' }}>
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(99,102,241,.3)' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, margin: '0 auto 16px', background: 'linear-gradient(135deg, #16a34a, #2ECC71)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 40px rgba(46,204,113,.3)' }}>
             <Shield size={26} color="white"/>
           </div>
           <h1 style={{ fontSize: 22, fontWeight: 700, color: '#fff', marginBottom: 6 }}>管理员登录</h1>
