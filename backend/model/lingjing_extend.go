@@ -123,6 +123,21 @@ type ModelPrice struct {
 	UpdatedAt     int64   `json:"updated_at" gorm:"autoUpdateTime"`
 }
 
+// CostLedger 上游成本记账
+// admin 手动录入"我给上游打了多少钱"、"上游退给我多少钱"。
+// 不参与任何用户调用扣费链路，仅财务统计读。
+// 1 USD = 1 USD（不做币种转换；用户充值在平台是 1:1 USD 定价）
+type CostLedger struct {
+	Id        int     `json:"id" gorm:"primaryKey;autoIncrement"`
+	OccurDate string  `json:"occur_date" gorm:"type:date;index;not null"`   // YYYY-MM-DD
+	Upstream  string  `json:"upstream" gorm:"size:64;index;not null"`       // 自由文本：OpenAI / Anthropic / ApiMart...
+	Type      string  `json:"type" gorm:"size:16;not null;default:expense"` // expense / refund
+	AmountUSD float64 `json:"amount_usd" gorm:"type:decimal(10,2);not null"`
+	Remark    string  `json:"remark" gorm:"size:255"`
+	CreatedAt int64   `json:"created_at" gorm:"autoCreateTime"`
+	CreatedBy int     `json:"created_by" gorm:"not null"` // admin user id
+}
+
 // InitLingjingTables 初始化灵镜AI扩展表
 func InitLingjingTables() error {
 	err := DB.AutoMigrate(
@@ -133,6 +148,7 @@ func InitLingjingTables() error {
 		&ModelPrice{},
 		&WithdrawRequest{},
 		&UserNotification{},
+		&CostLedger{},
 	)
 	if err != nil {
 		return err
