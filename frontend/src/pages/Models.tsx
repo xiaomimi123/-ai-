@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Cpu, Search } from 'lucide-react'
 import { modelPriceApi } from '../api'
 import ModelIcon from '../components/ModelIcon'
+import { isImageModel } from '../utils/modelPricing'
 
 interface ModelItem {
   id: number
@@ -59,7 +60,7 @@ export default function ModelsPage() {
           <Cpu size={22} color="var(--accent)" />
           模型广场
         </h1>
-        <p className="page-desc">浏览所有可用模型及定价（价格单位：$/百万 Token）</p>
+        <p className="page-desc">浏览所有可用模型及定价（聊天模型按 $/百万 Token，图像模型按 $/张）</p>
       </div>
 
       {/* 搜索 + 筛选 */}
@@ -155,25 +156,37 @@ export default function ModelsPage() {
                 {m.description || '—'}
               </p>
 
-              {/* 价格区 */}
+              {/* 价格区 —— 图像模型按"每张"展示；聊天模型按输入/输出 $/M tokens 展示 */}
               <div style={{
                 borderTop: '0.5px solid var(--border)', paddingTop: 12, marginBottom: 12,
                 display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
               }}>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输入</div>
-                  <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: 14 }}>
-                    ${(m.input_price ?? 0).toFixed(2)}
-                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
+                {isImageModel(m.tags) ? (
+                  <div style={{ gridColumn: '1/-1' }}>
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>每张图</div>
+                    <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: 14 }}>
+                      ${(m.input_price ?? 0).toFixed(4)}
+                      <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/张</span>
+                    </div>
                   </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输出</div>
-                  <div style={{ fontWeight: 600, color: 'var(--primary)', fontSize: 14 }}>
-                    ${(m.output_price ?? 0).toFixed(2)}
-                    <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
-                  </div>
-                </div>
+                ) : (
+                  <>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输入</div>
+                      <div style={{ fontWeight: 600, color: 'var(--accent)', fontSize: 14 }}>
+                        ${(m.input_price ?? 0).toFixed(2)}
+                        <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>输出</div>
+                      <div style={{ fontWeight: 600, color: 'var(--primary)', fontSize: 14 }}>
+                        ${(m.output_price ?? 0).toFixed(2)}
+                        <span style={{ fontWeight: 400, fontSize: 11, color: 'var(--muted)', marginLeft: 2 }}>/M</span>
+                      </div>
+                    </div>
+                  </>
+                )}
                 {m.context_window && (
                   <div style={{ gridColumn: '1/-1' }}>
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>上下文窗口</div>

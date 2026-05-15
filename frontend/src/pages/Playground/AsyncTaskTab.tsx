@@ -215,8 +215,16 @@ export default function AsyncTaskTab() {
           </div>
         </div>
 
+        {/* TODO: 从 model_prices 表动态读取价格（当前按 model id 硬编码）。
+            历史背景：模型广场用 input_price 字段，图像模型语义为"$/张"，待 AsyncTaskTab 接入后端价格表后改为统一来源。 */}
         <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12 }}>
-          预估扣费: $0.006/张 · 异步生成约 30-60 秒，请耐心等待
+          预估扣费: {
+            currentModel.id === 'gpt-image-2'
+              ? '$0.0060/张'
+              : currentModel.id === 'gemini-2.5-flash-image' || currentModel.id === 'nano-banana'
+                ? '$0.0078/张'
+                : '约 $0.006-0.008/张'
+          } · 异步生成约 {currentModel.eta}，请耐心等待
         </div>
 
         <button

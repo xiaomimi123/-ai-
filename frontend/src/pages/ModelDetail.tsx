@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { ArrowLeft, Copy, Check } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 import { apiUrl } from '../api'
+import { isImageModel } from '../utils/modelPricing'
 
 interface ModelPrice {
   id: number
@@ -14,6 +15,7 @@ interface ModelPrice {
   output_price: number
   logo?: string
   context_window?: string
+  tags?: string  // 逗号分隔，用于检测是否图像模型（"画图"）
 }
 
 function CodeBlock({ code, lang }: { code: string; lang: string }) {
@@ -84,18 +86,29 @@ export default function ModelDetailPage() {
         {model.description && <p style={{ color: 'var(--muted)', fontSize: 14, lineHeight: 1.8 }}>{model.description}</p>}
       </div>
 
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
-        <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输入价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${(model.input_price ?? 0).toFixed(2)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+      {isImageModel(model.tags) ? (
+        // 图像模型：按"每张图"展示，铺满一行
+        <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, marginBottom: 20 }}>
+          <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>单张价格</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${(model.input_price ?? 0).toFixed(4)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 张</div>
+          </div>
         </div>
-        <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--primary)' }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输出价格</div>
-          <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>${(model.output_price ?? 0).toFixed(2)}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+      ) : (
+        <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 20 }}>
+          <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--accent)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输入价格</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent)' }}>${(model.input_price ?? 0).toFixed(2)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+          </div>
+          <div className="card" style={{ textAlign: 'center', borderLeft: '3px solid var(--primary)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>输出价格</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary)' }}>${(model.output_price ?? 0).toFixed(2)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>/ 百万 Token</div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="card">
         <h3 style={{ fontWeight: 600, marginBottom: 16 }}>API 调用示例</h3>
