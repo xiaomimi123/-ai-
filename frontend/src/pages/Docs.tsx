@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import {
   Copy, Check, ChevronDown, ChevronRight, Zap, Code, BookOpen, Monitor, Smartphone, Globe,
-  Shield, Activity, Layers, Clock,
+  Shield, Activity, Layers, Clock, Image as ImageIcon,
 } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 
@@ -87,6 +87,117 @@ const models: ModelRow[] = [
 
 export default function DocsPage() {
   const [activeTab, setActiveTab] = useState('python')
+  const [imgTab, setImgTab] = useState('python')
+
+  const imageExamples: Record<string, string> = {
+    curl: `# 1. 提交任务
+TASK=$(curl -s -X POST ${BASE_URL}/images/generations \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
+    "size": "16:9",
+    "resolution": "1k",
+    "n": 1
+  }')
+TASK_ID=$(echo "$TASK" | grep -oE '"task_id":"[^"]+"' | head -1 | cut -d'"' -f4)
+echo "task_id: $TASK_ID"
+
+# 2. 轮询直到完成
+while true; do
+  RES=$(curl -s ${BASE_URL}/tasks/$TASK_ID \\
+    -H "Authorization: Bearer sk-你的令牌")
+  STATUS=$(echo "$RES" | grep -oE '"status":"[^"]+"' | head -1 | cut -d'"' -f4)
+  echo "status: $STATUS"
+  if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then
+    echo "$RES"
+    break
+  fi
+  sleep 3
+done`,
+
+    python: `import time
+import requests
+
+API_KEY = "sk-你的令牌"
+BASE = "${BASE_URL}"
+
+# 1. 提交任务
+resp = requests.post(
+    f"{BASE}/images/generations",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json={
+        "model": "gpt-image-2",
+        "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
+        "size": "16:9",
+        "resolution": "1k",
+        "n": 1,
+    },
+)
+task_id = resp.json()["data"][0]["task_id"]
+print("task_id:", task_id)
+
+# 2. 轮询直到完成
+while True:
+    res = requests.get(
+        f"{BASE}/tasks/{task_id}",
+        headers={"Authorization": f"Bearer {API_KEY}"},
+    ).json()
+    print("status:", res["status"], "progress:", res.get("progress"))
+    if res["status"] in ("completed", "failed", "canceled"):
+        break
+    time.sleep(3)
+
+# 3. 取图
+if res["status"] == "completed":
+    image_url = res["result"]["raw"]["data"]["result"]["images"][0]["url"][0]
+    print("Image URL:", image_url)
+else:
+    print("Task ended:", res.get("error"))`,
+
+    nodejs: `const API_KEY = "sk-你的令牌";
+const BASE = "${BASE_URL}";
+
+async function generate(prompt: string) {
+  // 1. 提交任务
+  const submit = await fetch(\`\${BASE}/images/generations\`, {
+    method: "POST",
+    headers: {
+      "Authorization": \`Bearer \${API_KEY}\`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "gpt-image-2",
+      prompt,
+      size: "16:9",
+      resolution: "1k",
+      n: 1,
+    }),
+  });
+  const { data } = await submit.json();
+  const taskId = data[0].task_id;
+  console.log("task_id:", taskId);
+
+  // 2. 轮询直到完成
+  while (true) {
+    const r = await fetch(\`\${BASE}/tasks/\${taskId}\`, {
+      headers: { "Authorization": \`Bearer \${API_KEY}\` },
+    });
+    const res = await r.json();
+    console.log("status:", res.status, "progress:", res.progress);
+    if (res.status === "completed") {
+      return res.result.raw.data.result.images[0].url[0];
+    }
+    if (res.status === "failed" || res.status === "canceled") {
+      throw new Error(res.error?.message || \`task \${res.status}\`);
+    }
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+generate("一只橘猫坐在窗台上看夕阳，水彩画风格").then(console.log);`,
+  }
 
   const codeExamples: Record<string, string> = {
     python: `from openai import OpenAI
@@ -305,6 +416,212 @@ for chunk in stream:
         </div>
       </Section>
 
+      {/* 异步图像生成 */}
+      <Section title="异步图像生成 API（gpt-image-2 / gemini-2.5-flash-image / nano-banana）" icon={ImageIcon}>
+        {/* 概述 */}
+        <div style={{
+          background: 'var(--accent-light)', borderLeft: '3px solid var(--accent)',
+          borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--primary)',
+          marginBottom: 20, lineHeight: 1.7,
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>为什么是异步？</div>
+          灵镜支持的图像生成模型（<code>gpt-image-2</code> / <code>gemini-2.5-flash-image</code> / <code>nano-banana</code> 等）单张耗时 <b>20–60 秒</b>，因此采用异步任务设计：提交后立即返回 <code>task_id</code>，轮询 <code>/v1/tasks/&#123;task_id&#125;</code> 拿结果。失败 / 取消会自动退还预扣额度。
+        </div>
+
+        {/* 1.2 提交任务 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, marginTop: 4, fontSize: 15, color: 'var(--text)' }}>1. 提交任务</h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
+          <span className="badge badge-green">POST</span>
+          <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/images/generations</code>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>请求体：</div>
+        <CodeBlock language="json" code={`{
+  "model": "gpt-image-2",
+  "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
+  "n": 1,
+  "size": "16:9",
+  "resolution": "1k"
+}`} />
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>响应（HTTP 200）：</div>
+        <CodeBlock language="json" code={`{
+  "created": 1747156804,
+  "data": [
+    {
+      "task_id": "task_859be413-68c1-41c8-9488-660e70fd9204",
+      "status": "submitted"
+    }
+  ]
+}`} />
+
+        <div className="table-wrap" style={{ marginBottom: 24 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>字段</th>
+                <th>类型</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>model</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>模型 ID，见下方支持列表</td></tr>
+              <tr><td><code>prompt</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>提示词（最多 1000 字符）</td></tr>
+              <tr><td><code>n</code></td><td style={{ color: 'var(--muted)' }}>int</td><td>生成数量，默认 <code>1</code></td></tr>
+              <tr><td><code>size</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>比例，推荐 <code>16:9</code> / <code>1:1</code> / <code>9:16</code> / <code>4:3</code> / <code>3:4</code></td></tr>
+              <tr><td><code>resolution</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>分辨率档位 <code>1k</code> / <code>2k</code> / <code>4k</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 1.3 查询任务状态 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>2. 查询任务状态</h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
+          <span className="badge badge-green">GET</span>
+          <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/&#123;task_id&#125;</code>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>处理中响应：</div>
+        <CodeBlock language="json" code={`{
+  "id": "task_859be413-...",
+  "status": "in_progress",
+  "progress": 50,
+  "created_at": 1747156804
+}`} />
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>完成响应：</div>
+        <CodeBlock language="json" code={`{
+  "id": "task_859be413-...",
+  "status": "completed",
+  "progress": 100,
+  "created_at": 1747156804,
+  "completed_at": 1747156852,
+  "result": {
+    "raw": {
+      "data": {
+        "result": {
+          "images": [
+            {
+              "url": ["https://upload.apimart.ai/.../image.png"],
+              "expires_at": 1747243204
+            }
+          ]
+        }
+      }
+    }
+  },
+  "usage": {
+    "cost_quota": 1024,
+    "cost_usd": 0.002048
+  }
+}`} />
+
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}><code>status</code> 取值：</div>
+        <div className="table-wrap" style={{ marginBottom: 16 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>状态</th>
+                <th>说明</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><code>submitted</code></td><td>已提交，等待上游处理</td></tr>
+              <tr><td><code>queued</code></td><td>上游排队中</td></tr>
+              <tr><td><code>in_progress</code></td><td>上游处理中</td></tr>
+              <tr><td><code>completed</code></td><td>完成（含结果图）</td></tr>
+              <tr><td><code>failed</code></td><td>失败（自动退款）</td></tr>
+              <tr><td><code>canceled</code></td><td>用户主动取消（自动退款）</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{
+          background: '#fef3c7', borderLeft: '3px solid #f59e0b',
+          borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#7c2d12',
+          marginBottom: 24,
+        }}>
+          ⚠️ 图片 URL <b>24 小时内有效</b>，请尽快下载或转存到自家 CDN，过期后将无法访问。
+        </div>
+
+        {/* 1.4 批量查询 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>3. 批量查询</h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
+          <span className="badge badge-green">POST</span>
+          <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/batch</code>
+        </div>
+        <CodeBlock language="json" code={`{
+  "task_ids": ["task_xxx", "task_yyy"]
+}`} />
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.7 }}>
+          适用场景：playground 同时跑多个任务时合并查询请求，节省 RTT。
+        </div>
+
+        {/* 1.5 取消任务 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>4. 取消任务</h4>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
+          <span className="badge badge-green">POST</span>
+          <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/&#123;task_id&#125;/cancel</code>
+        </div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 24, lineHeight: 1.7 }}>
+          只在 <code>submitted</code> / <code>queued</code> / <code>in_progress</code> 状态下可取消。取消后状态转 <code>canceled</code>，预扣额度全额退还。
+        </div>
+
+        {/* 1.6 支持模型 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>5. 当前支持的图像模型</h4>
+        <div className="table-wrap" style={{ marginBottom: 24 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Model ID</th>
+                <th>提供方</th>
+                <th>单张耗时</th>
+                <th>单张价格</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>gpt-image-2</code></td>
+                <td style={{ color: 'var(--muted)' }}>apimart</td>
+                <td style={{ color: 'var(--muted)' }}>30–60 秒</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.006</td>
+              </tr>
+              <tr>
+                <td><code>gemini-2.5-flash-image</code></td>
+                <td style={{ color: 'var(--muted)' }}>apimart</td>
+                <td style={{ color: 'var(--muted)' }}>20–40 秒</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.0078</td>
+              </tr>
+              <tr>
+                <td><code>nano-banana</code></td>
+                <td style={{ color: 'var(--muted)' }}>apimart (alias)</td>
+                <td style={{ color: 'var(--muted)' }}>20–40 秒</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.0078</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* 1.7 完整代码示例 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>6. 完整代码示例（提交 → 轮询 → 取图）</h4>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {[
+            { key: 'python', label: 'Python' },
+            { key: 'nodejs', label: 'Node.js' },
+            { key: 'curl', label: 'cURL' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setImgTab(tab.key)}
+              className={`btn btn-sm ${imgTab === tab.key ? 'btn-accent' : 'btn-outline'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        <CodeBlock code={imageExamples[imgTab]} language={imgTab === 'curl' ? 'bash' : imgTab === 'nodejs' ? 'typescript' : 'python'} />
+
+        <Tip>
+          推荐轮询间隔 3 秒；首次查询可在 5 秒后进行，避免无谓的 in_progress 命中。批量任务建议改用 <code>/v1/tasks/batch</code>。
+        </Tip>
+      </Section>
+
       {/* 客户端接入 */}
       <Section title="客户端工具接入" icon={Monitor}>
         <p style={{ color: 'var(--muted)', fontSize: 14, marginBottom: 20 }}>不会写代码？使用以下客户端工具，填入配置即可直接使用 AI。</p>
@@ -450,6 +767,8 @@ for chunk in stream:
             { q: '支持流式输出（Streaming）吗？', a: '支持。在请求参数中设置 stream: true 即可开启流式输出，实时接收生成内容。具体示例见上方「流式输出」代码。' },
             { q: '令牌泄露了怎么办？', a: '立即进入「API 令牌」页面删除已泄露的令牌，然后重新创建一个新令牌。删除后旧令牌立即失效。' },
             { q: '目前支持哪些模型？', a: `灵镜 AI 已全面接入 Anthropic、OpenAI、Google、DeepSeek、阿里云等厂商的 ${models.length} 款主流模型（Claude Sonnet 4.6、GPT-4o、Gemini 2.5 Pro、DeepSeek V3/R1、o3、Qwen Max 等），所有模型即开即用，一份额度通用全部渠道；后续新模型发布后会持续加入，可在「模型广场」页面查看实时列表与价格。` },
+            { q: '图像生成（gpt-image-2 / nano-banana）为什么是异步的？', a: '图像模型单张耗时 20–60 秒，远超 HTTP 网关空闲超时；因此采用异步任务 —— 提交后拿 task_id，再轮询 /v1/tasks/{task_id}。轮询间隔建议 3 秒，首次查询建议在提交 5 秒后再发起。任务失败或主动取消时预扣额度会自动退还。' },
+            { q: '生成的图片 URL 能保存多久？', a: '图片 URL 默认 24 小时内有效（response 里 expires_at 字段是准确的过期时间戳）。生产环境建议拿到图后立即下载或转存到自家 OSS / CDN，不要直接把上游 URL 返回给前端。' },
             { q: '调用时报错 401 是什么原因？', a: '401 表示认证失败，请检查：1）令牌是否正确填写；2）令牌是否已被删除；3）请求头格式是否为 Authorization: Bearer sk-xxx。' },
             { q: '调用时报错 429 是什么原因？', a: '429 表示请求频率超限，请稍等片刻后重试，或联系客服提升限额。' },
           ].map((item, i) => (
