@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
-import { Check, Search } from 'lucide-react'
+import { Check, ShoppingBag } from 'lucide-react'
 import Pagination from '../components/Pagination'
 import { orderApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { FilterTabs } from '../components/FilterTabs'
+import { SearchInput } from '../components/SearchInput'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 // 后端 Order.status: 0=待支付 1=已支付 2=已取消
 const STATUS: Record<number, { label: string; cls: string }> = {
@@ -41,6 +46,7 @@ export default function OrdersPage() {
   const [status, setStatus] = useState('')
   const [username, setUsername] = useState('')
   const [usernameInput, setUsernameInput] = useState('')
+  const [completeTarget, setCompleteTarget] = useState<Order | null>(null)
 
   const PAGE_SIZE = 15
   const load = () => {
@@ -59,49 +65,42 @@ export default function OrdersPage() {
   }
   useEffect(() => { load() /* eslint-disable-line react-hooks/exhaustive-deps */ }, [page, status, username])
 
-  const handleComplete = async (o: Order) => {
-    if (!confirm(`确认手动补单？\n\n订单号: ${o.order_no}\n用户: ${o.username || `#${o.user_id}`}\n金额: ¥${o.amount?.toFixed(2)}\n额度: $${(o.quota / 500000).toFixed(2)}\n\n执行后将：\n• 订单状态改为「已完成」\n• 用户账户余额增加 $${(o.quota / 500000).toFixed(2)}\n• 给用户发送「充值成功」通知`)) return
+  const handleComplete = (o: Order) => {
+    setCompleteTarget(o)
+  }
+
+  const doComplete = async () => {
+    if (!completeTarget) return
     try {
-      const r = await orderApi.complete(o.order_no)
+      const r = await orderApi.complete(completeTarget.order_no)
       if (r.data.success) { toast.success(r.data.message || '补单成功'); load() }
       else toast.error(r.data.message || '补单失败')
-    } catch { toast.error('网络错误') }
+    } catch { toast.error('网络错误') } finally { setCompleteTarget(null) }
   }
 
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">订单管理</h1>
-        <p className="page-desc">全平台充值订单记录 · 可手动补单</p>
-      </div>
+      <PageHeader
+        title="订单管理"
+        description="全平台充值订单记录 · 可手动补单"
+        icon={ShoppingBag}
+      />
 
       {/* 筛选 */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {STATUS_TABS.map(t => (
-            <button
-              key={t.key}
-              onClick={() => { setStatus(t.key); setPage(1) }}
-              style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500,
-                border: status === t.key ? '1px solid var(--primary)' : '1px solid var(--border)',
-                background: status === t.key ? 'var(--primary-50)' : '#fff',
-                color: status === t.key ? 'var(--primary)' : 'var(--text)',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ position: 'relative', width: 220, marginLeft: 'auto' }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-          <input
-            placeholder="按用户名精确筛选"
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <FilterTabs
+          value={status}
+          onChange={v => { setStatus(v); setPage(1) }}
+          options={STATUS_TABS.map(t => ({ label: t.label, value: t.key }))}
+        />
+        <div style={{ marginLeft: 'auto' }}>
+          <SearchInput
             value={usernameInput}
-            onChange={e => setUsernameInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { setUsername(usernameInput.trim()); setPage(1) } }}
-            style={{ paddingLeft: 34 }}
+            onChange={setUsernameInput}
+            onSubmit={() => { setUsername(usernameInput.trim()); setPage(1) }}
+            placeholder="按用户名精确筛选"
+            width={240}
           />
         </div>
       </div>
@@ -123,7 +122,13 @@ export default function OrdersPage() {
           </thead>
           <tbody>
             {orders.length === 0
-              ? <tr><td colSpan={9} className="empty-state" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无订单</td></tr>
+              ? <tr><td colSpan={9} style={{ padding: 0 }}>
+                  <EmptyCard
+                    icon={ShoppingBag}
+                    title="暂无订单"
+                    description={(status || username) ? '试试别的筛选条件' : ''}
+                  />
+                </td></tr>
               : orders.map(o => {
                   const st = STATUS[o.status] || { label: `状态${o.status}`, cls: 'badge-gray' }
                   return (
@@ -133,7 +138,7 @@ export default function OrdersPage() {
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{o.username || `#${o.user_id}`}</div>
                         {o.email && <div style={{ fontSize: 11, color: 'var(--muted)' }}>{o.email}</div>}
                       </td>
-                      <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
+                      <td><code style={{ fontSize: 11, background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 4 }}>{o.order_no}</code></td>
                       <td style={{ fontWeight: 700, color: 'var(--primary)' }}>¥{o.amount?.toFixed(2)}</td>
                       <td style={{ fontFamily: 'monospace' }}>${(o.quota / 500000).toFixed(2)}</td>
                       <td><span className="badge badge-gray">{o.payment_method || '-'}</span></td>
@@ -165,6 +170,25 @@ export default function OrdersPage() {
       </div>
 
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} onChange={setPage} />
+
+      <ConfirmDialog
+        open={!!completeTarget}
+        title="确认手动补单"
+        description={
+          <>
+            订单号: <code style={{ fontFamily: 'monospace', fontSize: 12 }}>{completeTarget?.order_no}</code><br />
+            用户: <strong>{completeTarget?.username || `#${completeTarget?.user_id}`}</strong><br />
+            金额: <strong>¥{completeTarget?.amount?.toFixed(2)}</strong> · 额度: <strong>${((completeTarget?.quota || 0) / 500000).toFixed(2)}</strong>
+            <div style={{ marginTop: 10, fontSize: 12, color: 'var(--text-secondary)' }}>
+              执行后将：订单状态改为「已完成」 · 用户账户余额增加 · 给用户发送「充值成功」通知
+            </div>
+          </>
+        }
+        confirmLabel="补单"
+        confirmVariant="primary"
+        onConfirm={doComplete}
+        onCancel={() => setCompleteTarget(null)}
+      />
     </div>
   )
 }
