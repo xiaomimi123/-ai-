@@ -10,6 +10,7 @@ import Pagination from '../components/Pagination'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { SearchInput } from '../components/SearchInput'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 // 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
 // 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
@@ -116,6 +117,8 @@ export default function ChannelsPage() {
   const [modalLoading, setModalLoading] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<any>(null) // 单个删除目标
+  const [deleteAllDisabled, setDeleteAllDisabled] = useState(false) // 批量清理禁用确认
 
   // ---- 加载 ----
   const load = async () => {
@@ -256,22 +259,29 @@ export default function ChannelsPage() {
     } catch { toast.error('切换失败') }
   }
 
-  const handleDelete = async (ch: any) => {
-    if (!confirm(`删除「${ch.name}」？\n此操作不可恢复，已用额度历史将丢失。`)) return
-    try {
-      const r = await channelApi.delete(ch.id)
-      if (r.data.success) { toast.success('已删除'); load() }
-      else toast.error(r.data.message || '删除失败')
-    } catch { toast.error('删除失败') }
+  const handleDelete = (ch: any) => {
+    setDeleteTarget(ch)
   }
 
-  const handleDeleteDisabled = async () => {
-    if (!confirm('删除所有禁用的渠道（手动禁用 + 自动禁用）？\n此操作不可恢复。')) return
+  const doDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      const r = await channelApi.delete(deleteTarget.id)
+      if (r.data.success) { toast.success('已删除'); load() }
+      else toast.error(r.data.message || '删除失败')
+    } catch { toast.error('删除失败') } finally { setDeleteTarget(null) }
+  }
+
+  const handleDeleteDisabled = () => {
+    setDeleteAllDisabled(true)
+  }
+
+  const doDeleteDisabled = async () => {
     try {
       const r = await channelApi.deleteDisabled()
       if (r.data.success) { toast.success(`已删除 ${r.data.data || 0} 个禁用渠道`); load() }
       else toast.error(r.data.message || '删除失败')
-    } catch { toast.error('删除失败') }
+    } catch { toast.error('删除失败') } finally { setDeleteAllDisabled(false) }
   }
 
   const handleTest = async (id: number) => {
@@ -597,6 +607,24 @@ export default function ChannelsPage() {
         </div>
       )}
 
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除渠道"
+        description={<>渠道 <strong>{deleteTarget?.name}</strong> 将被删除。<br />此操作不可恢复，已用额度历史将丢失。</>}
+        confirmLabel="删除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={deleteAllDisabled}
+        title="确认批量清理"
+        description={<>将删除所有禁用的渠道（手动禁用 + 自动禁用，共 <strong>{stats.manualOff + stats.autoOff}</strong> 个）。<br />此操作不可恢复。</>}
+        confirmLabel="全部删除"
+        confirmVariant="danger"
+        onConfirm={doDeleteDisabled}
+        onCancel={() => setDeleteAllDisabled(false)}
+      />
       <style>{`@keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }`}</style>
     </div>
   )
