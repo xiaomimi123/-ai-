@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Save, CreditCard, AlertCircle, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { PageHeader } from '../components/PageHeader'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -66,22 +67,16 @@ export default function PaymentSettingsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <CreditCard size={22} color="var(--primary)" />支付配置
-        </h1>
-        <p className="page-desc">虎皮椒协议：支付宝、微信两个渠道独立配置，各自的 AppID / AppSecret 互不影响</p>
-      </div>
+      <PageHeader
+        title="支付配置"
+        description="虎皮椒协议：支付宝、微信两个渠道独立配置，各自的 AppID / AppSecret 互不影响"
+        icon={CreditCard}
+      />
 
       {/* 状态提示 */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
-        borderRadius: 10, marginBottom: 24,
-        background: anyEnabled ? '#dcfce7' : '#fef3c7',
-        border: `1px solid ${anyEnabled ? '#86efac' : '#fcd34d'}`,
-      }}>
-        {anyEnabled ? <CheckCircle size={18} color="#16a34a" /> : <AlertCircle size={18} color="#d97706" />}
-        <span style={{ fontSize: 14, color: anyEnabled ? '#166534' : '#92400e' }}>
+      <div className={`alert ${anyEnabled ? 'alert-success' : 'alert-warning'}`} style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        {anyEnabled ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+        <span style={{ fontSize: 14 }}>
           {anyEnabled
             ? `已开启：${[payConfig.epay_enabled && '支付宝', payConfig.wx_enabled && '微信'].filter(Boolean).join(' + ')}`
             : '所有支付渠道未开启，用户只能使用充值码兑换额度'}
@@ -187,9 +182,9 @@ function ChannelCard(props: {
               placeholder={props.keyConfigured ? '留空则保持原值' : '虎皮椒应用的 AppSecret'}
             />
           </div>
-          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#166534' }}>
+          <div className="alert alert-success" style={{ marginBottom: 0 }}>
             <div style={{ marginBottom: 4 }}><strong>异步回调地址</strong>（填到虎皮椒后台）：</div>
-            <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: 4, display: 'inline-block', wordBreak: 'break-all' }}>
+            <code style={{ background: 'var(--accent-light)', padding: '2px 6px', borderRadius: 4, display: 'inline-block', wordBreak: 'break-all' }}>
               https://aitoken.homes/api/lingjing/pay/notify/hupijiao
             </code>
           </div>
