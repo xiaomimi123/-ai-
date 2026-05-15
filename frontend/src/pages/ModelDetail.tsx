@@ -58,12 +58,27 @@ export default function ModelDetailPage() {
     </div>
   )
 
-  const codes: Record<string, string> = {
+  const isImage = isImageModel(model.tags)
+
+  const chatCodes: Record<string, string> = {
     python: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nresponse = client.chat.completions.create(\n    model="${model.model_id}",\n    messages=[\n        {"role": "system", "content": "你是一个智能助手"},\n        {"role": "user", "content": "你好！"}\n    ]\n)\n\nprint(response.choices[0].message.content)`,
     nodejs: `import OpenAI from 'openai'\n\nconst client = new OpenAI({\n  apiKey: 'sk-你的令牌',\n  baseURL: '${BASE_URL}'\n})\n\nconst response = await client.chat.completions.create({\n  model: '${model.model_id}',\n  messages: [\n    { role: 'system', content: '你是一个智能助手' },\n    { role: 'user', content: '你好！' }\n  ]\n})\n\nconsole.log(response.choices[0].message.content)`,
     curl: `curl ${BASE_URL}/chat/completions \\\n  -H "Authorization: Bearer sk-你的令牌" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model.model_id}",\n    "messages": [\n      {"role": "user", "content": "你好！"}\n    ]\n  }'`,
     stream: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nstream = client.chat.completions.create(\n    model="${model.model_id}",\n    messages=[{"role": "user", "content": "你好！"}],\n    stream=True\n)\n\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end="", flush=True)`,
   }
+
+  const imageCodes: Record<string, string> = {
+    python: `import time\nimport requests\n\nAPI_KEY = "sk-你的令牌"\nBASE = "${BASE_URL}"\n\n# 1. 提交异步任务\nresp = requests.post(\n    f"{BASE}/images/generations",\n    headers={"Authorization": f"Bearer {API_KEY}"},\n    json={\n        "model": "${model.model_id}",\n        "prompt": "一只橘猫坐在窗台上看夕阳",\n        "size": "16:9",\n        "resolution": "1k",\n        "n": 1,\n    },\n)\ntask_id = resp.json()["data"][0]["task_id"]\nprint("task_id:", task_id)\n\n# 2. 轮询任务状态（约 20-60 秒完成）\nwhile True:\n    res = requests.get(\n        f"{BASE}/tasks/{task_id}",\n        headers={"Authorization": f"Bearer {API_KEY}"},\n    ).json()\n    print("status:", res["status"], "progress:", res.get("progress"))\n    if res["status"] in ("completed", "failed", "canceled"):\n        break\n    time.sleep(3)\n\n# 3. 取图片 URL\nif res["status"] == "completed":\n    image_url = res["result"]["raw"]["data"]["result"]["images"][0]["url"][0]\n    print("Image URL:", image_url)\nelse:\n    print("Task ended:", res.get("error"))`,
+    nodejs: `const API_KEY = "sk-你的令牌";\nconst BASE = "${BASE_URL}";\n\nasync function generate(prompt) {\n  // 1. 提交异步任务\n  const submit = await fetch(\`\${BASE}/images/generations\`, {\n    method: "POST",\n    headers: {\n      "Authorization": \`Bearer \${API_KEY}\`,\n      "Content-Type": "application/json",\n    },\n    body: JSON.stringify({\n      model: "${model.model_id}",\n      prompt,\n      size: "16:9",\n      resolution: "1k",\n      n: 1,\n    }),\n  });\n  const { data } = await submit.json();\n  const taskId = data[0].task_id;\n  console.log("task_id:", taskId);\n\n  // 2. 轮询任务状态\n  while (true) {\n    const r = await fetch(\`\${BASE}/tasks/\${taskId}\`, {\n      headers: { "Authorization": \`Bearer \${API_KEY}\` },\n    });\n    const res = await r.json();\n    console.log("status:", res.status, "progress:", res.progress);\n    if (res.status === "completed") {\n      return res.result.raw.data.result.images[0].url[0];\n    }\n    if (res.status === "failed" || res.status === "canceled") {\n      throw new Error(res.error?.message || \`task \${res.status}\`);\n    }\n    await new Promise(r => setTimeout(r, 3000));\n  }\n}\n\ngenerate("一只橘猫坐在窗台上看夕阳").then(console.log).catch(console.error);`,
+    curl: `# 1. 提交异步任务\nTASK=$(curl -s -X POST ${BASE_URL}/images/generations \\\n  -H "Authorization: Bearer sk-你的令牌" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model.model_id}",\n    "prompt": "一只橘猫坐在窗台上看夕阳",\n    "size": "16:9",\n    "resolution": "1k",\n    "n": 1\n  }')\nTASK_ID=$(echo "$TASK" | grep -oE '"task_id":"[^"]+"' | head -1 | cut -d'"' -f4)\necho "task_id: $TASK_ID"\n\n# 2. 轮询任务状态\nwhile true; do\n  RES=$(curl -s ${BASE_URL}/tasks/$TASK_ID \\\n    -H "Authorization: Bearer sk-你的令牌")\n  STATUS=$(echo "$RES" | grep -oE '"status":"[^"]+"' | head -1 | cut -d'"' -f4)\n  echo "status: $STATUS"\n  if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then\n    echo "$RES"\n    break\n  fi\n  sleep 3\ndone`,
+  }
+
+  const codes: Record<string, string> = isImage ? imageCodes : chatCodes
+  // 图像模型没有 stream tab，若残留 activeTab=stream 则回落到 python
+  const safeTab = codes[activeTab] ? activeTab : 'python'
+  const tabs = isImage
+    ? [{ key: 'python', label: 'Python' }, { key: 'nodejs', label: 'Node.js' }, { key: 'curl', label: 'cURL' }]
+    : [{ key: 'python', label: 'Python' }, { key: 'nodejs', label: 'Node.js' }, { key: 'curl', label: 'cURL' }, { key: 'stream', label: '流式输出' }]
 
   return (
     <div style={{ maxWidth: 800 }}>
@@ -117,13 +132,17 @@ export default function ModelDetailPage() {
           &nbsp;&nbsp;模型：<code style={{ background: 'var(--bg)', padding: '2px 8px', borderRadius: 4 }}>{model.model_id}</code>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          {[{ key: 'python', label: 'Python' }, { key: 'nodejs', label: 'Node.js' }, { key: 'curl', label: 'cURL' }, { key: 'stream', label: '流式输出' }].map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`btn btn-sm ${activeTab === tab.key ? 'btn-accent' : 'btn-outline'}`}>{tab.label}</button>
+          {tabs.map(tab => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`btn btn-sm ${safeTab === tab.key ? 'btn-accent' : 'btn-outline'}`}>{tab.label}</button>
           ))}
         </div>
-        <CodeBlock code={codes[activeTab]} lang={activeTab === 'curl' ? 'bash' : activeTab === 'stream' ? 'python' : activeTab} />
+        <CodeBlock code={codes[safeTab]} lang={safeTab === 'curl' ? 'bash' : safeTab === 'stream' ? 'python' : safeTab} />
         <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--accent-light)', borderRadius: 8, fontSize: 13, color: 'var(--primary)', borderLeft: '3px solid var(--accent)' }}>
-          💡 将 <code>sk-你的令牌</code> 替换为你的实际令牌。Python: <code>pip install openai</code>，Node.js: <code>npm install openai</code>
+          {isImage ? (
+            <>💡 将 <code>sk-你的令牌</code> 替换为你的实际令牌。图像生成为<b>异步任务</b>，单张耗时约 20–60 秒，需轮询 <code>/v1/tasks/&#123;task_id&#125;</code> 获取结果。Python 依赖：<code>pip install requests</code>。</>
+          ) : (
+            <>💡 将 <code>sk-你的令牌</code> 替换为你的实际令牌。Python: <code>pip install openai</code>，Node.js: <code>npm install openai</code></>
+          )}
         </div>
       </div>
     </div>
