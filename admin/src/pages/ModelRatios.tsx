@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Save, Search, Plus, Trash2, Sliders } from 'lucide-react'
+import { Save, Plus, Trash2, Sliders } from 'lucide-react'
 import { optionApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { SearchInput } from '../components/SearchInput'
+import { FilterTabs } from '../components/FilterTabs'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 // 这个页面只有模型名（ratio map 的 key），没有 tags 数据。
 // 按名字推断是否图像模型，避免显示误导的 "$X/1K tokens"。
@@ -28,6 +33,7 @@ export default function ModelRatiosPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newModel, setNewModel] = useState({ name: '', input: '', output: '' })
   const [tab, setTab] = useState<'input' | 'output'>('input')
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
 
   useEffect(() => {
     optionApi.get().then(r => {
@@ -76,6 +82,12 @@ export default function ModelRatiosPage() {
   }
 
   const handleDelete = (model: string) => {
+    setDeleteTarget(model)
+  }
+
+  const doDelete = () => {
+    if (!deleteTarget) return
+    const model = deleteTarget
     setModelRatio(prev => {
       const next = { ...prev }
       delete next[model]
@@ -86,9 +98,10 @@ export default function ModelRatiosPage() {
       delete next[model]
       return next
     })
-    // 同步清掉 draft，避免删完之后输入框还残留旧文本
     setInputDraft(prev => { const n = { ...prev }; delete n[model]; return n })
     setCompletionDraft(prev => { const n = { ...prev }; delete n[model]; return n })
+    setDeleteTarget(null)
+    toast.success(`已从列表移除 ${model}（点击「保存全部」生效）`)
   }
 
   const handleAdd = () => {
@@ -117,36 +130,37 @@ export default function ModelRatiosPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Sliders size={22} color="var(--primary)" />模型倍率
-          </h1>
-          <p className="page-desc">调整模型计费倍率（1 = $0.002/1K tokens）</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setShowAdd(true)}><Plus size={14}/>添加模型</button>
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            <Save size={14}/>{saving ? '保存中...' : '保存全部'}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="模型倍率"
+        description="调整模型计费倍率（1 = $0.002/1K tokens）"
+        icon={Sliders}
+        actions={
+          <>
+            <button className="btn btn-outline" onClick={() => setShowAdd(true)}><Plus size={14}/>添加模型</button>
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+              <Save size={14}/>{saving ? '保存中...' : '保存全部'}
+            </button>
+          </>
+        }
+      />
 
       {/* Search + tabs */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 20, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 320 }}>
-          <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-          <input placeholder="搜索模型名称..." value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 34 }} />
-        </div>
-        <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
-          <button onClick={() => setTab('input')} style={{ padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 500, background: tab === 'input' ? '#fff' : 'transparent', color: tab === 'input' ? 'var(--text)' : 'var(--muted)', border: 'none', boxShadow: tab === 'input' ? '0 1px 2px rgba(0,0,0,.05)' : 'none' }}>
-            输入倍率
-          </button>
-          <button onClick={() => setTab('output')} style={{ padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 500, background: tab === 'output' ? '#fff' : 'transparent', color: tab === 'output' ? 'var(--text)' : 'var(--muted)', border: 'none', boxShadow: tab === 'output' ? '0 1px 2px rgba(0,0,0,.05)' : 'none' }}>
-            补全倍率
-          </button>
-        </div>
-        <span style={{ color: 'var(--muted)', fontSize: 13 }}>共 {allModels.length} 个模型</span>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="搜索模型名称..."
+          width={320}
+        />
+        <FilterTabs
+          value={tab}
+          onChange={v => setTab(v as 'input' | 'output')}
+          options={[
+            { label: '输入倍率', value: 'input' },
+            { label: '补全倍率', value: 'output' },
+          ]}
+        />
+        <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>共 {allModels.length} 个模型</span>
       </div>
 
       {/* Table */}
@@ -162,7 +176,13 @@ export default function ModelRatiosPage() {
           </thead>
           <tbody>
             {filtered.length === 0 ? (
-              <tr><td colSpan={4} className="empty-state">未找到匹配模型</td></tr>
+              <tr><td colSpan={4} style={{ padding: 0 }}>
+                <EmptyCard
+                  icon={Sliders}
+                  title={search ? '未找到匹配模型' : '暂无模型倍率配置'}
+                  description={search ? '试试别的关键字' : '点击右上角「添加模型」开始'}
+                />
+              </td></tr>
             ) : (
               Object.entries(groups).map(([prefix, models]) => (
                 models.map((model, i) => (
@@ -216,7 +236,7 @@ export default function ModelRatiosPage() {
         </table>
       </div>
 
-      <div style={{ marginTop: 16, padding: '12px 16px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
+      <div style={{ marginTop: 16, padding: '12px 16px', background: 'var(--surface-2)', borderRadius: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
         <strong>计费说明：</strong>输入倍率 1 = $0.002/1K tokens。例如 GPT-4o 的倍率 2.5 表示 $0.005/1K tokens。
         补全倍率是输出相对于输入的价格倍数，留空默认为 1（输出价格=输入价格）。
       </div>
@@ -247,6 +267,23 @@ export default function ModelRatiosPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认从列表移除"
+        description={
+          <>
+            将从倍率配置中移除「<strong>{deleteTarget}</strong>」（输入 + 补全）。
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+              移除后需点击「保存全部」才会写入后端。在此之前可重新「添加模型」恢复。
+            </div>
+          </>
+        }
+        confirmLabel="移除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
