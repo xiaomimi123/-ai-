@@ -28,6 +28,18 @@
   --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
   --shadow: 0 1px 3px rgba(0,0,0,.08), 0 2px 8px rgba(0,0,0,.04);
   --shadow-lg: 0 4px 24px rgba(0,0,0,.1);
+  /* ===== Admin UI Refresh 2026-05-15: 新增令牌 ===== */
+  --warning-bg: #FEF3C7;
+  --warning-text: #92400E;
+  --info-bg: #DBEAFE;
+  --info-text: #1E40AF;
+  --danger-bg: #FEE2E2;
+  --danger-text: #DC2626;
+  --surface-2: #F8FAFC;
+  --hover-bg: #F1F5F9;
+  --z-modal-backdrop: 1000;
+  --z-modal: 1001;
+  --z-toast: 2000;
 }
 
 html { scroll-behavior: smooth; }
@@ -105,3 +117,61 @@ tr:hover td { background: #fafbfc; }
   .form-row { grid-template-columns: 1fr; }
   th, td { padding: 10px 12px; font-size: 13px; }
 }
+
+/* ===== Admin UI Refresh 2026-05-15: 新增 utility classes ===== */
+
+.badge-info    { background: var(--info-bg);    color: var(--info-text); }
+.badge-orange  { background: #FED7AA;           color: #C2410C; }
+
+.filter-button {
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.15s;
+}
+.filter-button:hover { background: var(--hover-bg); }
+.filter-button.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.alert {
+  padding: 12px 16px;
+  border-radius: var(--radius-sm, 6px);
+  border-left: 3px solid;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+.alert-success { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+.alert-warning { border-color: var(--warning); background: var(--warning-bg); color: var(--warning-text); }
+.alert-info    { border-color: var(--info);    background: var(--info-bg);    color: var(--info-text); }
+.alert-danger  { border-color: var(--danger);  background: var(--danger-bg);  color: var(--danger-text); }
+
+.empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+.empty-card svg { margin-bottom: 12px; opacity: 0.4; }
+
+.form-hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.modal-sm  { max-width: 480px; }
+.modal-md  { max-width: 640px; }
+.modal-lg  { max-width: 820px; }
+.modal-xl  { max-width: 1080px; }
+.modal-content { max-height: 85vh; overflow-y: auto; }
