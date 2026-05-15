@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import { AreaChart, Area, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { Users, Activity, TrendingUp, DollarSign, Server, Zap } from 'lucide-react'
+import { Users, Activity, TrendingUp, DollarSign, Server, Zap, BarChart2 } from 'lucide-react'
 import axios from 'axios'
+import { StatCard } from '../components/StatCard'
+import { PageHeader } from '../components/PageHeader'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -36,34 +38,26 @@ export default function OverviewPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700 }}>数据概览</h2>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)' }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
-          实时 · 过去1小时 {realtime?.hour_calls || 0} 次调用
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 24 }}>
-        {[
-          { label: '总用户', value: summary.total_users?.toLocaleString() || '0', sub: `今日 +${summary.today_new_users || 0}`, icon: Users, color: '#4f6ef7', bg: 'var(--primary-50)' },
-          { label: '今日调用', value: (summary.today_calls || 0).toLocaleString(), sub: `¥${(summary.today_revenue || 0).toFixed(2)}`, icon: Activity, color: '#10b981', bg: '#dcfce7' },
-          { label: '本月调用', value: (summary.month_calls || 0).toLocaleString(), sub: `¥${(summary.month_revenue || 0).toFixed(2)}`, icon: TrendingUp, color: '#8b5cf6', bg: '#ede9fe' },
-          { label: '累计收入', value: `¥${(summary.total_revenue || 0).toFixed(0)}`, sub: `${(summary.total_calls || 0).toLocaleString()} 次`, icon: DollarSign, color: '#f59e0b', bg: '#fef3c7' },
-          { label: '活跃渠道', value: `${activeChannels}/${totalChannels}`, sub: '运行中', icon: Server, color: '#10b981', bg: '#dcfce7' },
-          { label: '过去1小时', value: `${realtime?.hour_calls || 0}`, sub: '实时调用', icon: Zap, color: '#ef4444', bg: '#fee2e2' },
-        ].map(c => (
-          <div className="card" key={c.label}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{c.label}</div>
-                <div style={{ fontSize: 22, fontWeight: 800, color: c.color }}>{c.value}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{c.sub}</div>
-              </div>
-              <div style={{ background: c.bg, borderRadius: 10, padding: 8 }}><c.icon size={18} color={c.color}/></div>
-            </div>
+      <PageHeader
+        title="数据概览"
+        description="实时数据 · 系统概览"
+        icon={BarChart2}
+        actions={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+            <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} />
+            实时 · 过去1小时 {realtime?.hour_calls || 0} 次调用
           </div>
-        ))}
+        }
+      />
+      <div style={{ marginBottom: 24 }} />
+
+      <div className="stat-grid" style={{ marginBottom: 24 }}>
+        <StatCard label="总用户"   value={summary.total_users?.toLocaleString() || '0'}   icon={Users}       color="info"    hint={`今日 +${summary.today_new_users || 0}`} />
+        <StatCard label="今日调用" value={(summary.today_calls || 0).toLocaleString()}    icon={Activity}    color="success" hint={`¥${(summary.today_revenue || 0).toFixed(2)}`} />
+        <StatCard label="本月调用" value={(summary.month_calls || 0).toLocaleString()}    icon={TrendingUp}  color="accent"  hint={`¥${(summary.month_revenue || 0).toFixed(2)}`} />
+        <StatCard label="累计收入" value={`¥${(summary.total_revenue || 0).toFixed(0)}`}  icon={DollarSign}  color="warning" hint={`${(summary.total_calls || 0).toLocaleString()} 次`} />
+        <StatCard label="活跃渠道" value={`${activeChannels}/${totalChannels}`}            icon={Server}      color="success" hint="运行中" />
+        <StatCard label="过去1小时" value={`${realtime?.hour_calls || 0}`}                icon={Zap}         color="danger"  hint="实时调用" />
       </div>
 
       <div className="card" style={{ marginBottom: 20 }}>
