@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Eye, EyeOff, Package } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { PageHeader } from '../components/PageHeader'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -18,6 +21,7 @@ export default function PlansPage() {
   const [editing, setEditing] = useState<Plan | null>(null)
   const [form, setForm] = useState({ name: '', description: '', price: 10, quota: 5000000, bonus_quota: 0, is_available: true, sort_order: 0 })
   const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<Plan | null>(null)
 
   const load = () => { http.get('/api/admin/lingjing/plans').then(r => { if (r.data.success) setPlans(r.data.data || []) }) }
   useEffect(() => { load() }, [])
@@ -35,22 +39,40 @@ export default function PlansPage() {
     } catch { toast.error('网络错误') } finally { setSaving(false) }
   }
 
-  const handleDelete = async (p: Plan) => { if (!confirm(`删除「${p.name}」？`)) return; await http.delete(`/api/admin/lingjing/plans/${p.id}`); load() }
+  const handleDelete = (p: Plan) => setDeleteTarget(p)
+
+  const doDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      const r = await http.delete(`/api/admin/lingjing/plans/${deleteTarget.id}`)
+      if (r.data.success) { toast.success('已删除'); load() }
+      else toast.error(r.data.message || '删除失败')
+    } catch { toast.error('删除失败') } finally { setDeleteTarget(null) }
+  }
   const handleToggle = async (p: Plan) => { const r = await http.put(`/api/admin/lingjing/plans/${p.id}/toggle`, {}); if (r.data.success) load() }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}><h1 className="page-title">套餐管理</h1><p className="page-desc">配置充值套餐，支持赠送额度和上下线控制</p></div>
-        <button className="btn btn-primary" onClick={openCreate}><Plus size={15}/>新增套餐</button>
-      </div>
+      <PageHeader
+        title="套餐管理"
+        description="配置充值套餐，支持赠送额度和上下线控制"
+        icon={Package}
+        actions={
+          <button className="btn btn-primary" onClick={openCreate}><Plus size={15}/>新增套餐</button>
+        }
+      />
 
       <div style={{ background: 'var(--primary-50)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, fontSize: 13, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Package size={15}/>前台充值页实时显示已上线的套餐
       </div>
 
       {plans.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: 48 }}><Package size={40} color="var(--muted)" style={{ marginBottom: 12 }}/><div style={{ fontWeight: 600, marginBottom: 8 }}>暂无套餐</div><button className="btn btn-primary" onClick={openCreate}>新增套餐</button></div>
+        <EmptyCard
+          icon={Package}
+          title="暂无套餐"
+          description="点击下方按钮创建第一个套餐"
+          action={<button className="btn btn-primary" onClick={openCreate}><Plus size={14}/>新增套餐</button>}
+        />
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
           {plans.map(p => (
@@ -68,13 +90,13 @@ export default function PlansPage() {
                 <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--primary)' }}>¥{p.price}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)' }}>
                   到账 ${quotaToUsd(p.quota).toFixed(2)}
-                  {p.bonus_quota > 0 && <span style={{ color: '#f59e0b', fontWeight: 600 }}> + ${quotaToUsd(p.bonus_quota).toFixed(2)}</span>}
+                  {p.bonus_quota > 0 && <span style={{ color: 'var(--warning)', fontWeight: 600 }}> + ${quotaToUsd(p.bonus_quota).toFixed(2)}</span>}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                 <button onClick={() => handleToggle(p)} className="btn btn-sm btn-outline" style={{ padding: '6px 10px' }}>{p.is_available ? <EyeOff size={14}/> : <Eye size={14}/>}</button>
                 <button onClick={() => openEdit(p)} className="btn btn-sm btn-outline" style={{ padding: '6px 10px' }}><Edit2 size={14}/></button>
-                <button onClick={() => handleDelete(p)} className="btn btn-sm" style={{ padding: '6px 10px', background: '#fee2e2', color: '#ef4444', border: 'none' }}><Trash2 size={14}/></button>
+                <button onClick={() => handleDelete(p)} className="btn btn-sm" style={{ padding: '6px 10px', background: 'var(--danger-bg)', color: 'var(--danger)', border: 'none' }}><Trash2 size={14}/></button>
               </div>
             </div>
           ))}
@@ -113,7 +135,7 @@ export default function PlansPage() {
                   value={quotaToUsd(form.bonus_quota)}
                   onChange={e => setForm(p => ({ ...p, bonus_quota: usdToQuota(parseFloat(e.target.value) || 0) }))}
                 />
-                {form.bonus_quota > 0 && <div style={{ fontSize: 11, color: '#f59e0b', marginTop: 4 }}>赠送 ${quotaToUsd(form.bonus_quota).toFixed(2)}</div>}
+                {form.bonus_quota > 0 && <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 4 }}>赠送 ${quotaToUsd(form.bonus_quota).toFixed(2)}</div>}
               </div>
               <div className="form-group"><label className="form-label">排序（小→前）</label><input type="number" min="0" value={form.sort_order} onChange={e => setForm(p => ({ ...p, sort_order: parseInt(e.target.value) || 0 }))} /></div>
             </div>
@@ -122,6 +144,16 @@ export default function PlansPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除套餐"
+        description={<>套餐「<strong>{deleteTarget?.name}</strong>」(¥{deleteTarget?.price}) 将被删除。<br />此操作不可撤销。</>}
+        confirmLabel="删除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
