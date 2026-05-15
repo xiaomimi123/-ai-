@@ -49,7 +49,6 @@ export default function OverviewPage() {
           </div>
         }
       />
-      <div style={{ marginBottom: 24 }} />
 
       <div className="stat-grid" style={{ marginBottom: 24 }}>
         <StatCard label="总用户"   value={summary.total_users?.toLocaleString() || '0'}   icon={Users}       color="info"    hint={`今日 +${summary.today_new_users || 0}`} />
