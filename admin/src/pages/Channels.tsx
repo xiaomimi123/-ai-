@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, PlayCircle, CheckCircle, XCircle, ToggleLeft, ToggleRight,
   Loader2, RefreshCw, DollarSign, Edit2, Copy,
-  AlertTriangle, Settings, Image as ImageIcon, Network,
+  AlertTriangle, Settings, Image as ImageIcon, Network, Eye,
 } from 'lucide-react'
 import { channelApi } from '../api'
 import toast from 'react-hot-toast'
@@ -11,6 +11,7 @@ import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { SearchInput } from '../components/SearchInput'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Drawer } from '../components/Drawer'
 
 // 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
 // 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
@@ -119,6 +120,7 @@ export default function ChannelsPage() {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<any>(null) // 单个删除目标
   const [deleteAllDisabled, setDeleteAllDisabled] = useState(false) // 批量清理禁用确认
+  const [detailChannel, setDetailChannel] = useState<any>(null) // 详情抽屉
 
   // ---- 加载 ----
   const load = async () => {
@@ -403,13 +405,13 @@ export default function ChannelsPage() {
         <table>
           <thead>
             <tr>
-              <th>ID</th><th>名称</th><th>类型</th><th>状态</th>
-              <th>优先级</th><th>余额</th><th>已用</th><th>响应</th><th>上次测试</th><th>操作</th>
+              <th>ID</th><th>名称 / 类型</th><th>状态</th>
+              <th>优先级</th><th>余额</th><th>上次测试</th><th>操作</th>
             </tr>
           </thead>
           <tbody>
             {channels.length === 0 ? (
-              <tr><td colSpan={10} className="empty-state">{searchMode ? '未找到匹配渠道' : '暂无渠道，点击上方按钮添加'}</td></tr>
+              <tr><td colSpan={7} className="empty-state">{searchMode ? '未找到匹配渠道' : '暂无渠道，点击上方按钮添加'}</td></tr>
             ) : channels.map(ch => {
               const type = TYPES[ch.type] || { name: `Type ${ch.type}`, color: '#6b7280' }
               const tested = ch.test_time > 0
@@ -417,9 +419,9 @@ export default function ChannelsPage() {
               return (
                 <tr key={ch.id}>
                   <td style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--muted)' }}>{ch.id}</td>
-                  <td><strong>{ch.name}</strong></td>
                   <td>
-                    <span className="badge" style={{ background: `${type.color}15`, color: type.color, border: `1px solid ${type.color}30` }}>
+                    <div><strong>{ch.name}</strong></div>
+                    <span className="badge" style={{ background: `${type.color}15`, color: type.color, border: `1px solid ${type.color}30`, fontSize: 11, marginTop: 4, display: 'inline-block' }}>
                       {type.name}
                     </span>
                   </td>
@@ -433,12 +435,6 @@ export default function ChannelsPage() {
                       <div style={{ fontSize: 10, color: 'var(--muted)' }}>{timeAgo(ch.balance_updated_time)}</div>
                     )}
                   </td>
-                  <td style={{ fontSize: 13, color: 'var(--muted)' }}>
-                    ${((ch.used_quota || 0) / 500000).toFixed(2)}
-                  </td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                    {ch.response_time ? `${(ch.response_time / 1000).toFixed(2)}s` : '-'}
-                  </td>
                   <td style={{ fontSize: 12 }}>
                     {tested ? (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -449,6 +445,9 @@ export default function ChannelsPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 2 }}>
+                      <button className="btn btn-ghost btn-icon" title="详情" onClick={() => setDetailChannel(ch)}>
+                        <Eye size={14} color="var(--text-secondary)" />
+                      </button>
                       {isAsyncTaskType(ch.type) ? (
                         <button
                           className="btn btn-ghost btn-icon"
@@ -606,6 +605,56 @@ export default function ChannelsPage() {
           </div>
         </div>
       )}
+
+      <Drawer
+        open={!!detailChannel}
+        title={`渠道详情 — ${detailChannel?.name ?? ''}`}
+        onClose={() => setDetailChannel(null)}
+        width={520}
+      >
+        {detailChannel && (
+          <div>
+            <div className="form-group">
+              <label className="form-label">已用配额</label>
+              <div style={{ fontSize: 15, color: 'var(--text)' }}>
+                ${((detailChannel.used_quota || 0) / 500000).toFixed(2)}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">响应时间</label>
+              <div style={{ fontSize: 15, color: 'var(--text)' }}>
+                {detailChannel.response_time ? `${(detailChannel.response_time / 1000).toFixed(2)} 秒` : '未测试'}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">权重</label>
+              <div style={{ fontSize: 15, color: 'var(--text)' }}>{detailChannel.weight || 0}</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">分组</label>
+              <div style={{ fontSize: 14, color: 'var(--text)' }}>{detailChannel.group || 'default'}</div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">代理地址</label>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                {detailChannel.base_url || '(默认)'}
+              </div>
+            </div>
+            <div className="form-group">
+              <label className="form-label">支持模型</label>
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace', maxHeight: 140, overflowY: 'auto', background: 'var(--surface-2)', padding: 8, borderRadius: 6 }}>
+                {detailChannel.models || '(无)'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+              <button className="btn btn-primary" onClick={() => { openEdit(detailChannel.id); setDetailChannel(null) }}>
+                <Edit2 size={14} />编辑完整配置
+              </button>
+              <button className="btn btn-outline" onClick={() => setDetailChannel(null)}>关闭</button>
+            </div>
+          </div>
+        )}
+      </Drawer>
 
       <ConfirmDialog
         open={!!deleteTarget}
