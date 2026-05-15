@@ -112,6 +112,11 @@ export default function AsyncTaskTab() {
 
       setPrompt('')
       toast.success('任务已提交')
+
+      // 提交后滚动到顶部，让新任务卡片可见
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 100)
     } catch (e) {
       const msg = e instanceof Error ? e.message : '提交失败'
       toast.error(msg)
@@ -208,6 +213,10 @@ export default function AsyncTaskTab() {
           </div>
         </div>
 
+        <div style={{ color: 'var(--text-secondary)', fontSize: 12, marginBottom: 12 }}>
+          预估扣费: $0.006/张 · 异步生成约 30-60 秒，请耐心等待
+        </div>
+
         <button
           onClick={onSubmit}
           disabled={submitting || !prompt.trim()}
@@ -234,12 +243,39 @@ export default function AsyncTaskTab() {
       <div style={{ display: 'grid', gap: 10 }}>
         {tasks.length === 0 && (
           <div style={{
-            color: 'var(--muted)',
-            fontSize: 13,
-            fontStyle: 'italic',
-            padding: '20px 4px',
+            background: 'var(--card)',
+            border: '1px dashed var(--border)',
+            borderRadius: 'var(--radius-sm, 6px)',
+            padding: 32,
+            textAlign: 'center',
+            color: 'var(--text-secondary)',
           }}>
-            暂无任务
+            <div style={{ fontSize: 14, marginBottom: 16 }}>暂无任务，提交一个开始</div>
+            <div style={{ fontSize: 12, marginBottom: 8 }}>试试这些提示词：</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+              {[
+                '一只橘猫坐在窗台上看夕阳，水彩画风格',
+                '星空下的古老城堡，电影感',
+                '雪山脚下的森林木屋，黄昏',
+                '科幻风格的霓虹城市，夜景',
+              ].map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPrompt(p)}
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 4,
+                    padding: '4px 10px',
+                    cursor: 'pointer',
+                    fontSize: 12,
+                    color: 'var(--text-secondary)',
+                  }}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
           </div>
         )}
         {tasks.map(t => (
@@ -249,6 +285,16 @@ export default function AsyncTaskTab() {
             onUpdate={(patch) => updateTask(t.taskId, patch)}
           />
         ))}
+      </div>
+
+      <div style={{
+        textAlign: 'center',
+        fontSize: 11,
+        color: 'var(--text-secondary)',
+        marginTop: 16,
+        fontStyle: 'italic',
+      }}>
+        提示：任务历史仅本次会话保存，刷新页面后丢失。完成的图片请及时下载（24小时有效）。
       </div>
     </div>
   )
