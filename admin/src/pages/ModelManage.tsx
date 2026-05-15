@@ -6,6 +6,23 @@ import axios from 'axios'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
+// 图像模型识别：与 ModelPrices.tsx / frontend modelPricing.ts 保持一致
+// 优先按 tags 判断；若该模型未在「模型价格」页配置 tags（空字符串），用模型名兜底
+const IMAGE_TAGS = new Set(['生图', '画图', '图像', 'image', 'images', '图片', '文生图'])
+function isImageModel(tags?: string | null, modelName?: string): boolean {
+  if (tags) {
+    const hit = tags.split(',').map(t => t.trim()).some(t => IMAGE_TAGS.has(t))
+    if (hit) return true
+  }
+  if (!modelName) return false
+  const lower = modelName.toLowerCase()
+  return lower.includes('image')
+      || lower.includes('imagen')
+      || lower.includes('dall-e')
+      || lower.includes('nano-banana')
+      || lower.includes('flux')
+}
+
 interface ModelInfo {
   model_name: string
   input_ratio: number
@@ -15,6 +32,7 @@ interface ModelInfo {
   provider: string
   category: string
   description: string
+  tags?: string
   is_visible: number
   price_id: number
   channel_count: number
@@ -145,7 +163,7 @@ export default function ModelManagePage() {
               <th>渠道数</th>
               <th>输入倍率</th>
               <th>补全倍率</th>
-              <th>展示价格 ($/M)</th>
+              <th>展示价格</th>
               <th>供应商</th>
               <th>前台可见</th>
               <th>操作</th>
@@ -170,10 +188,16 @@ export default function ModelManagePage() {
                     </span>
                   </td>
                   <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{m.input_ratio || <span style={{ color: 'var(--muted)' }}>未设</span>}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: 13 }}>{m.completion_ratio || <span style={{ color: 'var(--muted)' }}>1x</span>}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                    {isImageModel(m.tags, m.model_name)
+                      ? <span style={{ color: 'var(--muted)' }}>—</span>
+                      : (m.completion_ratio || <span style={{ color: 'var(--muted)' }}>1x</span>)}
+                  </td>
                   <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
                     {m.input_price > 0 ? (
-                      <span><span style={{ color: 'var(--success)' }}>${m.input_price}</span> / <span style={{ color: 'var(--primary)' }}>${m.output_price}</span></span>
+                      isImageModel(m.tags, m.model_name)
+                        ? <span style={{ color: 'var(--success)' }}>${m.input_price.toFixed(4)}/张</span>
+                        : <span><span style={{ color: 'var(--success)' }}>${m.input_price}</span> / <span style={{ color: 'var(--primary)' }}>${m.output_price}</span> <span style={{ color: 'var(--muted)', fontSize: 11 }}>/M</span></span>
                     ) : <span style={{ color: 'var(--muted)' }}>未设</span>}
                   </td>
                   <td>{m.provider ? <span className="badge badge-blue">{m.provider}</span> : <span style={{ color: 'var(--muted)' }}>-</span>}</td>
@@ -217,37 +241,47 @@ export default function ModelManagePage() {
       </div>
 
       {/* Edit Modal — 只改倍率 */}
-      {editModel && (
+      {editModel && (() => {
+        const isImg = isImageModel(editModel.tags, editModel.model_name)
+        return (
           <div className="modal-overlay" onClick={() => setEditModel(null)}>
             <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 520 }}>
               <div className="modal-title">调整倍率 — {editModel.model_name}</div>
 
               {/* 计费倍率（可编辑） */}
               <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12 }}>计费倍率（真实扣费）</h4>
+                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 12 }}>
+                  计费倍率（真实扣费）{isImg && <span style={{ fontWeight: 400, color: 'var(--muted)', marginLeft: 8 }}>· 图像模型按张计费</span>}
+                </h4>
                 <div className="form-row">
                   <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">输入倍率</label>
+                    <label className="form-label">{isImg ? '计费倍率' : '输入倍率'}</label>
                     <input
                       type="number" step="0.001" placeholder="例：0.14"
                       value={editModel.input_ratio || ''}
                       onChange={e => setEditModel({ ...editModel, input_ratio: parseFloat(e.target.value) || 0 })}
                     />
                     <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                      倍率 × 2 = $/M input → 当前: <strong>${((editModel.input_ratio || 0) * 2).toFixed(3)}/M</strong>
+                      {isImg ? (
+                        <>倍率 × input_price ($/张) → 当前: <strong>${((editModel.input_ratio || 0) * (editModel.input_price || 0)).toFixed(4)}/张</strong></>
+                      ) : (
+                        <>倍率 × 2 = $/M input → 当前: <strong>${((editModel.input_ratio || 0) * 2).toFixed(3)}/M</strong></>
+                      )}
                     </div>
                   </div>
-                  <div className="form-group" style={{ marginBottom: 0 }}>
-                    <label className="form-label">补全倍率</label>
-                    <input
-                      type="number" step="0.01" placeholder="例：1.5"
-                      value={editModel.completion_ratio || ''}
-                      onChange={e => setEditModel({ ...editModel, completion_ratio: parseFloat(e.target.value) || 0 })}
-                    />
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-                      输出 / 输入 比 → 输出: <strong>${((editModel.input_ratio || 0) * (editModel.completion_ratio || 1) * 2).toFixed(3)}/M</strong>
+                  {!isImg && (
+                    <div className="form-group" style={{ marginBottom: 0 }}>
+                      <label className="form-label">补全倍率</label>
+                      <input
+                        type="number" step="0.01" placeholder="例：1.5"
+                        value={editModel.completion_ratio || ''}
+                        onChange={e => setEditModel({ ...editModel, completion_ratio: parseFloat(e.target.value) || 0 })}
+                      />
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                        输出 / 输入 比 → 输出: <strong>${((editModel.input_ratio || 0) * (editModel.completion_ratio || 1) * 2).toFixed(3)}/M</strong>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -265,12 +299,20 @@ export default function ModelManagePage() {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: 13 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>展示输入价</div>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>${editModel.input_price || '—'}/M</div>
+                    <div style={{ fontSize: 11, color: 'var(--muted)' }}>{isImg ? '展示单价' : '展示输入价'}</div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      {editModel.input_price
+                        ? (isImg ? `$${editModel.input_price.toFixed(4)}/张` : `$${editModel.input_price}/M`)
+                        : '—'}
+                    </div>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>展示输出价</div>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>${editModel.output_price || '—'}/M</div>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                      {isImg
+                        ? <span style={{ color: 'var(--muted)' }}>—</span>
+                        : (editModel.output_price ? `$${editModel.output_price}/M` : '—')}
+                    </div>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>供应商</div>
@@ -291,7 +333,8 @@ export default function ModelManagePage() {
               </div>
             </div>
           </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

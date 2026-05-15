@@ -22,6 +22,7 @@ type ModelInfo struct {
 	OutputPrice     float64 `json:"output_price"`
 	Provider        string  `json:"provider"`
 	Description     string  `json:"description"`
+	Tags            string  `json:"tags"`       // 逗号分隔，前端用于判断是否图像模型（按张计费）
 	IsVisible       int     `json:"is_visible"` // 0/1（前端期望 int）
 	PriceId         int     `json:"price_id"`
 	ChannelCount    int     `json:"channel_count"`
@@ -72,6 +73,7 @@ func AdminGetAllModels(c *gin.Context) {
 			info.OutputPrice = p.OutputPrice
 			info.Provider = p.Provider
 			info.Description = p.Description
+			info.Tags = p.Tags
 			if p.IsVisible {
 				info.IsVisible = 1
 			}
@@ -97,6 +99,7 @@ func AdminGetAllModels(c *gin.Context) {
 				OutputPrice:     p.OutputPrice,
 				Provider:        p.Provider,
 				Description:     p.Description,
+				Tags:            p.Tags,
 				IsVisible:       isVis,
 				PriceId:         p.Id,
 				ChannelCount:    0,
