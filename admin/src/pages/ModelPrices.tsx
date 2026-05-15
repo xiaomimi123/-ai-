@@ -1,8 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Plus, Trash2, Edit2, Eye, EyeOff, Star, X, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, Edit2, Eye, EyeOff, Star, X, ExternalLink, DollarSign, Image as ImageIcon } from 'lucide-react'
 import { modelPriceApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
+import { SearchInput } from '../components/SearchInput'
+import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 // 图像模型识别：tags 含任一关键词即视为按"张"计费的图像模型
 // 必须与 frontend/src/utils/modelPricing.ts 的 IMAGE_TAGS 保持一致
@@ -52,6 +57,8 @@ export default function ModelPricesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({})
+  const [search, setSearch] = useState('')
+  const [deleteTarget, setDeleteTarget] = useState<ModelPrice | null>(null)
 
   const load = () => {
     modelPriceApi.list().then(r => { if (r.data.success) setPrices(r.data.data || []) })
@@ -113,13 +120,17 @@ export default function ModelPricesPage() {
     }
   }
 
-  const handleDelete = async (m: ModelPrice) => {
-    if (!confirm(`确认删除「${m.name}」（${m.model_id}）？此操作不可恢复。`)) return
+  const handleDelete = (m: ModelPrice) => {
+    setDeleteTarget(m)
+  }
+
+  const doDelete = async () => {
+    if (!deleteTarget) return
     try {
-      const r = await modelPriceApi.delete(m.id!)
+      const r = await modelPriceApi.delete(deleteTarget.id!)
       if (r.data.success) { toast.success('已删除'); load() }
       else toast.error(r.data.message || '删除失败')
-    } catch { toast.error('删除失败') }
+    } catch { toast.error('删除失败') } finally { setDeleteTarget(null) }
   }
 
   const handleToggle = async (m: ModelPrice) => {
@@ -130,31 +141,53 @@ export default function ModelPricesPage() {
     } catch { toast.error('切换失败') }
   }
 
-  const visibleCount = prices.filter(p => p.is_visible).length
-  const featuredCount = prices.filter(p => p.featured).length
+  const visibleCount = useMemo(() => prices.filter(p => p.is_visible).length, [prices])
+  const featuredCount = useMemo(() => prices.filter(p => p.featured).length, [prices])
+  const imageCount = useMemo(() => prices.filter(p => isImageModel(p.tags)).length, [prices])
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    if (!q) return prices
+    return prices.filter(m =>
+      m.model_id.toLowerCase().includes(q) ||
+      (m.name || '').toLowerCase().includes(q) ||
+      (m.provider || '').toLowerCase().includes(q) ||
+      (m.tags || '').toLowerCase().includes(q)
+    )
+  }, [search, prices])
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">模型广场</h1>
-          <p className="page-desc">管理前台模型广场展示的模型卡片信息</p>
-        </div>
-        <button className="btn btn-primary" onClick={openCreate}><Plus size={15}/>新增模型</button>
-      </div>
+      <PageHeader
+        title="模型广场"
+        description="管理前台模型广场展示的模型卡片信息"
+        icon={DollarSign}
+        actions={
+          <button className="btn btn-primary" onClick={openCreate}><Plus size={15}/>新增模型</button>
+        }
+      />
 
       {/* Stats */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[
-          { label: '全部模型', value: prices.length, color: 'var(--primary)' },
-          { label: '前台可见', value: visibleCount, color: 'var(--success)' },
-          { label: '推荐', value: featuredCount, color: '#ca8a04' },
-        ].map(s => (
-          <div key={s.label} className="card" style={{ padding: '14px 20px', minWidth: 120 }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>{s.value}</div>
-          </div>
-        ))}
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatCard label="全部模型" value={prices.length}  icon={DollarSign}  color="info"    />
+        <StatCard label="前台可见" value={visibleCount}   icon={Eye}         color="success" />
+        <StatCard label="推荐"     value={featuredCount}  icon={Star}        color="warning" />
+        <StatCard label="图像模型" value={imageCount}     icon={ImageIcon}   color="accent"  />
+      </div>
+
+      {/* 搜索 */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="搜索 model_id / 名称 / 厂商 / 标签..."
+          width={360}
+          debounce={300}
+        />
+        {search && (
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+            匹配 {filtered.length} / {prices.length}
+          </span>
+        )}
       </div>
 
       {/* 表格 */}
@@ -162,71 +195,79 @@ export default function ModelPricesPage() {
         <table>
           <thead>
             <tr>
-              <th style={{ width: 60 }}>排序</th>
-              <th style={{ width: 48 }}>Logo</th>
               <th>名称</th>
               <th>厂商</th>
               <th>标识</th>
-              <th>输入价格</th>
-              <th>输出价格</th>
-              <th>上下文</th>
-              <th>标签</th>
+              <th>价格</th>
               <th>状态</th>
               <th style={{ width: 180 }}>操作</th>
             </tr>
           </thead>
           <tbody>
-            {prices.length === 0 ? (
-              <tr><td colSpan={11} className="empty-state" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无模型，点击「新增模型」</td></tr>
-            ) : prices.map(m => (
+            {filtered.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: 0 }}>
+                <EmptyCard
+                  icon={DollarSign}
+                  title={search ? '没有匹配的模型' : '暂无模型，点击「新增模型」'}
+                  description={search ? '试试别的关键字' : '点击右上角添加第一个模型'}
+                />
+              </td></tr>
+            ) : filtered.map(m => (
               <tr key={m.id} ref={el => { rowRefs.current[m.model_id] = el }}>
-                <td style={{ fontFamily: 'monospace', color: 'var(--muted)', fontSize: 12 }}>{m.sort_order}</td>
                 <td>
-                  {m.logo ? (
-                    <img
-                      src={`https://unpkg.com/@lobehub/icons-static-png@latest/light/${m.logo.toLowerCase()}.png`}
-                      alt={m.logo}
-                      width={28} height={28}
-                      style={{ borderRadius: 6, objectFit: 'contain' }}
-                      onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-                    />
-                  ) : (
-                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-                <td>
-                  <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {m.name}
-                    {m.featured && <Star size={12} color="#ca8a04" fill="#ca8a04" />}
-                  </div>
-                  {m.description && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.description}</div>}
-                </td>
-                <td>{m.provider || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
-                <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{m.model_id}</code></td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--success)' }}>
-                  {isImageModel(m.tags)
-                    ? `$${(m.input_price ?? 0).toFixed(4)}/张`
-                    : `$${(m.input_price ?? 0).toFixed(2)}/M`}
-                </td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
-                  {isImageModel(m.tags)
-                    ? <span style={{ color: 'var(--muted)' }}>—</span>
-                    : `$${(m.output_price ?? 0).toFixed(2)}/M`}
-                </td>
-                <td style={{ fontSize: 12, color: 'var(--muted)' }}>{m.context_window || '—'}</td>
-                <td style={{ maxWidth: 160 }}>
-                  {m.tags
-                    ? <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {m.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
-                          <span key={t} className="badge badge-gray" style={{ fontSize: 10 }}>{t}</span>
-                        ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    {m.logo ? (
+                      <img
+                        src={`https://unpkg.com/@lobehub/icons-static-png@latest/light/${m.logo.toLowerCase()}.png`}
+                        alt={m.logo}
+                        width={28} height={28}
+                        style={{ borderRadius: 6, objectFit: 'contain', flexShrink: 0 }}
+                        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                      />
+                    ) : (
+                      <div style={{ width: 28, height: 28, background: 'var(--surface-2)', borderRadius: 6, flexShrink: 0 }} />
+                    )}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {m.name}
+                        {m.featured && <Star size={12} color="#ca8a04" fill="#ca8a04" />}
                       </div>
-                    : <span style={{ color: 'var(--muted)' }}>—</span>}
+                      {m.description && (
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {m.description}
+                        </div>
+                      )}
+                      {m.tags && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                          {m.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => (
+                            <span key={t} className="badge badge-gray" style={{ fontSize: 10 }}>{t}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                <td>{m.provider || <span style={{ color: 'var(--text-secondary)' }}>—</span>}</td>
+                <td><code style={{ fontSize: 11, background: 'var(--surface-2)', padding: '2px 6px', borderRadius: 4 }}>{m.model_id}</code></td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                  {isImageModel(m.tags) ? (
+                    <span style={{ color: 'var(--accent)' }}>${(m.input_price ?? 0).toFixed(4)}/张</span>
+                  ) : (
+                    <>
+                      <div style={{ color: 'var(--accent)' }}>${(m.input_price ?? 0).toFixed(2)}/M 输入</div>
+                      <div style={{ color: 'var(--text-secondary)', fontSize: 11 }}>${(m.output_price ?? 0).toFixed(2)}/M 输出</div>
+                    </>
+                  )}
                 </td>
                 <td>
                   <span className={`badge ${m.is_visible ? 'badge-green' : 'badge-gray'}`}>
                     {m.is_visible ? '显示' : '隐藏'}
                   </span>
+                  {m.context_window && (
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      ctx {m.context_window}
+                    </div>
+                  )}
                 </td>
                 <td>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -468,6 +509,16 @@ export default function ModelPricesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除模型"
+        description={<>「<strong>{deleteTarget?.name}</strong>」(<code>{deleteTarget?.model_id}</code>) 将被删除。<br />此操作不可恢复。</>}
+        confirmLabel="删除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
