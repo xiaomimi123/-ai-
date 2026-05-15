@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { ListTodo, Search, RefreshCw, RotateCcw, DollarSign, X } from 'lucide-react'
+import { ListTodo, RefreshCw, RotateCcw, DollarSign, X, CheckCircle, Loader2, AlertCircle, Clock } from 'lucide-react'
 import Pagination from '../../components/Pagination'
 import { adminTaskApi, type AdminTaskRow } from './api/taskApi'
+import { PageHeader } from '../../components/PageHeader'
+import { StatCard } from '../../components/StatCard'
+import { FilterTabs } from '../../components/FilterTabs'
+import { SearchInput } from '../../components/SearchInput'
+import { ConfirmDialog } from '../../components/ConfirmDialog'
+import { EmptyCard } from '../../components/EmptyCard'
 
 // 与 Logs.tsx 对齐：1-indexed 页码 + 共享 Pagination 组件
 // 后端 list 接口期望 p 从 0 开始，因此请求时 page-1
@@ -53,6 +59,7 @@ export default function TasksPage() {
   const [refundReason, setRefundReason] = useState('')
   const [refunding, setRefunding] = useState(false)
   const [retrying, setRetrying] = useState<string | null>(null)
+  const [retryTarget, setRetryTarget] = useState<AdminTaskRow | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -80,11 +87,15 @@ export default function TasksPage() {
 
   const handleSearch = () => { if (page !== 1) setPage(1); else load() }
 
-  const onRetry = async (row: AdminTaskRow) => {
-    if (!window.confirm(`确认重试任务 ${row.task_id}？\n仅 FAILURE / TIMEOUT 状态可重试`)) return
-    setRetrying(row.task_id)
+  const onRetry = (row: AdminTaskRow) => {
+    setRetryTarget(row)
+  }
+
+  const doRetry = async () => {
+    if (!retryTarget) return
+    setRetrying(retryTarget.task_id)
     try {
-      await adminTaskApi.retry(row.task_id)
+      await adminTaskApi.retry(retryTarget.task_id)
       toast.success('已加入重试')
       load()
     } catch (e: unknown) {
@@ -92,6 +103,7 @@ export default function TasksPage() {
       toast.error(msg)
     } finally {
       setRetrying(null)
+      setRetryTarget(null)
     }
   }
 
@@ -110,7 +122,6 @@ export default function TasksPage() {
     if (!refundTarget) return
     const reason = refundReason.trim()
     if (!reason) { toast.error('请填写退款原因'); return }
-    if (!window.confirm(`确认退款？此操作不可撤销。\n任务：${refundTarget.task_id}\n额度：$${quotaToUsd(refundTarget.quota).toFixed(4)}\n原因：${reason}`)) return
     setRefunding(true)
     try {
       await adminTaskApi.refund(refundTarget.task_id, reason)
@@ -126,52 +137,68 @@ export default function TasksPage() {
     }
   }
 
+  // 本页统计（list endpoint 是分页的，所以这是当前页范围内的计数）
+  const stats = useMemo(() => {
+    const s = { success: 0, inProgress: 0, queued: 0, failed: 0 }
+    for (const t of list) {
+      switch (t.status) {
+        case 'SUCCESS': s.success++; break
+        case 'IN_PROGRESS': s.inProgress++; break
+        case 'QUEUED':
+        case 'SUBMITTED': s.queued++; break
+        case 'FAILURE':
+        case 'TIMEOUT': s.failed++; break
+      }
+    }
+    return s
+  }, [list])
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <ListTodo size={22} color="var(--primary)"/>
-          <div>
-            <h1 className="page-title" style={{ margin: 0 }}>异步任务管理</h1>
-            <p className="page-desc" style={{ margin: 0 }}>查看所有平台异步任务（gpt-image / jimeng 等），重试失败任务、手动退款</p>
-          </div>
-        </div>
+      <PageHeader
+        title="异步任务管理"
+        description="查看所有平台异步任务（gpt-image / jimeng 等），重试失败任务、手动退款"
+        icon={ListTodo}
+      />
+
+      {/* 本页统计 */}
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatCard label="成功"      value={stats.success}    icon={CheckCircle}  color="success" />
+        <StatCard label="进行中"    value={stats.inProgress} icon={Loader2}      color="info"    />
+        <StatCard label="排队中"    value={stats.queued}     icon={Clock}        color="warning" />
+        <StatCard label="失败/超时" value={stats.failed}     icon={AlertCircle}  color="danger"  />
       </div>
 
       {/* 筛选区 */}
-      <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <select value={filter.platform} onChange={e => setFilter(p => ({ ...p, platform: e.target.value }))} style={{ minWidth: 130 }}>
-          {PLATFORM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <select value={filter.status} onChange={e => setFilter(p => ({ ...p, status: e.target.value }))} style={{ minWidth: 150 }}>
-          {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-          <input
-            placeholder="用户 ID"
+      <div className="card" style={{ padding: 16, marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <FilterTabs
+          value={filter.status}
+          onChange={v => setFilter(p => ({ ...p, status: v }))}
+          options={STATUS_OPTIONS.map(o => ({ label: o.label, value: o.value }))}
+        />
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <select value={filter.platform} onChange={e => setFilter(p => ({ ...p, platform: e.target.value }))} style={{ minWidth: 130 }}>
+            {PLATFORM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <SearchInput
             value={filter.user_id}
-            onChange={e => setFilter(p => ({ ...p, user_id: e.target.value.replace(/\D/g, '') }))}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            style={{ paddingLeft: 32, width: 130 }}
+            onChange={v => setFilter(p => ({ ...p, user_id: v.replace(/\D/g, '') }))}
+            onSubmit={handleSearch}
+            placeholder="用户 ID"
+            width={140}
           />
-        </div>
-        <div style={{ position: 'relative' }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-          <input
-            placeholder="task_id 关键字"
+          <SearchInput
             value={filter.keyword}
-            onChange={e => setFilter(p => ({ ...p, keyword: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
-            style={{ paddingLeft: 32, width: 200 }}
+            onChange={v => setFilter(p => ({ ...p, keyword: v }))}
+            onSubmit={handleSearch}
+            placeholder="task_id 关键字"
+            width={220}
           />
+          <button className="btn btn-primary" onClick={handleSearch} disabled={loading}>查询</button>
+          <button className="btn btn-outline" onClick={() => load()} disabled={loading}>
+            <RefreshCw size={14}/>刷新
+          </button>
         </div>
-        <button className="btn btn-primary" onClick={handleSearch} disabled={loading}>
-          <Search size={14}/>查询
-        </button>
-        <button className="btn btn-outline" onClick={() => load()} disabled={loading}>
-          <RefreshCw size={14}/>刷新
-        </button>
       </div>
 
       {/* 表格 */}
@@ -192,7 +219,13 @@ export default function TasksPage() {
           </thead>
           <tbody>
             {list.length === 0
-              ? <tr><td colSpan={9} className="empty-state">{loading ? '加载中...' : '暂无任务'}</td></tr>
+              ? <tr><td colSpan={9} style={{ padding: 0 }}>
+                  <EmptyCard
+                    icon={ListTodo}
+                    title={loading ? '加载中...' : '暂无任务'}
+                    description={(filter.platform || filter.status || filter.user_id || filter.keyword) && !loading ? '试试别的筛选条件' : ''}
+                  />
+                </td></tr>
               : list.map(t => {
                 const elapsed = (t.finish_time && t.submit_time && t.finish_time > 0)
                   ? `${(t.finish_time - t.submit_time)}s`
@@ -202,7 +235,7 @@ export default function TasksPage() {
                 return (
                   <tr key={t.id}>
                     <td>
-                      <code title={t.task_id} style={{ fontFamily: 'monospace', fontSize: 12, background: '#f3f4f6', padding: '2px 8px', borderRadius: 4 }}>
+                      <code title={t.task_id} style={{ fontFamily: 'monospace', fontSize: 12, background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 4 }}>
                         {t.task_id.length > 16 ? `${t.task_id.slice(0, 16)}…` : t.task_id}
                       </code>
                     </td>
@@ -330,6 +363,21 @@ export default function TasksPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!retryTarget}
+        title="确认重试任务"
+        description={
+          <>
+            任务: <code style={{ fontFamily: 'monospace', fontSize: 12 }}>{retryTarget?.task_id}</code><br />
+            仅 FAILURE / TIMEOUT 状态可重试。任务会重新提交到上游，<strong>新一轮调用会产生费用。</strong>
+          </>
+        }
+        confirmLabel="重试"
+        confirmVariant="primary"
+        onConfirm={doRetry}
+        onCancel={() => setRetryTarget(null)}
+      />
     </div>
   )
 }
