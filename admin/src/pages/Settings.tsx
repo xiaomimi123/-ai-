@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle, Lock, KeyRound } from 'lucide-react'
+import { Save, Globe, UserPlus, Shield, Mail, Loader2, MessageCircle, Lock, KeyRound, Settings as SettingsIcon } from 'lucide-react'
 import { optionApi, lingjingConfigApi, authApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
 
 // 后端 GetOptions 对 *Token / *Secret 字段返回 sentinel 而不是真值
 // 前端识别后：input 留空 + placeholder 提示「已配置」；保存时空值跳过避免误清
@@ -161,15 +162,16 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">系统设置</h1>
-          <p className="page-desc">所有配置修改后需点击保存才会生效</p>
-        </div>
-        <button className="btn btn-primary" onClick={handleSaveAll} disabled={saving} style={{ padding: '10px 28px' }}>
-          <Save size={16}/>{saving ? '保存中...' : '保存全部设置'}
-        </button>
-      </div>
+      <PageHeader
+        title="系统设置"
+        description="所有配置修改后需点击保存才会生效"
+        icon={SettingsIcon}
+        actions={
+          <button className="btn btn-primary" onClick={handleSaveAll} disabled={saving} style={{ padding: '10px 28px' }}>
+            <Save size={16}/>{saving ? '保存中...' : '保存全部设置'}
+          </button>
+        }
+      />
 
       <div style={{ display: 'grid', gap: 20, maxWidth: 720 }}>
 
@@ -222,9 +224,9 @@ export default function SettingsPage() {
         {/* 人机验证 */}
         <div className="card">
           <div className="card-header"><span className="card-title"><Shield size={16} color="var(--warning)"/>人机验证（Turnstile）</span></div>
-          <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#92400e' }}>
+          <div className="alert alert-warning" style={{ marginBottom: 16 }}>
             Cloudflare Turnstile 是免费的人机验证服务，可有效防止机器人批量注册。
-            <a href="https://dash.cloudflare.com/sign-up?to=/:account/turnstile" target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb', marginLeft: 4 }}>前往申请 →</a>
+            <a href="https://dash.cloudflare.com/sign-up?to=/:account/turnstile" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--info)', marginLeft: 4 }}>前往申请 →</a>
           </div>
           <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', borderRadius: 10, background: 'var(--bg)', marginBottom: 16 }}>
             <div>
