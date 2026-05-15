@@ -6,6 +6,7 @@ import Pagination from '../components/Pagination'
 import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { EmptyCard } from '../components/EmptyCard'
 
 const ROLES = [
   { value: 1, label: '普通用户' },
@@ -43,6 +44,7 @@ export default function UsersPage() {
   const [searchKeyword, setSearchKeyword] = useState('')
   const [groups, setGroups] = useState<GroupConfig[]>([])
   const [editUser, setEditUser] = useState<any>(null)
+  const [editTab, setEditTab] = useState<'account' | 'config'>('account')
   const [editForm, setEditForm] = useState({
     username: '', display_name: '', email: '', password: '',
     quota: '', role: 1, group: 'default', status: 1, affiliate_rate: '',
@@ -113,6 +115,7 @@ export default function UsersPage() {
 
   const handleEdit = (u: any) => {
     setEditUser(u)
+    setEditTab('account')
     setEditForm({
       username: u.username,
       display_name: u.display_name || '',
@@ -308,75 +311,108 @@ export default function UsersPage() {
 
       <div className="table-wrap">
         <table>
-          <thead><tr><th>ID</th><th>用户名</th><th>显示名</th><th>邮箱</th><th>分组</th><th>角色</th><th>状态</th><th>剩余额度</th><th>已消耗</th><th>请求数</th><th>操作</th></tr></thead>
+          <thead>
+            <tr>
+              <th>用户</th>
+              <th>显示名 / 邮箱</th>
+              <th>分组</th>
+              <th>额度</th>
+              <th>状态</th>
+              <th style={{ width: 120 }}>操作</th>
+            </tr>
+          </thead>
           <tbody>
-            {filtered.length === 0
-              ? <tr><td colSpan={11} className="empty-state">暂无用户数据</td></tr>
-              : filtered.map(u => {
-                const role = getRoleLabel(u.role)
-                return (
-                  <tr key={u.id}>
-                    <td style={{ color: 'var(--muted)', fontSize: 12 }}>{u.id}</td>
-                    <td><strong>{u.username}</strong></td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.display_name || '-'}</td>
-                    <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>{u.email || '-'}</td>
-                    <td>
-                      {(() => {
-                        const cur = u.group || 'default'
-                        const c = pickColor(cur)
-                        const curGroup = groups.find(g => g.key === cur)
-                        return (
-                          <select
-                            value={cur}
-                            title={groupTooltip(curGroup)}
-                            onChange={async e => {
-                              try {
-                                const r = await groupApi.updateUser({ user_id: u.id, group: e.target.value })
-                                if (r.data.success) { toast.success('用户组已更新'); load() }
-                                else toast.error(r.data.message)
-                              } catch { toast.error('更新失败') }
-                            }}
-                            style={{
-                              fontSize: 12, fontWeight: 600,
-                              padding: '3px 10px', borderRadius: 999,
-                              background: c.bg, color: c.color,
-                              border: `1px solid ${c.border}`,
-                              cursor: 'pointer',
-                              appearance: 'none',
-                              // 从后端动态分组列表渲染选项
-                            }}
-                          >
-                            {groups.length === 0
-                              ? <option value={cur}>{cur}</option>
-                              : groups.map(g => <option key={g.key} value={g.key}>{g.name}</option>)
-                            }
-                          </select>
-                        )
-                      })()}
-                    </td>
-                    <td><span className={`badge ${role.cls}`}>{role.label}</span></td>
-                    <td><span className={`badge ${u.status === 1 ? 'badge-green' : 'badge-red'}`}>{u.status === 1 ? '正常' : '禁用'}</span></td>
-                    <td style={{ fontFamily: 'monospace', fontWeight: 600, color: u.quota < 0 ? 'var(--danger)' : 'var(--primary)' }}>${toUsd(u.quota)}</td>
-                    <td style={{ fontFamily: 'monospace', color: 'var(--text-secondary)' }}>${toUsd(u.used_quota)}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{u.request_count?.toLocaleString() || 0}</td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost btn-icon" title="编辑" onClick={() => handleEdit(u)}>
-                          <Edit2 size={14} color="var(--primary)"/>
+            {filtered.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: 0 }}>
+                <EmptyCard
+                  title={searchKeyword ? '未找到匹配用户' : '暂无用户数据'}
+                  description={searchKeyword ? '试试别的关键字或清除搜索' : ''}
+                />
+              </td></tr>
+            ) : filtered.map(u => {
+              const role = getRoleLabel(u.role)
+              return (
+                <tr key={u.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <strong>{u.username}</strong>
+                      <span className={`badge ${role.cls}`} style={{ fontSize: 10 }}>{role.label}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'monospace', marginTop: 2 }}>
+                      #{u.id}
+                      {(u.request_count || 0) > 0 && <> · {u.request_count.toLocaleString()} 调用</>}
+                    </div>
+                  </td>
+                  <td style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+                    <div>{u.display_name || '—'}</div>
+                    {u.email && (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>{u.email}</div>
+                    )}
+                  </td>
+                  <td>
+                    {(() => {
+                      const cur = u.group || 'default'
+                      const c = pickColor(cur)
+                      const curGroup = groups.find(g => g.key === cur)
+                      return (
+                        <select
+                          value={cur}
+                          title={groupTooltip(curGroup)}
+                          onChange={async e => {
+                            try {
+                              const r = await groupApi.updateUser({ user_id: u.id, group: e.target.value })
+                              if (r.data.success) { toast.success('用户组已更新'); load() }
+                              else toast.error(r.data.message)
+                            } catch { toast.error('更新失败') }
+                          }}
+                          style={{
+                            fontSize: 12, fontWeight: 600,
+                            padding: '3px 10px', borderRadius: 999,
+                            background: c.bg, color: c.color,
+                            border: `1px solid ${c.border}`,
+                            cursor: 'pointer',
+                            appearance: 'none',
+                          }}
+                        >
+                          {groups.length === 0
+                            ? <option value={cur}>{cur}</option>
+                            : groups.map(g => <option key={g.key} value={g.key}>{g.name}</option>)
+                          }
+                        </select>
+                      )
+                    })()}
+                  </td>
+                  <td>
+                    <div style={{ fontFamily: 'monospace', fontWeight: 600, color: u.quota < 0 ? 'var(--danger)' : 'var(--primary)' }}>
+                      ${toUsd(u.quota)}
+                    </div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                      已用 ${toUsd(u.used_quota)}
+                    </div>
+                  </td>
+                  <td>
+                    <span className={`badge ${u.status === 1 ? 'badge-green' : 'badge-red'}`}>
+                      {u.status === 1 ? '正常' : '禁用'}
+                    </span>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-ghost btn-icon" title="编辑" onClick={() => handleEdit(u)}>
+                        <Edit2 size={14} color="var(--primary)"/>
+                      </button>
+                      <button className="btn btn-ghost btn-icon" title={u.status === 1 ? '禁用' : '启用'} onClick={() => handleToggle(u)}>
+                        {u.status === 1 ? <UserX size={14} color="var(--warning)"/> : <UserCheck size={14} color="var(--success)"/>}
+                      </button>
+                      {u.role < 100 && (
+                        <button className="btn btn-ghost btn-icon" title="删除" onClick={() => handleDelete(u)}>
+                          <Trash2 size={14} color="var(--danger)"/>
                         </button>
-                        <button className="btn btn-ghost btn-icon" title={u.status === 1 ? '禁用' : '启用'} onClick={() => handleToggle(u)}>
-                          {u.status === 1 ? <UserX size={14} color="var(--warning)"/> : <UserCheck size={14} color="var(--success)"/>}
-                        </button>
-                        {u.role < 100 && (
-                          <button className="btn btn-ghost btn-icon" title="删除" onClick={() => handleDelete(u)}>
-                            <Trash2 size={14} color="var(--danger)"/>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -386,79 +422,138 @@ export default function UsersPage() {
       {/* Edit Modal */}
       {editUser && (
         <div className="modal-overlay" onClick={() => setEditUser(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ width: 560 }}>
+          <div className="modal modal-md" onClick={e => e.stopPropagation()}>
             <div className="modal-title">编辑用户 — {editUser.username} (#{editUser.id})</div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">用户名</label>
-                <input value={editForm.username} onChange={e => setEditForm(p => ({ ...p, username: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">显示名称</label>
-                <input value={editForm.display_name} onChange={e => setEditForm(p => ({ ...p, display_name: e.target.value }))} />
-              </div>
+            {/* tabs */}
+            <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 16, marginTop: 4 }}>
+              <button
+                type="button"
+                onClick={() => setEditTab('account')}
+                style={{
+                  padding: '8px 16px',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: `2px solid ${editTab === 'account' ? 'var(--accent)' : 'transparent'}`,
+                  color: editTab === 'account' ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  marginBottom: -1,
+                }}
+              >
+                账号
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditTab('config')}
+                style={{
+                  padding: '8px 16px',
+                  background: 'none',
+                  border: 'none',
+                  borderBottom: `2px solid ${editTab === 'config' ? 'var(--accent)' : 'transparent'}`,
+                  color: editTab === 'config' ? 'var(--accent)' : 'var(--text-secondary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  marginBottom: -1,
+                }}
+              >
+                配置
+              </button>
             </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">邮箱</label>
-                <input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">重置密码 <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(留空不修改)</span></label>
-                <input type="password" placeholder="留空不修改" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
-              </div>
-            </div>
+            {editTab === 'account' && (
+              <>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">用户名</label>
+                    <input value={editForm.username} onChange={e => setEditForm(p => ({ ...p, username: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">显示名称</label>
+                    <input value={editForm.display_name} onChange={e => setEditForm(p => ({ ...p, display_name: e.target.value }))} />
+                  </div>
+                </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">额度 ($)</label>
-                <input type="number" step="0.01" value={editForm.quota} onChange={e => setEditForm(p => ({ ...p, quota: e.target.value }))} />
-              </div>
-              <div className="form-group">
-                <label className="form-label">分组</label>
-                <select value={editForm.group} onChange={e => setEditForm(p => ({ ...p, group: e.target.value }))}>
-                  {groups.length === 0
-                    ? <option value={editForm.group}>{editForm.group}</option>
-                    : groups.map(g => <option key={g.key} value={g.key}>{g.name} · {g.description}</option>)
-                  }
-                </select>
-              </div>
-            </div>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">邮箱</label>
+                    <input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">重置密码 <span style={{ color: 'var(--text-secondary)', fontWeight: 400 }}>(留空不修改)</span></label>
+                    <input type="password" placeholder="留空不修改" value={editForm.password} onChange={e => setEditForm(p => ({ ...p, password: e.target.value }))} />
+                  </div>
+                </div>
+              </>
+            )}
 
-            <div className="form-row">
-              <div className="form-group">
-                <label className="form-label">角色</label>
-                <select value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: parseInt(e.target.value) }))}>
-                  {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">状态</label>
-                <select value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: parseInt(e.target.value) }))}>
-                  <option value={1}>正常</option>
-                  <option value={2}>禁用</option>
-                </select>
-              </div>
-            </div>
+            {editTab === 'config' && (() => {
+              const newQuotaUsd = parseFloat(editForm.quota) || 0
+              const oldQuotaUsd = (editUser.quota || 0) / 500000
+              const quotaDelta = newQuotaUsd - oldQuotaUsd
+              return (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">额度 ($)</label>
+                      <input type="number" step="0.01" value={editForm.quota} onChange={e => setEditForm(p => ({ ...p, quota: e.target.value }))} />
+                      {Math.abs(quotaDelta) >= 0.01 && (
+                        <div className="form-hint" style={{ color: quotaDelta > 0 ? 'var(--accent)' : 'var(--danger)', fontWeight: 600 }}>
+                          {quotaDelta > 0 ? `+$${quotaDelta.toFixed(2)}` : `−$${Math.abs(quotaDelta).toFixed(2)}`}
+                          <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 8 }}>
+                            ${oldQuotaUsd.toFixed(2)} → ${newQuotaUsd.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">分组</label>
+                      <select value={editForm.group} onChange={e => setEditForm(p => ({ ...p, group: e.target.value }))}>
+                        {groups.length === 0
+                          ? <option value={editForm.group}>{editForm.group}</option>
+                          : groups.map(g => <option key={g.key} value={g.key}>{g.name} · {g.description}</option>)
+                        }
+                      </select>
+                    </div>
+                  </div>
 
-            <div className="form-row">
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">
-                  专属返利比例 (%)
-                  <span style={{ color: 'var(--muted)', fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
-                    作为邀请人时使用此比例，留空或 0 则用全局设置
-                  </span>
-                </label>
-                <input
-                  type="number" step="0.1" min="0" max="100"
-                  placeholder="例如 20 表示 20%（留空 = 用全局）"
-                  value={editForm.affiliate_rate}
-                  onChange={e => setEditForm(p => ({ ...p, affiliate_rate: e.target.value }))}
-                />
-              </div>
-            </div>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label className="form-label">角色</label>
+                      <select value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role: parseInt(e.target.value) }))}>
+                        {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">状态</label>
+                      <select value={editForm.status} onChange={e => setEditForm(p => ({ ...p, status: parseInt(e.target.value) }))}>
+                        <option value={1}>正常</option>
+                        <option value={2}>禁用</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">
+                        专属返利比例 (%)
+                        <span style={{ color: 'var(--text-secondary)', fontWeight: 400, marginLeft: 6, fontSize: 12 }}>
+                          作为邀请人时使用此比例，留空或 0 则用全局设置
+                        </span>
+                      </label>
+                      <input
+                        type="number" step="0.1" min="0" max="100"
+                        placeholder="例如 20 表示 20%（留空 = 用全局）"
+                        value={editForm.affiliate_rate}
+                        onChange={e => setEditForm(p => ({ ...p, affiliate_rate: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
 
             <div className="modal-actions">
               <button className="btn btn-outline" onClick={() => setEditUser(null)}>取消</button>
