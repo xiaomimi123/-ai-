@@ -3,6 +3,18 @@ import { Save, Search, Plus, Trash2, Sliders } from 'lucide-react'
 import { optionApi } from '../api'
 import toast from 'react-hot-toast'
 
+// 这个页面只有模型名（ratio map 的 key），没有 tags 数据。
+// 按名字推断是否图像模型，避免显示误导的 "$X/1K tokens"。
+// 命中规则与 frontend isImageModel 互补：tags 优先；这里仅靠 model_id 关键词兜底。
+function isLikelyImageModel(modelName: string): boolean {
+  const lower = modelName.toLowerCase()
+  return lower.includes('image')
+      || lower.includes('imagen')
+      || lower.includes('dall-e')
+      || lower.includes('nano-banana')
+      || lower.includes('flux')
+}
+
 export default function ModelRatiosPage() {
   const [modelRatio, setModelRatio] = useState<Record<string, number>>({})
   const [completionRatio, setCompletionRatio] = useState<Record<string, number>>({})
@@ -165,7 +177,9 @@ export default function ModelRatiosPage() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'monospace' }}>
                       {tab === 'input'
-                        ? `$${((modelRatio[model] || 0) * 0.002).toFixed(4)}/1K`
+                        ? (isLikelyImageModel(model)
+                            ? <span style={{ color: 'var(--muted)' }}>× 倍率（按张计费模型）</span>
+                            : `$${((modelRatio[model] || 0) * 0.002).toFixed(4)}/1K tokens`)
                         : completionRatio[model] ? `${completionRatio[model].toFixed(2)}x` : '1x (默认)'}
                     </td>
                     <td>

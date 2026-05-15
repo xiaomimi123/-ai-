@@ -4,6 +4,14 @@ import { Plus, Trash2, Edit2, Eye, EyeOff, Star, X, ExternalLink } from 'lucide-
 import { modelPriceApi } from '../api'
 import toast from 'react-hot-toast'
 
+// 图像模型识别：tags 含任一关键词即视为按"张"计费的图像模型
+// 必须与 frontend/src/utils/modelPricing.ts 的 IMAGE_TAGS 保持一致
+const IMAGE_TAGS = new Set(['生图', '画图', '图像', 'image', 'images', '图片', '文生图'])
+function isImageModel(tags?: string | null): boolean {
+  if (!tags) return false
+  return tags.split(',').map(t => t.trim()).some(t => IMAGE_TAGS.has(t))
+}
+
 interface ModelPrice {
   id?: number
   model_id: string
@@ -159,8 +167,8 @@ export default function ModelPricesPage() {
               <th>名称</th>
               <th>厂商</th>
               <th>标识</th>
-              <th>输入 $/M</th>
-              <th>输出 $/M</th>
+              <th>输入价格</th>
+              <th>输出价格</th>
               <th>上下文</th>
               <th>标签</th>
               <th>状态</th>
@@ -195,8 +203,16 @@ export default function ModelPricesPage() {
                 </td>
                 <td>{m.provider || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
                 <td><code style={{ fontSize: 11, background: '#f3f4f6', padding: '2px 6px', borderRadius: 4 }}>{m.model_id}</code></td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--success)' }}>${(m.input_price ?? 0).toFixed(2)}</td>
-                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>${(m.output_price ?? 0).toFixed(2)}</td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--success)' }}>
+                  {isImageModel(m.tags)
+                    ? `$${(m.input_price ?? 0).toFixed(4)}/张`
+                    : `$${(m.input_price ?? 0).toFixed(2)}/M`}
+                </td>
+                <td style={{ fontFamily: 'monospace', fontSize: 13 }}>
+                  {isImageModel(m.tags)
+                    ? <span style={{ color: 'var(--muted)' }}>—</span>
+                    : `$${(m.output_price ?? 0).toFixed(2)}/M`}
+                </td>
                 <td style={{ fontSize: 12, color: 'var(--muted)' }}>{m.context_window || '—'}</td>
                 <td style={{ maxWidth: 160 }}>
                   {m.tags
@@ -361,23 +377,27 @@ export default function ModelPricesPage() {
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14, marginBottom: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isImageModel(dialog.data.tags) ? '1fr 1fr' : '1fr 1fr 1fr', gap: 14, marginBottom: 6 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输入 $/百万 Token</label>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  {isImageModel(dialog.data.tags) ? '价格 $/张' : '输入 $/百万 Token'}
+                </label>
                 <input
                   type="number" step="0.0001" min="0"
                   value={dialog.data.input_price}
                   onChange={e => setDialog({ ...dialog, data: { ...dialog.data, input_price: parseFloat(e.target.value) || 0 } })}
                 />
               </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输出 $/百万 Token</label>
-                <input
-                  type="number" step="0.0001" min="0"
-                  value={dialog.data.output_price}
-                  onChange={e => setDialog({ ...dialog, data: { ...dialog.data, output_price: parseFloat(e.target.value) || 0 } })}
-                />
-              </div>
+              {!isImageModel(dialog.data.tags) && (
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>输出 $/百万 Token</label>
+                  <input
+                    type="number" step="0.0001" min="0"
+                    value={dialog.data.output_price}
+                    onChange={e => setDialog({ ...dialog, data: { ...dialog.data, output_price: parseFloat(e.target.value) || 0 } })}
+                  />
+                </div>
+              )}
               <div>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>上下文窗口</label>
                 <input
@@ -386,6 +406,13 @@ export default function ModelPricesPage() {
                   onChange={e => setDialog({ ...dialog, data: { ...dialog.data, context_window: e.target.value } })}
                 />
               </div>
+            </div>
+            <div style={{ marginBottom: 14 }}>
+              <small style={{ color: 'var(--text-secondary, var(--muted))', fontSize: 11 }}>
+                {isImageModel(dialog.data.tags)
+                  ? '提示：图像模型按张计费。后端 quota = input_price × 500000，例如 0.012 = 6000 quota/张'
+                  : '提示：聊天模型按 token 计费，输入价格 × token 数即扣费'}
+              </small>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>

@@ -250,17 +250,39 @@ func errResp(c *gin.Context, code int, typ, msg string) {
 	c.JSON(code, gin.H{"error": gin.H{"message": msg, "type": typ}})
 }
 
-// estimateImageQuota returns a rough quota estimate for the request before
-// upstream submit. F1 will replace with model-aware pricing; today we just
-// use a flat per-image cost so the row has a sensible non-zero quota for
-// audit purposes.
+// estimateImageQuota returns a quota estimate for an async image-generation
+// request before upstream submit.
+//
+// 计费约定：
+//   - 图像模型在 model_prices.input_price 里存 "$ / 张"（USD per image）
+//   - 项目内 quota 换算：1 USD = config.QuotaPerUnit quota（默认 500000）
+//
+// 因此 quotaPerImage = input_price × QuotaPerUnit。
+// 当模型未在 model_prices 配置 / 配置价格 ≤ 0 / DB 查询失败时回退到 1024 quota/张
+// 兜底（保持旧行为，避免发布过程中新模型零扣费）。
+//
+// 备注：这里只是 pre-consume 估算，真正按结算价扣费要等任务回调（F1+）。
 func estimateImageQuota(req taskRequestBody) int {
 	n := req.N
 	if n <= 0 {
 		n = 1
 	}
-	const perImage = 1024
-	return perImage * n
+	const fallbackPerImage = 1024
+
+	price, err := model.GetModelPriceByModelID(req.Model)
+	if err != nil || price == nil || price.InputPrice <= 0 {
+		// 兜底：未配置或查询失败时维持旧行为 1024/张，记录一行 SysLog 方便排查
+		if req.Model != "" {
+			logger.SysLog("estimateImageQuota: no price config for model=" + req.Model + ", fallback to 1024/image")
+		}
+		return fallbackPerImage * n
+	}
+
+	quotaPerImage := int(price.InputPrice * config.QuotaPerUnit)
+	if quotaPerImage <= 0 {
+		quotaPerImage = fallbackPerImage
+	}
+	return quotaPerImage * n
 }
 
 // shouldDispatchToTaskRelay decides whether the current image-generation

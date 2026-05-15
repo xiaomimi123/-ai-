@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"gorm.io/gorm"
+
 	"github.com/songquanpeng/one-api/common/logger"
 )
 
@@ -328,6 +330,24 @@ func GetVisibleModelPrices() ([]ModelPrice, error) {
 	var prices []ModelPrice
 	err := DB.Where("is_visible = ?", true).Order("sort_order ASC, id ASC").Find(&prices).Error
 	return prices, err
+}
+
+// GetModelPriceByModelID 按 model_id 精确查找一条价格配置（不限 is_visible），用于
+// 后端计费路径读取 input_price。返回 (nil, gorm.ErrRecordNotFound) 表示没配置；
+// 调用方应按业务回退（例如 estimateImageQuota 走 1024/张 兜底）。
+//
+// 对 modelID 空串或 DB 未初始化（单测场景）返回 ErrRecordNotFound 友好降级，
+// 避免在测试里 panic（lingjing_extend_test 不依赖 DB）。
+func GetModelPriceByModelID(modelID string) (*ModelPrice, error) {
+	if modelID == "" || DB == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	var price ModelPrice
+	err := DB.Where("model_id = ?", modelID).First(&price).Error
+	if err != nil {
+		return nil, err
+	}
+	return &price, nil
 }
 
 // UpsertModelPrice 按 model_id 幂等写入
