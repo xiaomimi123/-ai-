@@ -126,3 +126,19 @@ export const withdrawApi = {
   process: (id: number, data: { action: 'approve' | 'reject' | 'paid'; reject_reason?: string; admin_remark?: string }) =>
     http.put(`/api/admin/withdraw/${id}`, data),
 }
+
+// 财务统计
+export const financeApi = {
+  summary: (params: { range?: string; from?: string; to?: string }) =>
+    http.get('/api/admin/lingjing/finance/summary', { params }),
+  trend: (days: number = 30) =>
+    http.get('/api/admin/lingjing/finance/trend', { params: { days } }),
+  listLedger: (params?: { page?: number; page_size?: number; upstream?: string; from?: string; to?: string }) =>
+    http.get('/api/admin/lingjing/cost-ledger', { params }),
+  createLedger: (data: { occur_date: string; upstream: string; type: 'expense' | 'refund'; amount_usd: number; remark?: string }) =>
+    http.post('/api/admin/lingjing/cost-ledger', data),
+  updateLedger: (id: number, data: object) =>
+    http.put(`/api/admin/lingjing/cost-ledger/${id}`, data),
+  deleteLedger: (id: number) =>
+    http.delete(`/api/admin/lingjing/cost-ledger/${id}`),
+}
