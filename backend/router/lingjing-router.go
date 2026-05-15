@@ -127,6 +127,14 @@ func SetLingjingRouter(router *gin.Engine) {
 		admin.POST("/topups/complete", controller.AdminCompleteOrder)
 
 		admin.PUT("/token/:id/rate-limit", controller.SetTokenRateLimit)
+
+		// 财务统计
+		admin.GET("/finance/summary", controller.AdminGetFinanceSummary)
+		admin.GET("/finance/trend", controller.AdminGetFinanceTrend)
+		admin.GET("/cost-ledger", controller.AdminListCostLedger)
+		admin.POST("/cost-ledger", controller.AdminCreateCostLedger)
+		admin.PUT("/cost-ledger/:id", controller.AdminUpdateCostLedger)
+		admin.DELETE("/cost-ledger/:id", controller.AdminDeleteCostLedger)
 	}
 
 	// ===== 分组管理 =====
