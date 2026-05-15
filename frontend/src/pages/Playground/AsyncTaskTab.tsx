@@ -24,8 +24,10 @@ interface ModelConfig {
 }
 
 const MODELS: ModelConfig[] = [
-  { id: 'gpt-image-2', label: 'GPT Image 2 (apimart)', eta: '30-60秒', supportsRatio: true,  supportsRes: true  },
-  { id: 'jimeng-v3.0', label: '即梦 v3.0',              eta: '60-90秒', supportsRatio: false, supportsRes: false },
+  { id: 'gpt-image-2',            label: 'GPT Image 2 (apimart)',           eta: '30-60秒', supportsRatio: true,  supportsRes: true  },
+  { id: 'gemini-2.5-flash-image', label: 'Gemini 2.5 Flash Image (apimart)', eta: '20-40秒', supportsRatio: true,  supportsRes: true  },
+  { id: 'nano-banana',            label: 'Nano Banana (apimart)',           eta: '20-40秒', supportsRatio: true,  supportsRes: true  },
+  { id: 'jimeng-v3.0',            label: '即梦 v3.0 (待接入)',              eta: '60-90秒', supportsRatio: false, supportsRes: false },
 ]
 
 const RATIOS = ['1:1', '3:2', '2:3', '4:3', '3:4', '16:9', '9:16']
