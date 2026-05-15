@@ -2,11 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, PlayCircle, CheckCircle, XCircle, ToggleLeft, ToggleRight,
   Loader2, RefreshCw, DollarSign, Search, Edit2, Copy,
-  AlertTriangle, Settings, Image as ImageIcon,
+  AlertTriangle, Settings, Image as ImageIcon, Network,
 } from 'lucide-react'
 import { channelApi } from '../api'
 import toast from 'react-hot-toast'
 import Pagination from '../components/Pagination'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
 
 // 注意：编号必须严格匹配后端 backend/relay/channeltype/define.go 的 iota 顺序
 // 之前 DeepSeek 错填成 33（实际是 AwsClaude），导致渠道创建后请求路由到错误 adaptor
@@ -338,31 +340,36 @@ export default function ChannelsPage() {
 
   return (
     <div>
-      {/* 标题区 + 统计 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">渠道管理</h1>
-          <p className="page-desc">
-            共 <strong>{stats.total}</strong>{searchMode ? ' 个匹配' : ' 个'} · 启用 <span style={{ color: 'var(--success)' }}>{stats.enabled}</span>
-            {stats.manualOff > 0 && <> · 手动禁用 <span style={{ color: 'var(--muted)' }}>{stats.manualOff}</span></>}
-            {stats.autoOff > 0 && <> · <span style={{ color: 'var(--danger)' }}>自动禁用 {stats.autoOff}</span></>}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button className="btn btn-outline" onClick={refreshAllBalance} disabled={refreshing}>
-            <RefreshCw size={14} style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
-            {refreshing ? '查询中' : '刷新余额'}
-          </button>
-          <button className="btn btn-outline" onClick={() => handleTestAll('all')} disabled={testingAll}>
-            <PlayCircle size={14} />{testingAll ? '测试中' : '测试全部'}
-          </button>
-          {stats.autoOff > 0 && (
-            <button className="btn btn-outline" onClick={() => handleTestAll('disabled')} disabled={testingAll} title="仅测试已禁用的渠道，自动恢复可用的">
-              <PlayCircle size={14} />测禁用渠道
+      {/* 标题区 + 操作按钮 */}
+      <PageHeader
+        title="渠道管理"
+        description={searchMode ? `搜索结果：${stats.total} 个匹配` : '管理所有上游渠道、Key、状态'}
+        icon={Network}
+        actions={
+          <>
+            <button className="btn btn-outline" onClick={refreshAllBalance} disabled={refreshing}>
+              <RefreshCw size={14} style={refreshing ? { animation: 'spin 1s linear infinite' } : {}} />
+              {refreshing ? '查询中' : '刷新余额'}
             </button>
-          )}
-          <button className="btn btn-primary" onClick={openCreate}><Plus size={14} />添加渠道</button>
-        </div>
+            <button className="btn btn-outline" onClick={() => handleTestAll('all')} disabled={testingAll}>
+              <PlayCircle size={14} />{testingAll ? '测试中' : '测试全部'}
+            </button>
+            {stats.autoOff > 0 && (
+              <button className="btn btn-outline" onClick={() => handleTestAll('disabled')} disabled={testingAll} title="仅测试已禁用的渠道，自动恢复可用的">
+                <PlayCircle size={14} />测禁用渠道
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={openCreate}><Plus size={14} />添加渠道</button>
+          </>
+        }
+      />
+
+      {/* 统计卡片 */}
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatCard label="总渠道"     value={stats.total}     icon={Network}        color="info"    />
+        <StatCard label="启用中"     value={stats.enabled}   icon={CheckCircle}    color="success" />
+        <StatCard label="手动禁用"   value={stats.manualOff} icon={ToggleLeft}     color="warning" />
+        <StatCard label="自动禁用"   value={stats.autoOff}   icon={AlertTriangle}  color="danger"  hint={stats.autoOff > 0 ? '需关注' : ''} />
       </div>
 
       {/* 搜索 + 清理按钮 */}
