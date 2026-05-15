@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Users, DollarSign, TrendingUp, Save } from 'lucide-react'
 import { referralAdminApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
 
 export default function ReferralsPage() {
   const [stats, setStats] = useState<any>(null)
@@ -30,30 +32,18 @@ export default function ReferralsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">分销管理</h1>
-        <p className="page-desc">邀请关系与佣金管理</p>
-      </div>
+      <PageHeader
+        title="分销管理"
+        description="邀请关系与佣金管理"
+        icon={TrendingUp}
+      />
 
       {/* Stats */}
       <div className="stat-grid" style={{ marginBottom: 24 }}>
-        {[
-          { label: '总用户', value: stats?.total_users ?? '--', icon: Users, color: 'var(--primary)', bg: 'var(--primary-50)' },
-          { label: '邀请用户', value: stats?.users_with_inviter ?? '--', sub: stats?.referral_rate, icon: TrendingUp, color: 'var(--success)', bg: '#dcfce7' },
-          { label: '总佣金', value: `$${stats?.total_commission?.toFixed(2) || '0'}`, icon: DollarSign, color: 'var(--warning)', bg: '#fef3c7' },
-          { label: '待结算', value: `$${stats?.pending_commission?.toFixed(2) || '0'}`, icon: DollarSign, color: 'var(--danger)', bg: '#fee2e2' },
-        ].map(s => (
-          <div className="stat-card" key={s.label}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div>
-                <div className="stat-label">{s.label}</div>
-                <div className="stat-value" style={{ color: s.color, fontSize: 24 }}>{s.value}</div>
-                {s.sub && <div className="stat-sub">{s.sub}</div>}
-              </div>
-              <div style={{ background: s.bg, borderRadius: 10, padding: 10 }}><s.icon size={18} color={s.color}/></div>
-            </div>
-          </div>
-        ))}
+        <StatCard label="总用户"   value={stats?.total_users ?? '--'}                            icon={Users}        color="info"    />
+        <StatCard label="邀请用户" value={stats?.users_with_inviter ?? '--'}                     icon={TrendingUp}   color="success" hint={stats?.referral_rate || ''} />
+        <StatCard label="总佣金"   value={`$${stats?.total_commission?.toFixed(2) || '0'}`}      icon={DollarSign}   color="warning" />
+        <StatCard label="待结算"   value={`$${stats?.pending_commission?.toFixed(2) || '0'}`}    icon={DollarSign}   color="danger"  />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
