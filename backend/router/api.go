@@ -78,6 +78,10 @@ func SetApiRouter(router *gin.Engine) {
 			channelRoute.GET("/:id", controller.GetChannel)
 			channelRoute.GET("/test", controller.TestChannels)
 			channelRoute.GET("/test/:id", controller.TestChannel)
+			// 异步图像渠道（type=57 ApiMart / type=58 Jimeng）专用测试端点；
+			// 标准 /test/:id 走 chat-completions payload 会被这些上游 400 拒绝。
+			// 不消耗配额、不落 task 行、不轮询，拿到上游 task_id 即视为通过。
+			channelRoute.POST("/test-image/:id", controller.AdminTestChannelImage)
 			channelRoute.GET("/update_balance", controller.UpdateAllChannelsBalance)
 			channelRoute.GET("/update_balance/:id", controller.UpdateChannelBalance)
 			channelRoute.POST("/", controller.AddChannel)

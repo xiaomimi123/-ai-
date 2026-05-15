@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Plus, Trash2, PlayCircle, CheckCircle, XCircle, ToggleLeft, ToggleRight,
   Loader2, RefreshCw, DollarSign, Search, Edit2, Copy,
-  AlertTriangle, Settings,
+  AlertTriangle, Settings, Image as ImageIcon,
 } from 'lucide-react'
 import { channelApi } from '../api'
 import toast from 'react-hot-toast'
@@ -53,6 +53,12 @@ const emptyForm: ChannelForm = {
   name: '', type: 1, key: '', base_url: '', models: '',
   model_mapping: '', priority: 0, weight: 0, group: 'default',
   system_prompt: '', config: '',
+}
+
+// 异步图像渠道：标准 /channel/test 走 chat-completions payload 会被这些上游 400 拒绝，
+// 必须改用 /channel/test-image
+function isAsyncTaskType(type: number): boolean {
+  return type === 57 || type === 58
 }
 
 // ---- 工具函数 ----
@@ -264,6 +270,24 @@ export default function ChannelsPage() {
     } catch { toast.error('测试失败') } finally { setTestingId(null) }
   }
 
+  // 异步图像渠道（type=57 / 58）专用：调 /api/channel/test-image，
+  // 后端只触发上游 submit 拿到 task_id 即视为通过，不轮询、不消耗配额、不落 task 行
+  const handleTestImage = async (id: number) => {
+    setTestingId(id)
+    try {
+      const r = await channelApi.testImage(id)
+      const d = r.data || {}
+      if (d.success) {
+        const tid = (d.upstream_task_id || '').slice(0, 16)
+        toast.success(`图像测试通过 (${d.model || ''}) · ${d.elapsed_ms || 0}ms${tid ? ` · task=${tid}…` : ''}`)
+      } else {
+        toast.error(`图像测试失败 (${d.model || ''})：${d.message || ''}`)
+      }
+    } catch (e: any) {
+      toast.error(`图像测试请求失败：${e?.response?.data?.message || e?.message || ''}`)
+    } finally { setTestingId(null) }
+  }
+
   const handleTestAll = async (scope: 'all' | 'disabled') => {
     setTestingAll(true)
     try {
@@ -404,9 +428,20 @@ export default function ChannelsPage() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', gap: 2 }}>
-                      <button className="btn btn-ghost btn-icon" title="测试" onClick={() => handleTest(ch.id)} disabled={testingId === ch.id}>
-                        {testingId === ch.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <PlayCircle size={14} color="var(--primary)" />}
-                      </button>
+                      {isAsyncTaskType(ch.type) ? (
+                        <button
+                          className="btn btn-ghost btn-icon"
+                          title="测试图像（仅 submit，不消耗配额）"
+                          onClick={() => handleTestImage(ch.id)}
+                          disabled={testingId === ch.id}
+                        >
+                          {testingId === ch.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <ImageIcon size={14} color="var(--primary)" />}
+                        </button>
+                      ) : (
+                        <button className="btn btn-ghost btn-icon" title="测试" onClick={() => handleTest(ch.id)} disabled={testingId === ch.id}>
+                          {testingId === ch.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <PlayCircle size={14} color="var(--primary)" />}
+                        </button>
+                      )}
                       <button className="btn btn-ghost btn-icon" title="查余额" onClick={() => checkBalance(ch.id)} disabled={checkingId === ch.id}>
                         {checkingId === ch.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <DollarSign size={14} color="var(--success)" />}
                       </button>

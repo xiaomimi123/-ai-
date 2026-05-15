@@ -35,6 +35,8 @@ export const channelApi = {
   deleteDisabled: () => http.delete('/api/channel/disabled'),
   test: (id: number, model?: string) =>
     http.get(`/api/channel/test/${id}`, { params: model ? { model } : {} }),
+  // 异步图像渠道专用（type=57 ApiMart / type=58 Jimeng）；不消耗配额、不落 task 行
+  testImage: (id: number) => http.post(`/api/channel/test-image/${id}`),
   testAll: (scope: 'all' | 'disabled' = 'all') =>
     http.get('/api/channel/test', { params: { scope } }),
   updateBalance: (id: number) => http.get(`/api/channel/update_balance/${id}`),
