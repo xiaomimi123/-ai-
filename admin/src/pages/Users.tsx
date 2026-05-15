@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
-import { Search, Edit2, UserX, UserCheck, Trash2, Plus, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Search, Edit2, UserX, UserCheck, Trash2, Plus, X, Users as UsersIcon, ShieldCheck, ShieldOff, ShieldAlert } from 'lucide-react'
 import { userApi, groupApi } from '../api'
 import toast from 'react-hot-toast'
 import Pagination from '../components/Pagination'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 const ROLES = [
   { value: 1, label: '普通用户' },
@@ -51,6 +54,10 @@ export default function UsersPage() {
   })
   const PAGE_SIZE = 15
 
+  // confirm dialogs
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
+  const [saveConfirm, setSaveConfirm] = useState<{ messages: string[]; payload: any } | null>(null)
+
   const load = async (p = page, kw = searchKeyword) => {
     try {
       // 前端 1-indexed，后端 p 0-indexed
@@ -92,6 +99,12 @@ export default function UsersPage() {
     return parts.join(' · ')
   }
 
+  // 派生统计（本页范围）
+  const enabledCount = useMemo(() => users.filter(u => u.status === 1).length, [users])
+  const disabledCount = useMemo(() => users.filter(u => u.status !== 1).length, [users])
+  const adminCount = useMemo(() => users.filter(u => u.role >= 10).length, [users])
+  const superAdminCount = useMemo(() => users.filter(u => u.role >= 100).length, [users])
+
   // 按分组统计人数（基于当前页，和 Redemptions stats 一个思路）
   const groupCounts: Record<string, number> = {}
   users.forEach(u => { const k = u.group || 'default'; groupCounts[k] = (groupCounts[k] || 0) + 1 })
@@ -114,10 +127,9 @@ export default function UsersPage() {
     })
   }
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!editUser) return
 
-    // 关键变动二次确认：防误操作（角色提升/降级、大额 quota、禁用账号、重置密码）
     const newQuotaUsd = parseFloat(editForm.quota) || 0
     const oldQuotaUsd = editUser.quota / 500000
     const quotaDelta = newQuotaUsd - oldQuotaUsd
@@ -127,28 +139,23 @@ export default function UsersPage() {
       const oldLabel = ROLES.find(r => r.value === editUser.role)?.label || `role=${editUser.role}`
       const newLabel = ROLES.find(r => r.value === editForm.role)?.label || `role=${editForm.role}`
       if (editForm.role > editUser.role) {
-        confirms.push(`⚠️ 角色提升：${oldLabel} → ${newLabel}（将获得更高后台权限）`)
+        confirms.push(`角色提升：${oldLabel} → ${newLabel}（将获得更高后台权限）`)
       } else {
-        confirms.push(`⚠️ 角色降级：${oldLabel} → ${newLabel}（将失去后台管理权限）`)
+        confirms.push(`角色降级：${oldLabel} → ${newLabel}（将失去后台管理权限）`)
       }
     }
 
     if (Math.abs(quotaDelta) > 100) {
       const sign = quotaDelta > 0 ? '+' : ''
-      confirms.push(`⚠️ 额度大幅变动：$${oldQuotaUsd.toFixed(2)} → $${newQuotaUsd.toFixed(2)}（${sign}$${quotaDelta.toFixed(2)}）`)
+      confirms.push(`额度大幅变动：$${oldQuotaUsd.toFixed(2)} → $${newQuotaUsd.toFixed(2)}（${sign}$${quotaDelta.toFixed(2)}）`)
     }
 
     if (editForm.status !== editUser.status && editForm.status === 2) {
-      confirms.push(`⚠️ 账号将被禁用，用户无法登录和调用 API`)
+      confirms.push(`账号将被禁用，用户无法登录和调用 API`)
     }
 
     if (editForm.password) {
-      confirms.push(`⚠️ 密码将被重置，用户需使用新密码登录`)
-    }
-
-    if (confirms.length > 0) {
-      const msg = `请确认以下关键变动：\n\n${confirms.join('\n')}\n\n目标用户：${editUser.username} (#${editUser.id})\n\n确定提交吗？`
-      if (!confirm(msg)) return
+      confirms.push(`密码将被重置，用户需使用新密码登录`)
     }
 
     const data: any = {
@@ -159,16 +166,24 @@ export default function UsersPage() {
       role: editForm.role,
       group: editForm.group,
       status: editForm.status,
-      // 百分数 → 小数；留空/非法输入 → 0（表示用全局比例）
-      // clamp 到 [0, 100]，防手滑输入 2000 把返利算崩
       affiliate_rate: Math.min(Math.max(parseFloat(editForm.affiliate_rate) || 0, 0), 100) / 100,
     }
     if (editForm.password) data.password = editForm.password
+
+    if (confirms.length > 0) {
+      setSaveConfirm({ messages: confirms, payload: data })
+      return
+    }
+    doSave(data)
+  }
+
+  const doSave = async (data: any) => {
+    if (!editUser) return
     try {
       const r = await userApi.update(editUser.id, data)
       if (r.data.success) { toast.success('用户已更新'); setEditUser(null); load() }
       else toast.error(r.data.message || '更新失败')
-    } catch { toast.error('网络错误') }
+    } catch { toast.error('网络错误') } finally { setSaveConfirm(null) }
   }
 
   const handleToggle = async (u: any) => {
@@ -179,13 +194,17 @@ export default function UsersPage() {
     } catch { toast.error('操作失败') }
   }
 
-  const handleDelete = async (u: any) => {
-    if (!confirm(`确认删除用户 ${u.username}？此操作不可撤销！`)) return
+  const handleDelete = (u: any) => {
+    setDeleteTarget(u)
+  }
+
+  const doDelete = async () => {
+    if (!deleteTarget) return
     try {
-      const r = await userApi.delete(u.id)
+      const r = await userApi.delete(deleteTarget.id)
       if (r.data.success) { toast.success('已删除'); load() }
       else toast.error(r.data.message || '删除失败')
-    } catch { toast.error('网络错误') }
+    } catch { toast.error('网络错误') } finally { setDeleteTarget(null) }
   }
 
   const handleCreate = async () => {
@@ -220,34 +239,43 @@ export default function UsersPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">用户管理</h1>
-          <p className="page-desc">共 {total} 名注册用户</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <div style={{ position: 'relative', width: 260 }}>
-            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }}/>
-            <input
-              placeholder="搜索用户名/邮箱/ID，回车确认..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') submitSearch() }}
-              style={{ paddingLeft: 34, paddingRight: search ? 34 : 14 }}
-            />
-            {search && (
-              <button
-                onClick={clearSearch}
-                title="清除搜索"
-                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', padding: 4, lineHeight: 0 }}
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-          <button className="btn btn-outline" onClick={submitSearch}>搜索</button>
-          <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>添加用户</button>
-        </div>
+      <PageHeader
+        title="用户管理"
+        description={`共 ${total} 名注册用户${searchKeyword ? ` · 搜索 "${searchKeyword}"` : ''}`}
+        icon={UsersIcon}
+        actions={
+          <>
+            <div style={{ position: 'relative', width: 260 }}>
+              <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}/>
+              <input
+                placeholder="搜索用户名/邮箱/ID，回车确认..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') submitSearch() }}
+                style={{ paddingLeft: 34, paddingRight: search ? 34 : 14 }}
+              />
+              {search && (
+                <button
+                  onClick={clearSearch}
+                  title="清除搜索"
+                  style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 4, lineHeight: 0 }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <button className="btn btn-outline" onClick={submitSearch}>搜索</button>
+            <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>添加用户</button>
+          </>
+        }
+      />
+
+      {/* 统计卡片：基于当前页（list endpoint 是分页的，所以这是"本页统计"） */}
+      <div className="stat-grid" style={{ marginBottom: 16 }}>
+        <StatCard label="本页用户" value={users.length}        icon={UsersIcon}     color="info"    hint={`总 ${total}`} />
+        <StatCard label="启用"     value={enabledCount}        icon={ShieldCheck}   color="success" />
+        <StatCard label="禁用"     value={disabledCount}       icon={ShieldOff}     color="warning" />
+        <StatCard label="管理员"   value={adminCount}          icon={ShieldAlert}   color="danger"  hint={superAdminCount > 0 ? `含 ${superAdminCount} 超管` : ''} />
       </div>
 
       {/* 分组统计（当前页） */}
@@ -466,6 +494,32 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除用户"
+        description={<>用户 <strong>{deleteTarget?.username}</strong> (#{deleteTarget?.id}) 将被删除。<br />此操作不可撤销，所有 token / 调用历史将一并清除。</>}
+        confirmLabel="删除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+      <ConfirmDialog
+        open={!!saveConfirm}
+        title="确认关键变动"
+        description={
+          <>
+            目标用户：<strong>{editUser?.username}</strong> (#{editUser?.id})
+            <ul style={{ margin: '12px 0 0', paddingLeft: 20 }}>
+              {saveConfirm?.messages.map((m, i) => <li key={i} style={{ marginBottom: 4 }}>{m}</li>)}
+            </ul>
+          </>
+        }
+        confirmLabel="确认提交"
+        confirmVariant="danger"
+        onConfirm={() => doSave(saveConfirm!.payload)}
+        onCancel={() => setSaveConfirm(null)}
+      />
     </div>
   )
 }
