@@ -10,12 +10,14 @@
  * 是否图像模型（按 tags 检测）。
  * 优先用 tags 而非硬编码 model_id 列表，运营加新图像模型时不用改前端。
  */
+const IMAGE_TAGS = new Set(['生图', '画图', '图像', 'image', 'images', '图片', '文生图'])
+
 export function isImageModel(tags?: string | null): boolean {
   if (!tags) return false
   return tags
     .split(',')
     .map(t => t.trim())
-    .some(t => t === '画图' || t === '图像' || t === 'image')
+    .some(t => IMAGE_TAGS.has(t))
 }
 
 export interface PriceDisplayOptions {
