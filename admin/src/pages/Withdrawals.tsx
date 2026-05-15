@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Check, X, DollarSign, Wallet, CheckCircle2 } from 'lucide-react'
+import { Check, X, DollarSign, Wallet, CheckCircle2, Banknote } from 'lucide-react'
 import Pagination from '../components/Pagination'
 import { withdrawApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { StatCard } from '../components/StatCard'
+import { FilterTabs } from '../components/FilterTabs'
+import { EmptyCard } from '../components/EmptyCard'
 
 interface Withdraw {
   id: number
@@ -107,50 +111,26 @@ export default function WithdrawalsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">提现审核</h1>
-        <p className="page-desc">分销佣金提现申请 — 审核、打款、拒绝</p>
-      </div>
+      <PageHeader
+        title="提现审核"
+        description="分销佣金提现申请 — 审核、打款、拒绝"
+        icon={Banknote}
+      />
 
       {/* 统计摘要 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14, marginBottom: 20 }}>
-        {[
-          { label: '待审核', value: pendingCount, unit: '笔', icon: Wallet, color: 'var(--warning)', bg: '#fef3c7' },
-          { label: '已通过待打款', value: approvedCount, unit: '笔', icon: CheckCircle2, color: 'var(--info)', bg: '#dbeafe' },
-          { label: '累计已打款', value: `¥${paidAmount.toFixed(2)}`, unit: '', icon: DollarSign, color: 'var(--success)', bg: '#dcfce7' },
-        ].map(s => (
-          <div key={s.label} className="card" style={{ padding: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>{s.label}</div>
-                <div style={{ fontSize: 24, fontWeight: 700, color: s.color }}>
-                  {s.value}<span style={{ fontSize: 13, color: 'var(--muted)', marginLeft: 4 }}>{s.unit}</span>
-                </div>
-              </div>
-              <div style={{ background: s.bg, borderRadius: 10, padding: 10 }}>
-                <s.icon size={18} color={s.color} />
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <StatCard label="待审核"         value={pendingCount}                  icon={Wallet}         color="warning" hint="笔" />
+        <StatCard label="已通过待打款"   value={approvedCount}                 icon={CheckCircle2}   color="info"    hint="笔" />
+        <StatCard label="累计已打款"     value={`¥${paidAmount.toFixed(2)}`}   icon={DollarSign}     color="success" />
       </div>
 
       {/* 筛选 */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {FILTER_TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => { setStatusFilter(t.key); setPage(1) }}
-            style={{
-              padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 500,
-              border: statusFilter === t.key ? '1px solid var(--primary)' : '1px solid var(--border)',
-              background: statusFilter === t.key ? 'var(--primary-50)' : '#fff',
-              color: statusFilter === t.key ? 'var(--primary)' : 'var(--text)',
-            }}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div style={{ marginBottom: 14 }}>
+        <FilterTabs
+          value={statusFilter}
+          onChange={v => { setStatusFilter(v); setPage(1) }}
+          options={FILTER_TABS.map(t => ({ label: t.label, value: t.key }))}
+        />
       </div>
 
       {/* 表格 */}
@@ -171,7 +151,13 @@ export default function WithdrawalsPage() {
           </thead>
           <tbody>
             {records.length === 0
-              ? <tr><td colSpan={9} className="empty-state" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>暂无数据</td></tr>
+              ? <tr><td colSpan={9} style={{ padding: 0 }}>
+                  <EmptyCard
+                    icon={Banknote}
+                    title="暂无提现申请"
+                    description={statusFilter ? '试试别的筛选条件' : ''}
+                  />
+                </td></tr>
               : records.map(r => {
                   const st = STATUS_MAP[r.status] || { label: '未知', cls: 'badge-gray' }
                   return (
