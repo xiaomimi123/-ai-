@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { Plus, Trash2, Bell } from 'lucide-react'
 import { noticeApi } from '../api'
 import toast from 'react-hot-toast'
+import { PageHeader } from '../components/PageHeader'
+import { EmptyCard } from '../components/EmptyCard'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 
 export default function NoticesPage() {
   const [notices, setNotices] = useState<any[]>([])
   const [showCreate, setShowCreate] = useState(false)
   const [form, setForm] = useState({ title: '', content: '' })
+  const [deleteTarget, setDeleteTarget] = useState<any>(null)
 
   const load = () => { noticeApi.list().then(r => { if (r.data.success) setNotices(r.data.data || []) }) }
   useEffect(() => { load() }, [])
@@ -20,27 +24,31 @@ export default function NoticesPage() {
     } catch { toast.error('网络错误') }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('删除此公告？')) return
-    await noticeApi.delete(id); load()
+  const handleDelete = (n: any) => setDeleteTarget(n)
+
+  const doDelete = async () => {
+    if (!deleteTarget) return
+    try {
+      await noticeApi.delete(deleteTarget.id)
+      toast.success('已删除')
+      load()
+    } catch { toast.error('删除失败') } finally { setDeleteTarget(null) }
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <div className="page-header" style={{ marginBottom: 0 }}>
-          <h1 className="page-title">公告管理</h1>
-          <p className="page-desc">发布公告将在用户前台首页显示</p>
-        </div>
-        <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>发布公告</button>
-      </div>
+      <PageHeader
+        title="公告管理"
+        description="发布公告将在用户前台首页显示"
+        icon={Bell}
+        actions={
+          <button className="btn btn-primary" onClick={() => setShowCreate(true)}><Plus size={15}/>发布公告</button>
+        }
+      />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {notices.length === 0 ? (
-          <div className="card" style={{ textAlign: 'center', padding: 48, color: 'var(--muted)' }}>
-            <Bell size={32} style={{ marginBottom: 8, opacity: .4 }} />
-            <div>暂无公告</div>
-          </div>
+          <EmptyCard icon={Bell} title="暂无公告" description="点击右上角「发布公告」开始" />
         ) : notices.map(n => (
           <div className="card" key={n.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: 20 }}>
             <div>
@@ -51,7 +59,7 @@ export default function NoticesPage() {
                 {n.is_active ? <span className="badge badge-green" style={{ marginLeft: 8 }}>显示中</span> : <span className="badge badge-gray" style={{ marginLeft: 8 }}>已隐藏</span>}
               </p>
             </div>
-            <button className="btn btn-ghost btn-icon" onClick={() => handleDelete(n.id)}>
+            <button className="btn btn-ghost btn-icon" onClick={() => handleDelete(n)}>
               <Trash2 size={15} color="var(--danger)" />
             </button>
           </div>
@@ -71,6 +79,16 @@ export default function NoticesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="确认删除公告"
+        description={<>公告「<strong>{deleteTarget?.title}</strong>」将被删除。<br />此操作不可撤销。</>}
+        confirmLabel="删除"
+        confirmVariant="danger"
+        onConfirm={doDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
