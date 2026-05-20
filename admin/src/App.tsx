@@ -25,6 +25,7 @@ import AgentOverviewPage from './pages/agent/AgentOverview'
 import AgentTeamMembersPage from './pages/agent/AgentTeamMembers'
 import AgentTeamOrdersPage from './pages/agent/AgentTeamOrders'
 import AgentTeamLogsPage from './pages/agent/AgentTeamLogs'
+import AgentCommissionsPage from './pages/agent/AgentCommissions'
 
 function App() {
   return (
@@ -55,6 +56,7 @@ function App() {
           <Route path="agent/team-members" element={<AgentTeamMembersPage />} />
           <Route path="agent/team-orders" element={<AgentTeamOrdersPage />} />
           <Route path="agent/team-logs" element={<AgentTeamLogsPage />} />
+          <Route path="agent/my-commissions" element={<AgentCommissionsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
