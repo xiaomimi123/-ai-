@@ -21,6 +21,7 @@ import TasksPage from './pages/Tasks'
 import FinancePage from './pages/Finance'
 import { RoleGuard } from './components/RoleGuard'
 import { ADMIN_PAGE_MIN_ROLE } from './api'
+import AgentOverviewPage from './pages/agent/AgentOverview'
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
           <Route path="payment" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><PaymentSettingsPage /></RoleGuard>} />
           <Route path="plans" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><PlansPage /></RoleGuard>} />
           <Route path="settings" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><SettingsPage /></RoleGuard>} />
+          <Route path="agent/overview" element={<AgentOverviewPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
