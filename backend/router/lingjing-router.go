@@ -137,6 +137,19 @@ func SetLingjingRouter(router *gin.Engine) {
 		admin.DELETE("/cost-ledger/:id", controller.AdminDeleteCostLedger)
 	}
 
+	// ===== 代理（agent role >= 5）=====
+	// 数据隔离由 controller 内 scopeUserIDs() helper 完成，
+	// admin/root 通过同一接口看全局，代理看自己 team
+	agent := router.Group("/api/admin/lingjing/agent")
+	agent.Use(middleware.AgentAuth())
+	{
+		agent.GET("/overview", controller.AgentGetOverview)
+		agent.GET("/team-members", controller.AgentListTeamMembers)
+		agent.GET("/team-orders", controller.AgentListTeamOrders)
+		agent.GET("/team-logs", controller.AgentListTeamLogs)
+		agent.GET("/my-commissions", controller.AgentListMyCommissions)
+	}
+
 	// ===== 分组管理 =====
 	groupAdmin := router.Group("/api/admin/group")
 	groupAdmin.Use(middleware.AdminAuth())
