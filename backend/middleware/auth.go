@@ -82,6 +82,15 @@ func AdminAuth() func(c *gin.Context) {
 	}
 }
 
+// AgentAuth role >= 5 即可（代理 + admin + root）。
+// 注意：此中间件仅放行进入路由，不做数据隔离；scope filter 由 handler 调
+// scopeUserIDs() helper 决定。
+func AgentAuth() func(c *gin.Context) {
+	return func(c *gin.Context) {
+		authHelper(c, model.RoleAgentUser)
+	}
+}
+
 func RootAuth() func(c *gin.Context) {
 	return func(c *gin.Context) {
 		authHelper(c, model.RoleRootUser)

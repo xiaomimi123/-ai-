@@ -19,6 +19,7 @@ import (
 const (
 	RoleGuestUser  = 0
 	RoleCommonUser = 1
+	RoleAgentUser  = 5   // 代理：可登入 admin 后台，只读看自己团队 + 佣金
 	RoleAdminUser  = 10
 	RoleRootUser   = 100
 )
