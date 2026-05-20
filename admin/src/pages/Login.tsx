@@ -27,7 +27,9 @@ export default function LoginPage() {
         setError('该账号无后台权限，请前往 https://aitoken.homes 用户前台登录')
         return
       }
-      navigate('/overview')
+      // 代理跳代理首页，admin/root 跳总览
+      const home = role >= 10 ? '/overview' : '/agent/overview'
+      navigate(home)
     } catch { setError('无法连接服务器') } finally { setLoading(false) }
   }
 

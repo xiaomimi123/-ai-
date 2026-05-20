@@ -16,9 +16,13 @@ export const authApi = {
   updateSelf: (data: { username?: string; display_name?: string; password?: string }) => http.put('/api/user/self', data),
 }
 
-// 后台准入门槛：只有 role >= 这个值才能进 admin 控制台。
-// 当前 = 10 (RoleAdminUser)。未来加代理 role=5 时把这里降到 5 即可放开代理登入。
-export const ADMIN_MIN_ROLE = 10
+// 准入门槛：能进 admin 网站（Login 接受 + AdminLayout 不踢出）
+// 当前 = 5 (RoleAgentUser)，让代理也能进
+export const ADMIN_MIN_ROLE = 5
+
+// 页面级门槛：admin 专属页（用户/渠道/系统设置/财务等）的可见门槛
+// 代理 (5) 不够，admin (10) 才可见。RoleGuard HOC 用这个值
+export const ADMIN_PAGE_MIN_ROLE = 10
 
 export const userApi = {
   // keyword 非空时走后端搜索（id 精确 + username/email/display_name 前缀 LIKE），
@@ -146,4 +150,17 @@ export const financeApi = {
     http.put(`/api/admin/lingjing/cost-ledger/${id}`, data),
   deleteLedger: (id: number) =>
     http.delete(`/api/admin/lingjing/cost-ledger/${id}`),
+}
+
+// 代理端只读 API
+export const agentApi = {
+  overview: () => http.get('/api/admin/lingjing/agent/overview'),
+  teamMembers: (params?: { page?: number; page_size?: number; keyword?: string }) =>
+    http.get('/api/admin/lingjing/agent/team-members', { params }),
+  teamOrders: (params?: { page?: number; page_size?: number; status?: string }) =>
+    http.get('/api/admin/lingjing/agent/team-orders', { params }),
+  teamLogs: (params?: { page?: number; page_size?: number; username?: string; model_name?: string }) =>
+    http.get('/api/admin/lingjing/agent/team-logs', { params }),
+  myCommissions: (params?: { page?: number; page_size?: number; status?: string }) =>
+    http.get('/api/admin/lingjing/agent/my-commissions', { params }),
 }

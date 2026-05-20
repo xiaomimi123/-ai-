@@ -19,6 +19,8 @@ import PaymentSettingsPage from './pages/PaymentSettings'
 import PlansPage from './pages/Plans'
 import TasksPage from './pages/Tasks'
 import FinancePage from './pages/Finance'
+import { RoleGuard } from './components/RoleGuard'
+import { ADMIN_PAGE_MIN_ROLE } from './api'
 
 function App() {
   return (
@@ -28,23 +30,23 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<AdminLayout />}>
           <Route index element={<Navigate to="/overview" replace />} />
-          <Route path="overview" element={<OverviewPage />} />
-          <Route path="users" element={<UsersPage />} />
-          <Route path="channels" element={<ChannelsPage />} />
-          <Route path="redemptions" element={<RedemptionsPage />} />
-          <Route path="logs" element={<LogsPage />} />
-          <Route path="tasks" element={<TasksPage />} />
-          <Route path="orders" element={<OrdersPage />} />
-          <Route path="referrals" element={<ReferralsPage />} />
-          <Route path="withdrawals" element={<WithdrawalsPage />} />
-          <Route path="finance" element={<FinancePage />} />
-          <Route path="model-prices" element={<ModelPricesPage />} />
-          <Route path="notices" element={<NoticesPage />} />
-          <Route path="model-manage" element={<ModelManagePage />} />
-          <Route path="model-ratios" element={<ModelRatiosPage />} />
-          <Route path="payment" element={<PaymentSettingsPage />} />
-          <Route path="plans" element={<PlansPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="overview" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><OverviewPage /></RoleGuard>} />
+          <Route path="users" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><UsersPage /></RoleGuard>} />
+          <Route path="channels" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><ChannelsPage /></RoleGuard>} />
+          <Route path="redemptions" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><RedemptionsPage /></RoleGuard>} />
+          <Route path="logs" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><LogsPage /></RoleGuard>} />
+          <Route path="tasks" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><TasksPage /></RoleGuard>} />
+          <Route path="orders" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><OrdersPage /></RoleGuard>} />
+          <Route path="referrals" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><ReferralsPage /></RoleGuard>} />
+          <Route path="withdrawals" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><WithdrawalsPage /></RoleGuard>} />
+          <Route path="finance" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><FinancePage /></RoleGuard>} />
+          <Route path="model-prices" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><ModelPricesPage /></RoleGuard>} />
+          <Route path="notices" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><NoticesPage /></RoleGuard>} />
+          <Route path="model-manage" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><ModelManagePage /></RoleGuard>} />
+          <Route path="model-ratios" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><ModelRatiosPage /></RoleGuard>} />
+          <Route path="payment" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><PaymentSettingsPage /></RoleGuard>} />
+          <Route path="plans" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><PlansPage /></RoleGuard>} />
+          <Route path="settings" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><SettingsPage /></RoleGuard>} />
         </Route>
       </Routes>
     </BrowserRouter>

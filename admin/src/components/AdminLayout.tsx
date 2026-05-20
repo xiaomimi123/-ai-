@@ -1,18 +1,16 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, Radio, Gift, ScrollText, LogOut, Settings, Shield, Menu, X, CreditCard, Share2, Bell, Sliders, Wallet, Cpu, ListTodo, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Users, Radio, Gift, ScrollText, LogOut, Settings, Shield, Menu, X, CreditCard, Share2, Bell, Sliders, Wallet, Cpu, ListTodo, DollarSign, Briefcase, TrendingUp } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { authApi, ADMIN_MIN_ROLE } from '../api'
 
-const navSections = [
+type NavItem = { to: string; icon: any; label: string; agentVisible?: boolean }
+type NavSection = { label: string; items: NavItem[]; agentVisible?: boolean }
+
+const navSections: NavSection[] = [
   {
-    label: '概览',
+    label: '系统总览',
     items: [
-      { to: '/overview', icon: LayoutDashboard, label: '数据面板' },
-    ],
-  },
-  {
-    label: '核心管理',
-    items: [
+      { to: '/overview', icon: LayoutDashboard, label: '数据概览' },
       { to: '/channels', icon: Radio, label: '渠道管理' },
       { to: '/users', icon: Users, label: '用户管理' },
       { to: '/logs', icon: ScrollText, label: '调用日志' },
@@ -40,6 +38,17 @@ const navSections = [
       { to: '/settings', icon: Settings, label: '系统设置' },
     ],
   },
+  {
+    label: '我的代理',
+    agentVisible: true,
+    items: [
+      { to: '/agent/overview',       icon: Briefcase,  label: '团队概览',   agentVisible: true },
+      { to: '/agent/team-members',   icon: Users,      label: '团队成员',   agentVisible: true },
+      { to: '/agent/team-orders',    icon: CreditCard, label: '团队订单',   agentVisible: true },
+      { to: '/agent/team-logs',      icon: ScrollText, label: '团队日志',   agentVisible: true },
+      { to: '/agent/my-commissions', icon: TrendingUp, label: '我的佣金',   agentVisible: true },
+    ],
+  },
 ]
 
 export default function AdminLayout() {
@@ -47,6 +56,7 @@ export default function AdminLayout() {
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
+  const [role, setRole] = useState<number>(0)
 
   // 准入守卫：Login.tsx 已经做过一遍校验，但用户可能：
   // ① 直接在地址栏输 /overview（绕过 Login）
@@ -55,12 +65,13 @@ export default function AdminLayout() {
   // 所以每次 AdminLayout 挂载都重新验证一次，挡住所有"绕过登录页"的情况
   useEffect(() => {
     authApi.getSelf().then(r => {
-      const role = r.data?.data?.role ?? 0
-      if (!r.data?.success || role < ADMIN_MIN_ROLE) {
+      const userRole = r.data?.data?.role ?? 0
+      if (!r.data?.success || userRole < ADMIN_MIN_ROLE) {
         authApi.logout().catch(() => {})
         navigate('/login', { replace: true })
         return
       }
+      setRole(userRole)
       setAuthChecked(true)
     }).catch(() => {
       // 401 已经被 axios interceptor 转跳 /login 了，这里兜底
@@ -95,12 +106,23 @@ export default function AdminLayout() {
           </div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: '#fff' }}>灵镜AI</div>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', letterSpacing: '.05em' }}>ADMIN CONSOLE</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,.3)', letterSpacing: '.05em' }}>
+              {role >= 100 ? 'ROOT' : role >= 10 ? 'ADMIN CONSOLE' : role === 5 ? 'AGENT CONSOLE' : 'CONSOLE'}
+            </div>
           </div>
         </div>
 
         <nav style={{ flex: 1, padding: '0 8px' }}>
-          {navSections.map(section => (
+          {(() => {
+            const isAdmin = role >= 10
+            const visibleSections = navSections
+              .map(s => ({
+                ...s,
+                items: s.items.filter(i => isAdmin ? !s.agentVisible : (i.agentVisible === true)),
+              }))
+              .filter(s => s.items.length > 0)
+            return visibleSections
+          })().map(section => (
             <div key={section.label} style={{ marginBottom: 16 }}>
               <div style={{ padding: '0 12px', fontSize: 10, color: 'rgba(255,255,255,.2)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 6 }}>
                 {section.label}
