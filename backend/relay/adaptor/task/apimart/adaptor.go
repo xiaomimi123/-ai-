@@ -57,11 +57,14 @@ func (a *Adaptor) BuildRequestURL(info *common.TaskRelayInfo) (string, error) {
 }
 
 func (a *Adaptor) BuildRequestHeader(info *common.TaskRelayInfo) (map[string]string, error) {
-	if info.APIKey == "" {
+	// trim 防御：复制粘贴的 key 常带尾部 \n / \r / 空格，
+	// net/http 会以 "invalid header field value" 拒绝整个请求
+	key := strings.TrimSpace(info.APIKey)
+	if key == "" {
 		return nil, errors.New("apimart channel APIKey is empty")
 	}
 	return map[string]string{
-		"Authorization": "Bearer " + info.APIKey,
+		"Authorization": "Bearer " + key,
 		"Content-Type":  "application/json",
 	}, nil
 }
@@ -160,7 +163,7 @@ func (a *Adaptor) FetchTask(info *common.TaskRelayInfo, taskID string) (*common.
 	if err != nil {
 		return nil, fmt.Errorf("build fetch request: %w", err)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+info.APIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(info.APIKey))
 
 	resp, err := common.HTTPClient().Do(httpReq)
 	if err != nil {
