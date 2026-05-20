@@ -1,12 +1,14 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/model"
 )
 
@@ -84,13 +86,38 @@ func AgentGetOverview(c *gin.Context) {
 		cq.Count(&monthCalls)
 	}
 
+	// 邀请信息（aff_code + 邀请链接 + 当前生效佣金比例）
+	// 跟 controller/lingjing_referral.go:DistributeCommission 的优先级规则一致：
+	// affiliate_rate > 0 用专属，否则 fallback 全局
+	affCode := ""
+	inviteLink := ""
+	commissionRate := 0.0
+	commissionRateSource := "global"
+	if u, uerr := model.GetUserById(selfId, false); uerr == nil && u != nil {
+		affCode = u.AffCode
+		inviteLink = fmt.Sprintf("%s/register?ref=%s",
+			strings.TrimRight(config.ServerAddress, "/"), u.AffCode)
+		if u.AffiliateRate > 0 && u.AffiliateRate <= 1 {
+			commissionRate = u.AffiliateRate
+			commissionRateSource = "personal"
+		} else {
+			globalRate, _, _ := getReferralCfg()
+			commissionRate = globalRate
+			commissionRateSource = "global"
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"team_size":     teamSize,
-			"month_revenue": monthRevenue,
-			"my_commission": myCommission,
-			"month_calls":   monthCalls,
+			"team_size":              teamSize,
+			"month_revenue":          monthRevenue,
+			"my_commission":          myCommission,
+			"month_calls":            monthCalls,
+			"aff_code":               affCode,
+			"invite_link":            inviteLink,
+			"commission_rate":        commissionRate,
+			"commission_rate_source": commissionRateSource,
 		},
 	})
 }

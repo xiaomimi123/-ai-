@@ -3,6 +3,7 @@ import { Briefcase, Users, DollarSign, TrendingUp, ListTodo } from 'lucide-react
 import toast from 'react-hot-toast'
 import { PageHeader } from '../../components/PageHeader'
 import { StatCard } from '../../components/StatCard'
+import { AgentInviteCard } from '../../components/AgentInviteCard'
 import { agentApi } from '../../api'
 
 interface Overview {
@@ -10,6 +11,10 @@ interface Overview {
   month_revenue: number
   my_commission: number
   month_calls: number
+  aff_code: string
+  invite_link: string
+  commission_rate: number
+  commission_rate_source: 'personal' | 'global'
 }
 
 export default function AgentOverviewPage() {
@@ -31,6 +36,9 @@ export default function AgentOverviewPage() {
         description="您团队（您直接邀请的下线）的实时数据"
         icon={Briefcase}
       />
+
+      {/* 邀请码 + 邀请链接 + 当前佣金比例 */}
+      <AgentInviteCard data={data ?? undefined} />
 
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         <StatCard

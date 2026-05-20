@@ -5,6 +5,7 @@ import { PageHeader } from '../../components/PageHeader'
 import { StatCard } from '../../components/StatCard'
 import { FilterTabs } from '../../components/FilterTabs'
 import { EmptyCard } from '../../components/EmptyCard'
+import { AgentInviteCard } from '../../components/AgentInviteCard'
 import Pagination from '../../components/Pagination'
 import { agentApi } from '../../api'
 
@@ -70,6 +71,9 @@ export default function AgentCommissionsPage() {
         description="您作为邀请人收到的所有佣金记录"
         icon={TrendingUp}
       />
+
+      {/* 邀请码 + 邀请链接 + 当前佣金比例 */}
+      <AgentInviteCard />
 
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         <StatCard
