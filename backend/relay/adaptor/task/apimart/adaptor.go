@@ -6,12 +6,38 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/songquanpeng/one-api/relay/adaptor/task/common"
 )
+
+// pickAPIKey 从 channel.key 字段抽出一个可用 key 给 Bearer 用。
+//
+// 历史背景：admin 在编辑渠道时如果粘贴多行 key（One API 新建时这么做会拆成多个渠道，
+// 但编辑路径不拆），key 字段会变成 "sk-A\nsk-B\nsk-C" 这种多 key 串。
+// 直接拼成 "Bearer sk-A\nsk-B\nsk-C" 给 net/http → "invalid header field value"。
+//
+// 假设：同一 channel 内的多个 key 属于同一 apimart 账号（典型用法是分散 rate limit）。
+// 因此 submit 和 fetch 可以独立随机挑 key，不必绑定。如不同账号请用多个渠道。
+func pickAPIKey(raw string) (string, error) {
+	keys := make([]string, 0, 4)
+	for _, line := range strings.Split(raw, "\n") {
+		if k := strings.TrimSpace(line); k != "" {
+			keys = append(keys, k)
+		}
+	}
+	if len(keys) == 0 {
+		return "", errors.New("apimart channel APIKey is empty")
+	}
+	if len(keys) == 1 {
+		return keys[0], nil
+	}
+	// Go 1.20+ math/rand 默认已自动 seed，无需 rand.Seed
+	return keys[rand.Intn(len(keys))], nil
+}
 
 // Adaptor 实现 common.TaskAdaptor for apimart.ai 异步图像协议
 type Adaptor struct{}
@@ -57,11 +83,9 @@ func (a *Adaptor) BuildRequestURL(info *common.TaskRelayInfo) (string, error) {
 }
 
 func (a *Adaptor) BuildRequestHeader(info *common.TaskRelayInfo) (map[string]string, error) {
-	// trim 防御：复制粘贴的 key 常带尾部 \n / \r / 空格，
-	// net/http 会以 "invalid header field value" 拒绝整个请求
-	key := strings.TrimSpace(info.APIKey)
-	if key == "" {
-		return nil, errors.New("apimart channel APIKey is empty")
+	key, err := pickAPIKey(info.APIKey)
+	if err != nil {
+		return nil, err
 	}
 	return map[string]string{
 		"Authorization": "Bearer " + key,
@@ -163,7 +187,11 @@ func (a *Adaptor) FetchTask(info *common.TaskRelayInfo, taskID string) (*common.
 	if err != nil {
 		return nil, fmt.Errorf("build fetch request: %w", err)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+strings.TrimSpace(info.APIKey))
+	key, err := pickAPIKey(info.APIKey)
+	if err != nil {
+		return nil, fmt.Errorf("build fetch header: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+key)
 
 	resp, err := common.HTTPClient().Do(httpReq)
 	if err != nil {
