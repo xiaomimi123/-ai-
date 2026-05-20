@@ -22,6 +22,9 @@ import FinancePage from './pages/Finance'
 import { RoleGuard } from './components/RoleGuard'
 import { ADMIN_PAGE_MIN_ROLE } from './api'
 import AgentOverviewPage from './pages/agent/AgentOverview'
+import AgentTeamMembersPage from './pages/agent/AgentTeamMembers'
+import AgentTeamOrdersPage from './pages/agent/AgentTeamOrders'
+import AgentTeamLogsPage from './pages/agent/AgentTeamLogs'
 
 function App() {
   return (
@@ -49,6 +52,9 @@ function App() {
           <Route path="plans" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><PlansPage /></RoleGuard>} />
           <Route path="settings" element={<RoleGuard min={ADMIN_PAGE_MIN_ROLE}><SettingsPage /></RoleGuard>} />
           <Route path="agent/overview" element={<AgentOverviewPage />} />
+          <Route path="agent/team-members" element={<AgentTeamMembersPage />} />
+          <Route path="agent/team-orders" element={<AgentTeamOrdersPage />} />
+          <Route path="agent/team-logs" element={<AgentTeamLogsPage />} />
         </Route>
       </Routes>
     </BrowserRouter>
