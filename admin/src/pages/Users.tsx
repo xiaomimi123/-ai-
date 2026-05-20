@@ -9,8 +9,9 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyCard } from '../components/EmptyCard'
 
 const ROLES = [
-  { value: 1, label: '普通用户' },
-  { value: 10, label: '管理员' },
+  { value: 1,   label: '普通用户' },
+  { value: 5,   label: '代理' },     // 可登入 admin 后台，只读看团队 + 佣金；按 affiliate_rate 算专属佣金
+  { value: 10,  label: '管理员' },
   { value: 100, label: '超级管理员' },
 ]
 
@@ -236,7 +237,8 @@ export default function UsersPage() {
 
   const getRoleLabel = (role: number) => {
     if (role >= 100) return { label: '超管', cls: 'badge-purple' }
-    if (role >= 10) return { label: '管理员', cls: 'badge-yellow' }
+    if (role >= 10)  return { label: '管理员', cls: 'badge-yellow' }
+    if (role >= 5)   return { label: '代理',  cls: 'badge-info' }  // 蓝色 info 区别于管理员的黄色
     return { label: '用户', cls: 'badge-gray' }
   }
 
