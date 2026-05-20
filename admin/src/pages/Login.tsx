@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Shield } from 'lucide-react'
-import { authApi } from '../api'
+import { authApi, ADMIN_MIN_ROLE } from '../api'
 
 export default function LoginPage() {
   const [form, setForm] = useState({ username: '', password: '' })
@@ -13,8 +13,21 @@ export default function LoginPage() {
     e.preventDefault(); setLoading(true); setError('')
     try {
       const res = await authApi.login(form.username, form.password)
-      if (res.data.success) { navigate('/overview') }
-      else setError(res.data.message || '登录失败')
+      if (!res.data.success) {
+        setError(res.data.message || '登录失败')
+        return
+      }
+      // 登录接口对任何 role 都返回 success；后台必须额外校验 role，
+      // 否则普通用户能拿着 admin 控制台空壳到处看（数据被后端 403 但 UI 已暴露）
+      const selfRes = await authApi.getSelf()
+      const role = selfRes.data?.data?.role ?? 0
+      if (role < ADMIN_MIN_ROLE) {
+        // 立刻清 session，避免登录态残留可以被 AdminLayout 检测到
+        await authApi.logout().catch(() => {})
+        setError('该账号无后台权限，请前往 https://aitoken.homes 用户前台登录')
+        return
+      }
+      navigate('/overview')
     } catch { setError('无法连接服务器') } finally { setLoading(false) }
   }
 

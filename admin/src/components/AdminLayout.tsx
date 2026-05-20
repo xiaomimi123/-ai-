@@ -1,6 +1,7 @@
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { LayoutDashboard, Users, Radio, Gift, ScrollText, LogOut, Settings, Shield, Menu, X, CreditCard, Share2, Bell, Sliders, Wallet, Cpu, ListTodo, DollarSign } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { authApi, ADMIN_MIN_ROLE } from '../api'
 
 const navSections = [
   {
@@ -45,9 +46,44 @@ export default function AdminLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // 准入守卫：Login.tsx 已经做过一遍校验，但用户可能：
+  // ① 直接在地址栏输 /overview（绕过 Login）
+  // ② Cookie 残留但 role 早就被降级了
+  // ③ 在其他 tab 退过但本 tab 没刷新
+  // 所以每次 AdminLayout 挂载都重新验证一次，挡住所有"绕过登录页"的情况
+  useEffect(() => {
+    authApi.getSelf().then(r => {
+      const role = r.data?.data?.role ?? 0
+      if (!r.data?.success || role < ADMIN_MIN_ROLE) {
+        authApi.logout().catch(() => {})
+        navigate('/login', { replace: true })
+        return
+      }
+      setAuthChecked(true)
+    }).catch(() => {
+      // 401 已经被 axios interceptor 转跳 /login 了，这里兜底
+      navigate('/login', { replace: true })
+    })
+  }, [navigate])
+
+  const handleLogout = async () => {
+    await authApi.logout().catch(() => {})
+    navigate('/login', { replace: true })
+  }
 
   const allItems = navSections.flatMap(s => s.items)
   const currentPage = allItems.find(n => location.pathname.startsWith(n.to))
+
+  // 守卫未通过前不渲染任何 admin 内容，避免敏感 UI 一闪而过
+  if (!authChecked) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: 'var(--text-secondary)', fontSize: 13 }}>
+        正在验证权限...
+      </div>
+    )
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
@@ -85,7 +121,7 @@ export default function AdminLayout() {
         </nav>
 
         <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,.06)', flexShrink: 0 }}>
-          <button onClick={() => { navigate('/login') }} style={{
+          <button onClick={handleLogout} style={{
             display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8,
             width: '100%', color: 'rgba(255,255,255,.3)', background: 'transparent', fontSize: 13,
           }}>

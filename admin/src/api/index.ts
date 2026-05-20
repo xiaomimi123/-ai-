@@ -11,9 +11,14 @@ http.interceptors.response.use(res => res, err => {
 // One API 原生接口
 export const authApi = {
   login: (username: string, password: string) => http.post('/api/user/login', { username, password }),
+  logout: () => http.get('/api/user/logout'),
   getSelf: () => http.get('/api/user/self'),
   updateSelf: (data: { username?: string; display_name?: string; password?: string }) => http.put('/api/user/self', data),
 }
+
+// 后台准入门槛：只有 role >= 这个值才能进 admin 控制台。
+// 当前 = 10 (RoleAdminUser)。未来加代理 role=5 时把这里降到 5 即可放开代理登入。
+export const ADMIN_MIN_ROLE = 10
 
 export const userApi = {
   // keyword 非空时走后端搜索（id 精确 + username/email/display_name 前缀 LIKE），
