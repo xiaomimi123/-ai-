@@ -178,10 +178,11 @@ var (
 	TaskUpstreamHTTPTimeout = 30 * time.Second
 	TaskMaxFetchErrors      = 5
 	// sync-mode wait (Fix ③): how long RelayTaskImage blocks polling upstream
-	// before falling back to 202 + task_id. 90s covers typical apimart p95
-	// (~55s p50, ~80s p95); if exceeded we hand the client a task_id and
-	// let them poll /v1/tasks/{id} themselves. Overridable via env.
-	TaskSyncWaitSeconds         = 90
+	// before falling back to 202 + task_id. 300s 覆盖 apimart 图生图 p95
+	// (~65s) + 文生图 p50（apimart 官方 estimated 100s，实测 200-450s 都见
+	// 过）；超出仍然给客户端 task_id 让其自主 poll，不 504。
+	// 部署侧：nginx proxy_read_timeout 必须 ≥ 320s，否则连接会先被 nginx 断开。
+	TaskSyncWaitSeconds         = 300
 	TaskSyncPollIntervalSeconds = 2
 )
 
