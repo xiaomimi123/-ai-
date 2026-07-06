@@ -16,6 +16,7 @@ import (
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
 	"github.com/songquanpeng/one-api/relay/adaptor/task"
+	"github.com/songquanpeng/one-api/relay/adaptor/task/apimart"
 	taskcommon "github.com/songquanpeng/one-api/relay/adaptor/task/common"
 	"github.com/songquanpeng/one-api/relay/billing"
 )
@@ -221,6 +222,46 @@ func RelayTaskImage(c *gin.Context) {
 		return
 	}
 
+	// Fix ④ — sync-response short-circuit.
+	//
+	// apimart 对 gpt-image-1 / gpt-image-1.5 直接返回内联 b64_json / URL，
+	// 而不是 task_id。此时 DoRequest 给我们空 taskID + valid rawResp + nil
+	// err，我们跳过整套异步任务框架：直接抽图 + 把 task 行标 SUCCESS +
+	// 用标准 OpenAI 格式响应。async 请求也走这里（拿到图直接给客户端，没有
+	// 什么可以 poll 的）。
+	if upstreamTaskID == "" && len(rawResp) > 0 {
+		images := apimartExtractSync(platform, rawResp)
+		if len(images) == 0 {
+			_ = model.UpdateTaskStatus(model.DB, taskUUID, map[string]interface{}{
+				"status":      model.TaskStatusFailure,
+				"fail_reason": "sync response contained no images",
+				"finish_time": time.Now().Unix(),
+			})
+			_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "sync_no_images")
+			errResp(c, http.StatusBadGateway, "upstream_error", "sync response contained no images")
+			return
+		}
+		syncUpdates := map[string]interface{}{
+			"status":      model.TaskStatusSuccess,
+			"progress":    "100",
+			"submit_time": time.Now().Unix(),
+			"finish_time": time.Now().Unix(),
+		}
+		if json.Valid(rawResp) {
+			syncUpdates["data"] = json.RawMessage(rawResp)
+		}
+		_ = model.UpdateTaskStatus(model.DB, taskUUID, syncUpdates)
+
+		logger.SysLog("task sync-complete task_id=" + taskUUID +
+			" user_id=" + strconv.Itoa(userID) +
+			" channel=" + strconv.Itoa(channelID) +
+			" platform=" + platform +
+			" images=" + strconv.Itoa(len(images)))
+
+		c.JSON(http.StatusOK, buildSyncImagesResponse(images))
+		return
+	}
+
 	// 8. Update task to SUBMITTED with upstream task_id + raw response.
 	taskRecord.PrivateData.UpstreamTaskID = upstreamTaskID
 	updates := map[string]interface{}{
@@ -339,6 +380,17 @@ func shouldReturnTaskIDImmediately(c *gin.Context, req taskRequestBody) bool {
 		return true
 	}
 	return req.Async
+}
+
+// apimartExtractSync dispatches sync-response image extraction by platform.
+// Only apimart currently returns sync (gpt-image-1 / gpt-image-1.5). Other
+// platforms fall through to nil, which the caller treats as "no images".
+func apimartExtractSync(platform string, rawResp []byte) []string {
+	switch platform {
+	case "apimart":
+		return apimart.ExtractSyncImages(rawResp)
+	}
+	return nil
 }
 
 // buildSyncImagesResponse produces the OpenAI-standard shape:

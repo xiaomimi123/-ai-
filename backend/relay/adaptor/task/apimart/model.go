@@ -15,12 +15,17 @@ type SubmitRequest struct {
 	MaskURL string `json:"mask_url,omitempty"`
 }
 
-// SubmitResponse 提交后的异步响应
+// SubmitResponse 提交后的响应。apimart 走两种模式：
+//   - 异步：data[].task_id 有值，客户端后续 poll /v1/tasks/{id}
+//   - 同步：data[].b64_json 或 data[].url 有值（OpenAI DALL-E 风格）
+//     gpt-image-1 / gpt-image-1.5 走这条。task_id 会缺失。
 type SubmitResponse struct {
 	Code int `json:"code"`
 	Data []struct {
-		Status string `json:"status"`
-		TaskID string `json:"task_id"`
+		Status  string `json:"status"`
+		TaskID  string `json:"task_id"`
+		B64JSON string `json:"b64_json,omitempty"`
+		URL     string `json:"url,omitempty"`
 	} `json:"data"`
 	Error *APIError `json:"error,omitempty"`
 }

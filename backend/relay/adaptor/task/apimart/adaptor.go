@@ -161,11 +161,48 @@ func (a *Adaptor) DoRequest(info *common.TaskRelayInfo, body []byte) (string, []
 	if sr.Error != nil {
 		return "", raw, fmt.Errorf("upstream error: %s (%s)", sr.Error.Message, sr.Error.Type)
 	}
-	if len(sr.Data) == 0 || sr.Data[0].TaskID == "" {
-		return "", raw, errors.New("upstream did not return task_id")
+	if len(sr.Data) == 0 {
+		return "", raw, errors.New("upstream did not return data")
 	}
 
-	return sr.Data[0].TaskID, raw, nil
+	// 异步 path：有 task_id。
+	if sr.Data[0].TaskID != "" {
+		return sr.Data[0].TaskID, raw, nil
+	}
+
+	// 同步 path（Fix ④）：apimart 对 gpt-image-1 / gpt-image-1.5 直接返回
+	// 内联 b64_json / url，没有 task_id。空 taskID + nil err 是 sync 信号，
+	// 上层 RelayTaskImage 应该短路，用 ExtractSyncImages 抽图直接响应。
+	if sr.Data[0].B64JSON != "" || sr.Data[0].URL != "" {
+		return "", raw, nil
+	}
+
+	return "", raw, errors.New("upstream did not return task_id or inline image")
+}
+
+// ExtractSyncImages 从 apimart 同步响应里抽出图片列表。
+//   - b64_json 会包成 data URI（data:image/png;base64,...），前端可直接 <img src>
+//   - url 直接透传
+//
+// 无法解析或没有可用图片时返回空切片。
+func ExtractSyncImages(raw []byte) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var sr SubmitResponse
+	if err := json.Unmarshal(raw, &sr); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(sr.Data))
+	for _, d := range sr.Data {
+		switch {
+		case d.B64JSON != "":
+			out = append(out, "data:image/png;base64,"+d.B64JSON)
+		case d.URL != "":
+			out = append(out, d.URL)
+		}
+	}
+	return out
 }
 
 // truncate returns the first n runes of s plus "...", preserving UTF-8 boundaries.

@@ -403,6 +403,89 @@ func TestApiMart_E2E_submit_then_poll_to_completed(t *testing.T) {
 	})
 }
 
+// Fix ④: apimart 对 gpt-image-1 / gpt-image-1.5 直接返回内联 b64_json
+// （OpenAI 官方 DALL-E 风格的 sync 响应），不发 task_id。这时 DoRequest
+// 必须 return 空 taskID + valid raw + nil err，让上层短路走 sync 响应。
+func TestDoRequest_syncResponseWithB64Json(t *testing.T) {
+	Convey("DoRequest recognizes inline b64_json sync response", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{
+				"created": 1783349044,
+				"data": [{"b64_json": "iVBORw0KGgoAAAA=="}]
+			}`))
+		}))
+		defer srv.Close()
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+
+		body, _ := a.BuildRequestBody(info)
+		taskID, raw, err := a.DoRequest(info, body)
+		So(err, ShouldBeNil)
+		So(taskID, ShouldEqual, "") // sync signal: empty task_id
+		So(string(raw), ShouldContainSubstring, "b64_json")
+	})
+
+	Convey("DoRequest recognizes inline url sync response", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{
+				"created": 1783349044,
+				"data": [{"url": "https://cdn.x/direct.png"}]
+			}`))
+		}))
+		defer srv.Close()
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+
+		body, _ := a.BuildRequestBody(info)
+		taskID, _, err := a.DoRequest(info, body)
+		So(err, ShouldBeNil)
+		So(taskID, ShouldEqual, "")
+	})
+
+	Convey("DoRequest still errors when response has neither task_id nor inline image", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"created": 1, "data": [{"status": "queued"}]}`))
+		}))
+		defer srv.Close()
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+
+		body, _ := a.BuildRequestBody(info)
+		_, _, err := a.DoRequest(info, body)
+		So(err, ShouldNotBeNil)
+		So(err.Error(), ShouldContainSubstring, "did not return task_id")
+	})
+}
+
+func TestExtractSyncImages(t *testing.T) {
+	Convey("ExtractSyncImages picks up b64_json and turns into data URI", t, func() {
+		raw := []byte(`{"data":[{"b64_json":"iVBORw0KGgo"}]}`)
+		imgs := ExtractSyncImages(raw)
+		So(imgs, ShouldResemble, []string{"data:image/png;base64,iVBORw0KGgo"})
+	})
+
+	Convey("ExtractSyncImages picks up url directly", t, func() {
+		raw := []byte(`{"data":[{"url":"https://cdn.x/a.png"}]}`)
+		imgs := ExtractSyncImages(raw)
+		So(imgs, ShouldResemble, []string{"https://cdn.x/a.png"})
+	})
+
+	Convey("ExtractSyncImages returns empty for garbage / task_id-only response", t, func() {
+		So(ExtractSyncImages([]byte(`{"data":[{"task_id":"t"}]}`)), ShouldBeEmpty)
+		So(ExtractSyncImages([]byte(`not json`)), ShouldBeEmpty)
+		So(ExtractSyncImages(nil), ShouldBeEmpty)
+	})
+
+	Convey("ExtractSyncImages handles multiple images preserving order", t, func() {
+		raw := []byte(`{"data":[{"url":"u1"},{"b64_json":"AAA"},{"url":"u3"}]}`)
+		imgs := ExtractSyncImages(raw)
+		So(imgs, ShouldResemble, []string{"u1", "data:image/png;base64,AAA", "u3"})
+	})
+}
+
 func TestDoRequest_apimart_string_error_code(t *testing.T) {
 	Convey("DoRequest tolerates apimart's `code:''` (empty string) in error", t, func() {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
