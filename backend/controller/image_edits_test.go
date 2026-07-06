@@ -48,6 +48,54 @@ func TestParseImageEditsMultipart_textOnlyWithImage(t *testing.T) {
 		So(form.Size, ShouldEqual, "1024x1024")
 		So(form.ImageDataURI, ShouldStartWith, "data:image/png;base64,")
 		So(form.MaskDataURI, ShouldEqual, "")
+		// resolution 未传时应为空字符串（下游 apimart 走默认 1k）
+		So(form.Resolution, ShouldEqual, "")
+	})
+}
+
+// resolution 是 apimart 的 1k/2k/4k 分辨率选择。multipart 官方 OpenAI
+// images.edit 没这字段，但客户可以传 extra_body / 直接在 form 里加，
+// 我们要接住并透传。
+func TestParseImageEditsMultipart_capturesResolution(t *testing.T) {
+	Convey("resolution field is captured and passed through", t, func() {
+		buf, ct := buildEditsMultipart(
+			map[string]string{
+				"model": "gpt-image-2", "prompt": "x",
+				"resolution": "2k",
+			},
+			map[string][]byte{"image": []byte{0x89}},
+		)
+		gin.SetMode(gin.TestMode)
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest("POST", "/v1/images/edits", buf)
+		c.Request.Header.Set("Content-Type", ct)
+
+		form, err := parseImageEditsMultipart(c)
+		So(err, ShouldBeNil)
+		So(form.Resolution, ShouldEqual, "2k")
+	})
+}
+
+func TestMarshalImageEditsAsGenerations_includesResolution(t *testing.T) {
+	Convey("form.Resolution → JSON body has resolution key", t, func() {
+		form := &imageEditsForm{
+			Model: "gpt-image-2", Prompt: "x",
+			ImageDataURI: "data:image/png;base64,AAAA",
+			Resolution:   "4k",
+		}
+		body := marshalImageEditsAsGenerations(form)
+		So(string(body), ShouldContainSubstring, `"resolution":"4k"`)
+	})
+
+	Convey("empty Resolution → JSON body omits the key", t, func() {
+		form := &imageEditsForm{
+			Model: "gpt-image-2", Prompt: "x",
+			ImageDataURI: "data:image/png;base64,AAAA",
+			Resolution:   "",
+		}
+		body := marshalImageEditsAsGenerations(form)
+		So(string(body), ShouldNotContainSubstring, "resolution")
 	})
 }
 

@@ -33,6 +33,7 @@ type imageEditsForm struct {
 	Prompt       string
 	N            int
 	Size         string
+	Resolution   string // apimart 的 1k / 2k / 4k 分辨率档位
 	ImageDataURI string
 	MaskDataURI  string
 }
@@ -63,6 +64,7 @@ func parseImageEditsMultipart(c *gin.Context) (*imageEditsForm, error) {
 		n = 1
 	}
 	size := c.PostForm("size")
+	resolution := c.PostForm("resolution") // 1k/2k/4k，可选
 
 	imageDataURI, err := readMultipartFileAsDataURI(c, "image")
 	if err != nil {
@@ -78,6 +80,7 @@ func parseImageEditsMultipart(c *gin.Context) (*imageEditsForm, error) {
 		Prompt:       prompt,
 		N:            n,
 		Size:         size,
+		Resolution:   resolution,
 		ImageDataURI: imageDataURI,
 		MaskDataURI:  maskDataURI,
 	}, nil
@@ -137,6 +140,9 @@ func marshalImageEditsAsGenerations(form *imageEditsForm) []byte {
 	}
 	if form.Size != "" {
 		body["size"] = form.Size
+	}
+	if form.Resolution != "" {
+		body["resolution"] = form.Resolution
 	}
 	if form.MaskDataURI != "" {
 		body["mask_url"] = form.MaskDataURI
