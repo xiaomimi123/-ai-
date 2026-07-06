@@ -19,6 +19,10 @@ one-api/redis-data/
 # Logs
 *.log
 
+# Claude Code / superpowers session state — never commit
+.superpowers/
+scratchpad/
+
 # OS
 .DS_Store
 __pycache__/

@@ -109,6 +109,7 @@ func (a *Adaptor) BuildRequestBody(info *common.TaskRelayInfo) ([]byte, error) {
 		Size:       info.Size,
 		Resolution: info.Resolution,
 		ImageURLs:  info.ImageURLs,
+		MaskURL:    info.MaskURL,
 	}
 	return json.Marshal(req)
 }
@@ -223,6 +224,16 @@ func (a *Adaptor) FetchTask(info *common.TaskRelayInfo, taskID string) (*common.
 	}
 	if fr.Data.Error != nil {
 		out.FailReason = fr.Data.Error.Message
+	}
+	// 抽取图片 URL 给 sync 等待路径用。apimart result.images 是
+	// [{url:["https://..."], expires_at}] 结构，每个 images[i].url 是数组
+	// （历史上 apimart 可能返回同一张图的多种尺寸），这里只取第一个 URL。
+	if fr.Data.Status == "completed" {
+		for _, img := range fr.Data.Result.Images {
+			if len(img.URL) > 0 && img.URL[0] != "" {
+				out.Images = append(out.Images, img.URL[0])
+			}
+		}
 	}
 	return out, nil
 }

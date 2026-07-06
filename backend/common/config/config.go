@@ -177,6 +177,12 @@ var (
 	TaskRetentionDays       = 30
 	TaskUpstreamHTTPTimeout = 30 * time.Second
 	TaskMaxFetchErrors      = 5
+	// sync-mode wait (Fix ③): how long RelayTaskImage blocks polling upstream
+	// before falling back to 202 + task_id. 90s covers typical apimart p95
+	// (~55s p50, ~80s p95); if exceeded we hand the client a task_id and
+	// let them poll /v1/tasks/{id} themselves. Overridable via env.
+	TaskSyncWaitSeconds         = 90
+	TaskSyncPollIntervalSeconds = 2
 )
 
 // InitTaskConfig reads ENABLE_TASK_SYSTEM and related env vars.
@@ -189,4 +195,6 @@ func InitTaskConfig() {
 	TaskRetentionDays = env.Int("TASK_RETENTION_DAYS", 30)
 	TaskUpstreamHTTPTimeout = env.Duration("TASK_UPSTREAM_HTTP_TIMEOUT", 30*time.Second)
 	TaskMaxFetchErrors = env.Int("TASK_MAX_FETCH_ERRORS", 5)
+	TaskSyncWaitSeconds = env.Int("TASK_SYNC_WAIT_SECONDS", 90)
+	TaskSyncPollIntervalSeconds = env.Int("TASK_SYNC_POLL_INTERVAL_SECONDS", 2)
 }

@@ -76,6 +76,63 @@ func TestEstimateImageQuota(t *testing.T) {
 	})
 }
 
+// TestShouldReturnTaskIDImmediately covers the sync-vs-async decision
+// (Fix ③). Order of precedence: request body's async:true wins, then the
+// context ForceAsync flag set by Playground, else sync.
+func TestShouldReturnTaskIDImmediately(t *testing.T) {
+	Convey("default is sync (return image URL, not task_id)", t, func() {
+		c := newCtxWithChannelType(channeltype.ApiMart)
+		So(shouldReturnTaskIDImmediately(c, taskRequestBody{}), ShouldBeFalse)
+	})
+
+	Convey("body.async:true → return task_id immediately", t, func() {
+		c := newCtxWithChannelType(channeltype.ApiMart)
+		So(shouldReturnTaskIDImmediately(c, taskRequestBody{Async: true}), ShouldBeTrue)
+	})
+
+	Convey("ctxkey.ForceAsync=true (Playground path) → return task_id immediately", t, func() {
+		c := newCtxWithChannelType(channeltype.ApiMart)
+		c.Set(ctxkey.ForceAsync, true)
+		So(shouldReturnTaskIDImmediately(c, taskRequestBody{}), ShouldBeTrue)
+	})
+
+	Convey("body.async:false with ForceAsync=true still returns task_id (context wins to protect Playground)", t, func() {
+		c := newCtxWithChannelType(channeltype.ApiMart)
+		c.Set(ctxkey.ForceAsync, true)
+		So(shouldReturnTaskIDImmediately(c, taskRequestBody{Async: false}), ShouldBeTrue)
+	})
+}
+
+// TestBuildSyncImagesResponse locks the OpenAI-standard shape returned when
+// the sync waiter succeeds: {created, data:[{url:"..."}]} — no task_id, no
+// status, no lingjing extensions. Direct SDK compatibility depends on this.
+func TestBuildSyncImagesResponse(t *testing.T) {
+	Convey("single image → data has one entry with url", t, func() {
+		resp := buildSyncImagesResponse([]string{"https://cdn.x/a.png"})
+		So(resp["data"], ShouldHaveLength, 1)
+		data := resp["data"].([]gin.H)
+		So(data[0]["url"], ShouldEqual, "https://cdn.x/a.png")
+		_, hasTaskID := data[0]["task_id"]
+		So(hasTaskID, ShouldBeFalse)
+		_, hasStatus := data[0]["status"]
+		So(hasStatus, ShouldBeFalse)
+	})
+
+	Convey("multiple images → data preserves order", t, func() {
+		resp := buildSyncImagesResponse([]string{"u1", "u2", "u3"})
+		data := resp["data"].([]gin.H)
+		So(data, ShouldHaveLength, 3)
+		So(data[0]["url"], ShouldEqual, "u1")
+		So(data[2]["url"], ShouldEqual, "u3")
+	})
+
+	Convey("response has 'created' timestamp", t, func() {
+		resp := buildSyncImagesResponse([]string{"u1"})
+		_, ok := resp["created"]
+		So(ok, ShouldBeTrue)
+	})
+}
+
 // TestTaskToOpenAIView locks the OpenAI-shape projection for the read
 // endpoints (E3): status flattening, progress parsing, and which optional
 // keys (result/usage/error) appear in which states.

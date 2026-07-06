@@ -10,6 +10,9 @@ type SubmitRequest struct {
 	Size       string   `json:"size,omitempty"`
 	Resolution string   `json:"resolution,omitempty"`
 	ImageURLs  []string `json:"image_urls,omitempty"`
+	// MaskURL 局部重绘用的遮罩（黑白 PNG，白色区域会被重绘）。
+	// Fix ②c：仅 /v1/images/edits 会填这个字段。
+	MaskURL string `json:"mask_url,omitempty"`
 }
 
 // SubmitResponse 提交后的异步响应

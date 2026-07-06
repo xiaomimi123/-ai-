@@ -2,6 +2,7 @@ package controller
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -29,6 +30,12 @@ type taskRequestBody struct {
 	Size       string   `json:"size"`
 	Resolution string   `json:"resolution"`
 	ImageURLs  []string `json:"image_urls"`
+	MaskURL    string   `json:"mask_url,omitempty"` // Fix ②c: img2img with mask
+	// Async lets an API caller opt into the old task_id-returning behavior.
+	// Default (false) → the handler waits until the upstream task completes
+	// and returns a standard OpenAI {data:[{url}]} response. Any client that
+	// wants to poll on its own passes {"async": true}. See shouldReturnTaskIDImmediately.
+	Async bool `json:"async,omitempty"`
 }
 
 // RelayTaskImage handles POST /v1/images/generations for async (task-based)
@@ -125,6 +132,7 @@ func RelayTaskImage(c *gin.Context) {
 		Resolution:          req.Resolution,
 		N:                   req.N,
 		ImageURLs:           req.ImageURLs,
+		MaskURL:             req.MaskURL,
 		Group:               group,
 		OriginalRequestBody: raw,
 	}
@@ -236,18 +244,119 @@ func RelayTaskImage(c *gin.Context) {
 		" upstream_task_id=" + upstreamTaskID +
 		" quota=" + strconv.Itoa(estimatedQuota))
 
-	// 9. Respond OpenAI-style.
-	c.JSON(http.StatusOK, gin.H{
-		"created": time.Now().Unix(),
-		"data": []gin.H{
-			{"task_id": taskUUID, "status": "submitted"},
-		},
-	})
+	// 9. Respond.
+	//
+	// Two paths (Fix ③):
+	//   - async (Playground UI or explicit body.async:true) → return
+	//     {task_id, status:"submitted"} so the caller can poll on its own.
+	//   - sync (default for API callers) → block, poll upstream to completion,
+	//     return standard OpenAI {data:[{url}]}. This is what plain OpenAI
+	//     SDK usage expects (client.images.generate(...).data[0].url).
+	//
+	// The sync branch degrades gracefully: on timeout it returns 202 with
+	// {task_id, status:"processing"} instead of 504 — the client can then
+	// poll /v1/tasks/{id}.
+	if shouldReturnTaskIDImmediately(c, req) {
+		c.JSON(http.StatusOK, gin.H{
+			"created": time.Now().Unix(),
+			"data": []gin.H{
+				{"task_id": taskUUID, "status": "submitted"},
+			},
+		})
+		return
+	}
+
+	waitTimeout := time.Duration(config.TaskSyncWaitSeconds) * time.Second
+	pollInterval := time.Duration(config.TaskSyncPollIntervalSeconds) * time.Second
+	if waitTimeout <= 0 {
+		waitTimeout = 90 * time.Second
+	}
+	if pollInterval <= 0 {
+		pollInterval = 2 * time.Second
+	}
+
+	fr, waitErr := taskcommon.WaitForTaskCompletion(ctx, adaptor, info, upstreamTaskID, waitTimeout, pollInterval)
+
+	if errors.Is(waitErr, taskcommon.ErrTaskWaitTimeout) {
+		// Timeout: caller keeps polling; task row is fine, worker or a later
+		// /v1/tasks/{id} call finishes it. 202 = Accepted (not-yet-done).
+		logger.Warnf(ctx, "RelayTaskImage sync wait timeout task_id=%s upstream_task_id=%s", taskUUID, upstreamTaskID)
+		c.JSON(http.StatusAccepted, gin.H{
+			"created": time.Now().Unix(),
+			"data": []gin.H{
+				{"task_id": taskUUID, "status": "processing"},
+			},
+		})
+		return
+	}
+
+	if waitErr != nil {
+		// Upstream reported failure OR ctx cancelled (client disconnected /
+		// nginx timed out on us). Mark FAILED and refund; return OpenAI error.
+		_ = model.UpdateTaskStatus(model.DB, taskUUID, map[string]interface{}{
+			"status":      model.TaskStatusFailure,
+			"fail_reason": waitErr.Error(),
+			"finish_time": time.Now().Unix(),
+		})
+		_ = billing.RefundTaskQuota(userID, channelID, estimatedQuota, taskUUID, "upstream_failed")
+		errResp(c, http.StatusBadGateway, "upstream_error", waitErr.Error())
+		return
+	}
+
+	// Success: persist the completed result + progress to the task row so
+	// /v1/tasks/{id} can also serve it, and respond OpenAI-standard.
+	successUpdates := map[string]interface{}{
+		"status":      model.TaskStatusSuccess,
+		"progress":    "100",
+		"finish_time": time.Now().Unix(),
+	}
+	if len(fr.Result) > 0 && json.Valid(fr.Result) {
+		successUpdates["data"] = json.RawMessage(fr.Result)
+	}
+	_ = model.UpdateTaskStatus(model.DB, taskUUID, successUpdates)
+
+	c.JSON(http.StatusOK, buildSyncImagesResponse(fr.Images))
 }
 
 // errResp writes a structured OpenAI-style error response.
 func errResp(c *gin.Context, code int, typ, msg string) {
 	c.JSON(code, gin.H{"error": gin.H{"message": msg, "type": typ}})
+}
+
+// shouldReturnTaskIDImmediately decides whether RelayTaskImage should skip
+// the sync poll-and-wait step and return {task_id, status:"submitted"} right
+// after upstream submit.
+//
+// Precedence (highest first):
+//  1. ctxkey.ForceAsync set on the context (Playground path)
+//  2. request body's async:true (API caller opt-in)
+//
+// Playground's PlaygroundAsyncSubmit sets ForceAsync because the Playground
+// UI already polls /playground/async-tasks/:id; making the handler block
+// there would just double the wall-clock latency.
+func shouldReturnTaskIDImmediately(c *gin.Context, req taskRequestBody) bool {
+	if c.GetBool(ctxkey.ForceAsync) {
+		return true
+	}
+	return req.Async
+}
+
+// buildSyncImagesResponse produces the OpenAI-standard shape:
+//
+//	{"created": <unix>, "data": [{"url": "..."}]}
+//
+// which OpenAI Python/Node SDKs deserialize into their ImagesResponse type
+// without any customization. Explicitly does NOT include task_id/status so
+// pydantic validators in strict-mode SDK forks don't reject the payload.
+func buildSyncImagesResponse(urls []string) gin.H {
+	data := make([]gin.H, 0, len(urls))
+	for _, u := range urls {
+		data = append(data, gin.H{"url": u})
+	}
+	return gin.H{
+		"created": time.Now().Unix(),
+		"data":    data,
+	}
 }
 
 // estimateImageQuota returns a quota estimate for an async image-generation

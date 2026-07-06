@@ -6,6 +6,11 @@ type FetchResult struct {
 	Progress string `json:"progress"` // "0".."100"
 	// Result 是上游成功时的完整响应（含图 URL / b64 等），原样存到 tasks.data
 	Result []byte `json:"result"`
+	// Images 是 completed 时抽取好的图片 URL / data URI 列表。适配器负责从
+	// 各自上游响应里提取，好让 sync 等待路径可以直接构造 OpenAI 标准
+	// {data:[{url}]} 响应，而不必二次解码 upstream-specific JSON。
+	// 非 completed 时可为空。
+	Images []string `json:"images,omitempty"`
 	// FailReason 上游失败时的错误描述
 	FailReason string `json:"fail_reason"`
 }

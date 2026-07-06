@@ -88,6 +88,60 @@ func TestBuildRequestBody(t *testing.T) {
 		So(req.Resolution, ShouldEqual, "2k")
 		So(req.N, ShouldEqual, 1)
 	})
+
+	Convey("BuildRequestBody passes image_urls through for img2img (Fix ②a)", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gpt-image-2"
+		info.ImageURLs = []string{
+			"https://cdn.x/source.png",
+			"data:image/png;base64,ZZZZZ",
+		}
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+
+		var req SubmitRequest
+		So(json.Unmarshal(body, &req), ShouldBeNil)
+		So(req.ImageURLs, ShouldResemble, []string{
+			"https://cdn.x/source.png",
+			"data:image/png;base64,ZZZZZ",
+		})
+	})
+
+	Convey("BuildRequestBody omits image_urls when empty (JSON stays clean)", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gpt-image-2"
+		info.ImageURLs = nil
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+		// omitempty in SubmitRequest → field should not appear
+		So(string(body), ShouldNotContainSubstring, "image_urls")
+	})
+
+	Convey("BuildRequestBody includes mask_url when set (Fix ②c)", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gpt-image-2"
+		info.ImageURLs = []string{"data:image/png;base64,AAAA"}
+		info.MaskURL = "data:image/png;base64,BBBB"
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+
+		var req SubmitRequest
+		So(json.Unmarshal(body, &req), ShouldBeNil)
+		So(req.MaskURL, ShouldEqual, "data:image/png;base64,BBBB")
+	})
+
+	Convey("BuildRequestBody omits mask_url when empty", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gpt-image-2"
+		info.MaskURL = ""
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+		So(string(body), ShouldNotContainSubstring, "mask_url")
+	})
 }
 
 func TestDoRequest_success(t *testing.T) {
@@ -213,6 +267,50 @@ func TestFetchTask_completed(t *testing.T) {
 		So(err, ShouldBeNil)
 		So(res.Status, ShouldEqual, "completed")
 		So(res.Result, ShouldNotBeEmpty)
+	})
+}
+
+// Fix ③ sync-mode dep: adaptor must expose extracted image URLs via
+// FetchResult.Images so the sync waiter can build an OpenAI-style
+// {data:[{url}]} response without re-decoding apimart-specific JSON.
+func TestFetchTask_completedPopulatesImages(t *testing.T) {
+	Convey("FetchTask populates Images from apimart result.images[].url[]", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{
+				"code":200,
+				"data":{
+					"id":"task_xxx",
+					"status":"completed",
+					"progress":100,
+					"result":{"images":[
+						{"url":["https://cdn.x/one.png"]},
+						{"url":["https://cdn.x/two.png"]}
+					]}
+				}
+			}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(res.Images, ShouldResemble, []string{"https://cdn.x/one.png", "https://cdn.x/two.png"})
+	})
+
+	Convey("FetchTask leaves Images empty when status != completed", t, func() {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"code":200,"data":{"id":"task_xxx","status":"processing","progress":50}}`))
+		}))
+		defer srv.Close()
+
+		a := &Adaptor{}
+		info := newInfo()
+		info.BaseURL = srv.URL
+		res, err := a.FetchTask(info, "task_xxx")
+		So(err, ShouldBeNil)
+		So(res.Images, ShouldBeEmpty)
 	})
 }
 

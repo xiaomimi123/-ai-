@@ -27,6 +27,16 @@ func relayHelper(c *gin.Context, relayMode int) *model.ErrorWithStatusCode {
 	var err *model.ErrorWithStatusCode
 	switch relayMode {
 	case relaymode.ImagesGenerations:
+		// === Gemini image dispatch (Fix ①) ===
+		// Gemini 系模型（nano-banana / gemini-2.5-flash-image / imagen 走
+		// OpenAI-compat 端点时同样）出图走 chat/completions + modalities，
+		// 而不是 images/generations。这里在同步 image relay 之前拦一层，
+		// 把请求重写成 chat/completions 转发，再把返回里的图片抽出来包成
+		// 标准 OpenAI images/generations {data:[{url}]}。
+		if isGeminiChannelType(c.GetInt(ctxkey.Channel)) {
+			RelayGeminiImage(c)
+			return nil
+		}
 		// === Async task dispatch (feature: ENABLE_TASK_SYSTEM) ===
 		// When the flag is off, or the channel is not an async task type, this
 		// is a no-op and the sync path below remains byte-level equivalent to

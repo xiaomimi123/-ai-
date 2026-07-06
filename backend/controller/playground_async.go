@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/songquanpeng/one-api/common/ctxkey"
 	"github.com/songquanpeng/one-api/middleware"
 )
 
@@ -63,6 +64,12 @@ func PlaygroundAsyncSubmit(c *gin.Context) {
 	// 5. body 在 Distribute 里没动，但保险起见再还原一次
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(rawBody))
 	c.Request.ContentLength = int64(len(rawBody))
+
+	// Playground 前端已经写好 poll 逻辑（GET /playground/async-tasks/:id），
+	// 需要立即拿到 task_id 才能触发轮询显示进度条。Fix ③ 引入的 sync 默认
+	// 行为对 Playground 反而是回退。用 ForceAsync 让 RelayTaskImage 保持
+	// 旧的立即返回 task_id 语义。
+	c.Set(ctxkey.ForceAsync, true)
 
 	RelayTaskImage(c)
 }

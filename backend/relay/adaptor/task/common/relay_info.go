@@ -18,6 +18,10 @@ type TaskRelayInfo struct {
 	Resolution string
 	N          int
 	ImageURLs  []string
+	// MaskURL 是 /v1/images/edits 里的 mask 文件，转成 data URI 后填入。
+	// Fix ②c：apimart 上游用这个字段做局部重绘。Gemini 不原生支持像素级
+	// mask，收到时会忽略（或作为语义提示注入 prompt，见 geminiv2 分支）。
+	MaskURL string
 
 	// 给 adaptor 透传的原始 JSON（用于 BuildRequestBody 不丢字段）
 	OriginalRequestBody []byte
