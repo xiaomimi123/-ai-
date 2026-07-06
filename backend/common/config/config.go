@@ -196,6 +196,6 @@ func InitTaskConfig() {
 	TaskRetentionDays = env.Int("TASK_RETENTION_DAYS", 30)
 	TaskUpstreamHTTPTimeout = env.Duration("TASK_UPSTREAM_HTTP_TIMEOUT", 30*time.Second)
 	TaskMaxFetchErrors = env.Int("TASK_MAX_FETCH_ERRORS", 5)
-	TaskSyncWaitSeconds = env.Int("TASK_SYNC_WAIT_SECONDS", 90)
+	TaskSyncWaitSeconds = env.Int("TASK_SYNC_WAIT_SECONDS", 300)
 	TaskSyncPollIntervalSeconds = env.Int("TASK_SYNC_POLL_INTERVAL_SECONDS", 2)
 }
