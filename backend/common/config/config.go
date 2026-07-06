@@ -175,7 +175,12 @@ var (
 	TaskWorkerBatchSize     = 50
 	TaskTimeoutMinutes      = 10
 	TaskRetentionDays       = 30
-	TaskUpstreamHTTPTimeout = 30 * time.Second
+	// TaskUpstreamHTTPTimeout 是 adaptor.DoRequest / FetchTask 单次 HTTP
+	// 请求的读超时。以前默认 30s 是给"异步 submit"设的（apimart submit 秒
+	// 级返回 task_id）。Fix ④ 之后 apimart 的 gpt-image-1 / gpt-image-1.5
+	// 直接返回内联 b64_json / URL，那时候整个 HTTP 请求要跑到上游把图生完，
+	// 30s 会先断开。180s 覆盖 apimart sync 系模型的 p95 实测。
+	TaskUpstreamHTTPTimeout = 180 * time.Second
 	TaskMaxFetchErrors      = 5
 	// sync-mode wait (Fix ③): how long RelayTaskImage blocks polling upstream
 	// before falling back to 202 + task_id. 300s 覆盖 apimart 图生图 p95
@@ -194,7 +199,7 @@ func InitTaskConfig() {
 	TaskWorkerBatchSize = env.Int("TASK_WORKER_BATCH_SIZE", 50)
 	TaskTimeoutMinutes = env.Int("TASK_TIMEOUT_MINUTES", 10)
 	TaskRetentionDays = env.Int("TASK_RETENTION_DAYS", 30)
-	TaskUpstreamHTTPTimeout = env.Duration("TASK_UPSTREAM_HTTP_TIMEOUT", 30*time.Second)
+	TaskUpstreamHTTPTimeout = env.Duration("TASK_UPSTREAM_HTTP_TIMEOUT", 180*time.Second)
 	TaskMaxFetchErrors = env.Int("TASK_MAX_FETCH_ERRORS", 5)
 	TaskSyncWaitSeconds = env.Int("TASK_SYNC_WAIT_SECONDS", 300)
 	TaskSyncPollIntervalSeconds = env.Int("TASK_SYNC_POLL_INTERVAL_SECONDS", 2)
