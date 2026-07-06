@@ -10,6 +10,22 @@ services:
       - REDIS_CONN_STRING=redis://redis:6379
       - SESSION_SECRET=${SESSION_SECRET}
       - TZ=Asia/Shanghai
+      - COOKIE_DOMAIN=.aitoken.homes
+      - STREAM_NORMALIZER=on
+      # 异步任务系统（图片生成 / apimart / jimeng）
+      - ENABLE_TASK_SYSTEM=${ENABLE_TASK_SYSTEM:-false}
+      - TASK_WORKER_INTERVAL=${TASK_WORKER_INTERVAL:-5s}
+      - TASK_WORKER_BATCH_SIZE=${TASK_WORKER_BATCH_SIZE:-50}
+      - TASK_TIMEOUT_MINUTES=${TASK_TIMEOUT_MINUTES:-10}
+      - TASK_RETENTION_DAYS=${TASK_RETENTION_DAYS:-30}
+      # ⚠️ apimart 的 gpt-image-1 / gpt-image-1.5 走 sync 内联 b64_json
+      # 响应，HTTP 请求本身就要跑 30-450s。180s 覆盖 p95。默认 30s 会挂。
+      - TASK_UPSTREAM_HTTP_TIMEOUT=${TASK_UPSTREAM_HTTP_TIMEOUT:-180s}
+      - TASK_MAX_FETCH_ERRORS=${TASK_MAX_FETCH_ERRORS:-5}
+      # Fix ③ sync-by-default：客户端一次 HTTP 调用等到出图 URL；
+      # 超时降级为 202 + task_id。nginx proxy_read_timeout 也要 ≥ 320s。
+      - TASK_SYNC_WAIT_SECONDS=${TASK_SYNC_WAIT_SECONDS:-300}
+      - TASK_SYNC_POLL_INTERVAL_SECONDS=${TASK_SYNC_POLL_INTERVAL_SECONDS:-2}
     volumes:
       - ./data:/data
     depends_on:
