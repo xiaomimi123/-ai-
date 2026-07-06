@@ -89,114 +89,105 @@ export default function DocsPage() {
   const [activeTab, setActiveTab] = useState('python')
   const [imgTab, setImgTab] = useState('python')
 
+  // 图像生成样例。默认走"同步模式" —— 一次 HTTP 调用直接拿到图片 URL，
+  // 完全兼容 OpenAI 官方 SDK 用法（client.images.generate 即用）。
+  // 显式异步模式（拿 task_id 自主轮询）见下方"异步模式与轮询"。
   const imageExamples: Record<string, string> = {
-    curl: `# 1. 提交任务
-TASK=$(curl -s -X POST ${BASE_URL}/images/generations \\
+    python: `# 完全兼容 OpenAI SDK —— 一次调用拿到图片 URL
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-你的令牌",
+    base_url="${BASE_URL}",
+    timeout=360,  # 图像 p95 约 60-120 秒，建议 timeout ≥ 300
+)
+
+resp = client.images.generate(
+    model="gpt-image-2",
+    prompt="一只橘猫坐在窗台上看夕阳，水彩画风格",
+    n=1,
+    size="16:9",             # 比例：1:1 / 3:2 / 2:3 / 4:3 / 3:4 / 16:9 / 9:16
+    extra_body={
+        "resolution": "1k",  # 分辨率：1k / 2k / 4k
+    },
+)
+print(resp.data[0].url)
+
+# ─── 图生图（image_urls）─── 参考图可以是公网 URL 或 base64 data URI
+resp2 = client.images.generate(
+    model="gpt-image-2",
+    prompt="把这张改成动漫风格",
+    extra_body={
+        "image_urls": ["https://example.com/source.png"],
+        "resolution": "2k",
+    },
+)
+print(resp2.data[0].url)`,
+
+    nodejs: `// 完全兼容 OpenAI SDK —— 一次调用拿到图片 URL
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-你的令牌',
+  baseURL: '${BASE_URL}',
+  timeout: 360_000,  // 图像 p95 约 60-120 秒，建议 timeout ≥ 300s
+});
+
+const resp = await client.images.generate({
+  model: 'gpt-image-2',
+  prompt: '一只橘猫坐在窗台上看夕阳，水彩画风格',
+  n: 1,
+  size: '16:9',
+  // @ts-expect-error 非标准 OpenAI 字段，走 body 透传
+  resolution: '1k',
+});
+console.log(resp.data[0].url);
+
+// ─── 图生图（image_urls）───
+const edited = await client.images.generate({
+  model: 'gpt-image-2',
+  prompt: '把这张改成动漫风格',
+  // @ts-expect-error
+  image_urls: ['https://example.com/source.png'],
+  // @ts-expect-error
+  resolution: '2k',
+});
+console.log(edited.data[0].url);`,
+
+    curl: `# 文生图（sync 默认，一次调用拿 URL）
+curl ${BASE_URL}/images/generations \\
   -H "Authorization: Bearer sk-你的令牌" \\
   -H "Content-Type: application/json" \\
+  --max-time 360 \\
   -d '{
     "model": "gpt-image-2",
     "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
+    "n": 1,
     "size": "16:9",
-    "resolution": "1k",
-    "n": 1
-  }')
-TASK_ID=$(echo "$TASK" | grep -oE '"task_id":"[^"]+"' | head -1 | cut -d'"' -f4)
-echo "task_id: $TASK_ID"
+    "resolution": "1k"
+  }'
+# → {"created":..., "data":[{"url":"https://..."}]}
 
-# 2. 轮询直到完成
-while true; do
-  RES=$(curl -s ${BASE_URL}/tasks/$TASK_ID \\
-    -H "Authorization: Bearer sk-你的令牌")
-  STATUS=$(echo "$RES" | grep -oE '"status":"[^"]+"' | head -1 | cut -d'"' -f4)
-  echo "status: $STATUS"
-  if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then
-    echo "$RES"
-    break
-  fi
-  sleep 3
-done`,
+# 图生图（image_urls）
+curl ${BASE_URL}/images/generations \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  -H "Content-Type: application/json" \\
+  --max-time 360 \\
+  -d '{
+    "model": "gpt-image-2",
+    "prompt": "把这张改成动漫风格",
+    "image_urls": ["https://example.com/source.png"],
+    "resolution": "2k"
+  }'
 
-    python: `import time
-import requests
-
-API_KEY = "sk-你的令牌"
-BASE = "${BASE_URL}"
-
-# 1. 提交任务
-resp = requests.post(
-    f"{BASE}/images/generations",
-    headers={"Authorization": f"Bearer {API_KEY}"},
-    json={
-        "model": "gpt-image-2",
-        "prompt": "一只橘猫坐在窗台上看夕阳，水彩画风格",
-        "size": "16:9",
-        "resolution": "1k",
-        "n": 1,
-    },
-)
-task_id = resp.json()["data"][0]["task_id"]
-print("task_id:", task_id)
-
-# 2. 轮询直到完成
-while True:
-    res = requests.get(
-        f"{BASE}/tasks/{task_id}",
-        headers={"Authorization": f"Bearer {API_KEY}"},
-    ).json()
-    print("status:", res["status"], "progress:", res.get("progress"))
-    if res["status"] in ("completed", "failed", "canceled"):
-        break
-    time.sleep(3)
-
-# 3. 取图
-if res["status"] == "completed":
-    image_url = res["result"]["raw"]["data"]["result"]["images"][0]["url"][0]
-    print("Image URL:", image_url)
-else:
-    print("Task ended:", res.get("error"))`,
-
-    nodejs: `const API_KEY = "sk-你的令牌";
-const BASE = "${BASE_URL}";
-
-async function generate(prompt: string) {
-  // 1. 提交任务
-  const submit = await fetch(\`\${BASE}/images/generations\`, {
-    method: "POST",
-    headers: {
-      "Authorization": \`Bearer \${API_KEY}\`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "gpt-image-2",
-      prompt,
-      size: "16:9",
-      resolution: "1k",
-      n: 1,
-    }),
-  });
-  const { data } = await submit.json();
-  const taskId = data[0].task_id;
-  console.log("task_id:", taskId);
-
-  // 2. 轮询直到完成
-  while (true) {
-    const r = await fetch(\`\${BASE}/tasks/\${taskId}\`, {
-      headers: { "Authorization": \`Bearer \${API_KEY}\` },
-    });
-    const res = await r.json();
-    console.log("status:", res.status, "progress:", res.progress);
-    if (res.status === "completed") {
-      return res.result.raw.data.result.images[0].url[0];
-    }
-    if (res.status === "failed" || res.status === "canceled") {
-      throw new Error(res.error?.message || \`task \${res.status}\`);
-    }
-    await new Promise(r => setTimeout(r, 3000));
-  }
-}
-
-generate("一只橘猫坐在窗台上看夕阳，水彩画风格").then(console.log);`,
+# 官方 multipart /v1/images/edits（OpenAI SDK client.images.edit 走这里）
+curl ${BASE_URL}/images/edits \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  --max-time 360 \\
+  -F "model=gpt-image-2" \\
+  -F "prompt=把这张改成动漫风格" \\
+  -F "resolution=2k" \\
+  -F "image=@input.png"`,
   }
 
   const codeExamples: Record<string, string> = {
@@ -416,20 +407,26 @@ for chunk in stream:
         </div>
       </Section>
 
-      {/* 异步图像生成 */}
-      <Section title="异步图像生成 API（gpt-image-2 / gemini-2.5-flash-image / nano-banana）" icon={ImageIcon}>
+      {/* 图像生成 */}
+      <Section title="图像生成 API（gpt-image-2 / gemini-2.5-flash-image / nano-banana）" icon={ImageIcon}>
         {/* 概述 */}
         <div style={{
           background: 'var(--accent-light)', borderLeft: '3px solid var(--accent)',
           borderRadius: 8, padding: '12px 14px', fontSize: 13, color: 'var(--primary)',
           marginBottom: 20, lineHeight: 1.7,
         }}>
-          <div style={{ fontWeight: 600, marginBottom: 6 }}>为什么是异步？</div>
-          灵镜支持的图像生成模型（<code>gpt-image-2</code> / <code>gemini-2.5-flash-image</code> / <code>nano-banana</code> 等）单张耗时 <b>20–60 秒</b>，因此采用异步任务设计：提交后立即返回 <code>task_id</code>，轮询 <code>/v1/tasks/&#123;task_id&#125;</code> 拿结果。失败 / 取消会自动退还预扣额度。
+          <div style={{ fontWeight: 600, marginBottom: 6 }}>两种调用方式，同一个入口</div>
+          <ul style={{ margin: '4px 0 0 18px', padding: 0, lineHeight: 1.9 }}>
+            <li><b>同步模式（默认）</b>：一次 HTTP 调用直接拿到图片 URL，完全兼容 OpenAI SDK <code>client.images.generate()</code>。适合大部分场景，建议客户端 timeout ≥ 300s。</li>
+            <li><b>异步模式（可选）</b>：请求体加 <code>{'"async": true'}</code>，立即返回 <code>task_id</code>，客户端自主轮询 <code>/v1/tasks/&#123;task_id&#125;</code>。适合批量任务 / 前端进度条 / 长任务后台处理。</li>
+          </ul>
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--muted)' }}>
+            服务端等待超时（默认 300s）会自动降级为异步响应 <code>&#123;task_id, status:"processing"&#125;</code>，客户端接着 poll 即可，不会 504。失败 / 取消自动退款。
+          </div>
         </div>
 
-        {/* 1.2 提交任务 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, marginTop: 4, fontSize: 15, color: 'var(--text)' }}>1. 提交任务</h4>
+        {/* 1. 同步文生图 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, marginTop: 4, fontSize: 15, color: 'var(--text)' }}>1. 同步文生图（推荐）</h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
           <span className="badge badge-green">POST</span>
           <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/images/generations</code>
@@ -442,14 +439,18 @@ for chunk in stream:
   "size": "16:9",
   "resolution": "1k"
 }`} />
-        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>响应（HTTP 200）：</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>成功响应（HTTP 200，标准 OpenAI 格式）：</div>
         <CodeBlock language="json" code={`{
   "created": 1747156804,
   "data": [
-    {
-      "task_id": "task_859be413-68c1-41c8-9488-660e70fd9204",
-      "status": "submitted"
-    }
+    { "url": "https://upload.apimart.ai/.../image.png" }
+  ]
+}`} />
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>请求超过服务端等待时长（默认 300s）时的降级响应（HTTP 202，客户端应继续 poll）：</div>
+        <CodeBlock language="json" code={`{
+  "created": 1747156804,
+  "data": [
+    { "task_id": "task_xxx", "status": "processing" }
   ]
 }`} />
 
@@ -459,21 +460,76 @@ for chunk in stream:
               <tr>
                 <th>字段</th>
                 <th>类型</th>
+                <th>必填</th>
                 <th>说明</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td><code>model</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>模型 ID，见下方支持列表</td></tr>
-              <tr><td><code>prompt</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>提示词（最多 1000 字符）</td></tr>
-              <tr><td><code>n</code></td><td style={{ color: 'var(--muted)' }}>int</td><td>生成数量，默认 <code>1</code></td></tr>
-              <tr><td><code>size</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>比例，推荐 <code>16:9</code> / <code>1:1</code> / <code>9:16</code> / <code>4:3</code> / <code>3:4</code></td></tr>
-              <tr><td><code>resolution</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>分辨率档位 <code>1k</code> / <code>2k</code> / <code>4k</code></td></tr>
+              <tr><td><code>model</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>是</td><td>模型 ID，见下方"支持模型"</td></tr>
+              <tr><td><code>prompt</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>是</td><td>提示词（最多 4000 字符）</td></tr>
+              <tr><td><code>n</code></td><td style={{ color: 'var(--muted)' }}>int</td><td>否</td><td>生成数量，1–10，默认 <code>1</code></td></tr>
+              <tr><td><code>size</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>否</td><td>比例，<code>1:1</code> / <code>3:2</code> / <code>2:3</code> / <code>4:3</code> / <code>3:4</code> / <code>16:9</code> / <code>9:16</code> / <code>auto</code>，也可直接 <code>1881x836</code></td></tr>
+              <tr><td><code>resolution</code></td><td style={{ color: 'var(--muted)' }}>string</td><td>否</td><td>分辨率档位 <code>1k</code>（1254×1254）/ <code>2k</code>（2048×2048）/ <code>4k</code>（2880×2880）</td></tr>
+              <tr><td><code>image_urls</code></td><td style={{ color: 'var(--muted)' }}>string[]</td><td>否</td><td>参考图（图生图）。最多 16 张，元素可以是公网 URL 或 <code>data:image/png;base64,...</code> data URI</td></tr>
+              <tr><td><code>async</code></td><td style={{ color: 'var(--muted)' }}>bool</td><td>否</td><td>传 <code>true</code> 立即返回 <code>task_id</code>（异步模式）；默认 <code>false</code></td></tr>
             </tbody>
           </table>
         </div>
 
-        {/* 1.3 查询任务状态 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>2. 查询任务状态</h4>
+        {/* 2. 图生图 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>2. 图生图（image_urls 或 multipart edits）</h4>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.7 }}>
+          有两种方式提供参考图。方式一简单直接，适合 URL 已经可访问的场景；方式二是 OpenAI 官方 <code>client.images.edit()</code> 用的协议，SDK 直接兼容。
+        </div>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6 }}>方式一：<code>/v1/images/generations</code> 加 <code>image_urls</code></div>
+        <CodeBlock language="json" code={`{
+  "model": "gpt-image-2",
+  "prompt": "把这张改成动漫风格",
+  "image_urls": [
+    "https://example.com/source.png",
+    "data:image/png;base64,iVBORw0KGgo..."
+  ],
+  "resolution": "2k"
+}`} />
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, marginTop: 4 }}>方式二：<code>/v1/images/edits</code> 官方 multipart（推荐 SDK 用户）</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
+          <span className="badge badge-green">POST</span>
+          <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/images/edits</code>
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>Content-Type: multipart/form-data</span>
+        </div>
+        <CodeBlock language="bash" code={`curl ${BASE_URL}/images/edits \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  --max-time 360 \\
+  -F "model=gpt-image-2" \\
+  -F "prompt=把这张改成动漫风格" \\
+  -F "resolution=2k" \\
+  -F "image=@input.png"`} />
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, marginBottom: 24, lineHeight: 1.7 }}>
+          文件字段名 <code>image</code> 必填；<code>mask</code>（局部重绘遮罩，仅 apimart 系支持）可选。图片会在内存中转成 base64 data URI 转发上游，服务端不落盘。单文件上限 20MB。
+        </div>
+
+        {/* 3. 显式异步模式 */}
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>3. 显式异步模式与轮询</h4>
+        <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.7 }}>
+          在请求体加 <code>"async": true</code>，服务端立即返回 <code>task_id</code>，客户端自主 poll <code>/v1/tasks/&#123;task_id&#125;</code>。适合前端进度条、批处理管道、任务队列等场景。
+        </div>
+        <CodeBlock language="json" code={`// 请求
+{
+  "model": "gpt-image-2",
+  "prompt": "一只橘猫坐在窗台上看夕阳",
+  "resolution": "1k",
+  "async": true
+}
+
+// 响应
+{
+  "created": 1747156804,
+  "data": [
+    { "task_id": "task_859be413-...", "status": "submitted" }
+  ]
+}`} />
+
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>4. 查询任务状态</h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
           <span className="badge badge-green">GET</span>
           <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/&#123;task_id&#125;</code>
@@ -541,7 +597,7 @@ for chunk in stream:
         </div>
 
         {/* 1.4 批量查询 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>3. 批量查询</h4>
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>5. 批量查询</h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
           <span className="badge badge-green">POST</span>
           <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/batch</code>
@@ -554,7 +610,7 @@ for chunk in stream:
         </div>
 
         {/* 1.5 取消任务 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>4. 取消任务</h4>
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>6. 取消任务</h4>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, fontSize: 13 }}>
           <span className="badge badge-green">POST</span>
           <code style={{ background: 'var(--bg)', padding: '3px 8px', borderRadius: 4, color: 'var(--accent)', fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{BASE_URL}/tasks/&#123;task_id&#125;/cancel</code>
@@ -564,42 +620,53 @@ for chunk in stream:
         </div>
 
         {/* 1.6 支持模型 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>5. 当前支持的图像模型</h4>
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>7. 当前支持的图像模型</h4>
         <div className="table-wrap" style={{ marginBottom: 24 }}>
           <table>
             <thead>
               <tr>
                 <th>Model ID</th>
-                <th>提供方</th>
-                <th>单张耗时</th>
-                <th>单张价格</th>
+                <th>能力</th>
+                <th>耗时（实测）</th>
+                <th>分辨率</th>
+                <th>图生图</th>
+                <th>单张</th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td><code>gpt-image-2</code></td>
-                <td style={{ color: 'var(--muted)' }}>apimart</td>
-                <td style={{ color: 'var(--muted)' }}>30–60 秒</td>
+                <td style={{ color: 'var(--muted)' }}>文生图 / 图生图</td>
+                <td style={{ color: 'var(--muted)' }}>60–450 秒（分辨率越高越慢）</td>
+                <td style={{ color: 'var(--muted)' }}>1k / 2k / 4k</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>✓</td>
                 <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.006</td>
               </tr>
               <tr>
                 <td><code>gemini-2.5-flash-image</code></td>
-                <td style={{ color: 'var(--muted)' }}>apimart</td>
-                <td style={{ color: 'var(--muted)' }}>20–40 秒</td>
+                <td style={{ color: 'var(--muted)' }}>文生图 / 图生图</td>
+                <td style={{ color: 'var(--muted)' }}>10–30 秒</td>
+                <td style={{ color: 'var(--muted)' }}>1024×1024</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>✓</td>
                 <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.0078</td>
               </tr>
               <tr>
                 <td><code>nano-banana</code></td>
-                <td style={{ color: 'var(--muted)' }}>apimart (alias)</td>
-                <td style={{ color: 'var(--muted)' }}>20–40 秒</td>
+                <td style={{ color: 'var(--muted)' }}>gemini-2.5-flash-image 别名</td>
+                <td style={{ color: 'var(--muted)' }}>10–30 秒</td>
+                <td style={{ color: 'var(--muted)' }}>1024×1024</td>
+                <td style={{ color: 'var(--accent)', fontWeight: 600 }}>✓</td>
                 <td style={{ color: 'var(--accent)', fontWeight: 600 }}>$0.0078</td>
               </tr>
             </tbody>
           </table>
         </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 20, lineHeight: 1.7 }}>
+          <b>模型差异说明</b>：<code>gpt-image-2</code> 支持 apimart 独有的 <code>resolution</code> 分辨率档位（4k 最高约 2880×2880 像素）；<code>nano-banana</code> / <code>gemini-2.5-flash-image</code> 走 Google Gemini 官方协议，固定 1024×1024 输出，不接受 <code>resolution</code> 参数但速度更快。<code>size</code> 比例参数两边都支持。
+        </div>
 
         {/* 1.7 完整代码示例 */}
-        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>6. 完整代码示例（提交 → 轮询 → 取图）</h4>
+        <h4 style={{ fontWeight: 600, marginBottom: 10, fontSize: 15, color: 'var(--text)' }}>8. 完整代码示例（SDK 直接可用）</h4>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
           {[
             { key: 'python', label: 'Python' },
@@ -618,7 +685,7 @@ for chunk in stream:
         <CodeBlock code={imageExamples[imgTab]} language={imgTab === 'curl' ? 'bash' : imgTab === 'nodejs' ? 'typescript' : 'python'} />
 
         <Tip>
-          推荐轮询间隔 3 秒；首次查询可在 5 秒后进行，避免无谓的 in_progress 命中。批量任务建议改用 <code>/v1/tasks/batch</code>。
+          <b>调用建议</b>：同步模式客户端 timeout 建议 ≥ 300 秒（apimart 图像 p95 60–120 秒，文生图 4k 可能更长）。异步模式轮询间隔 3 秒，首次查询建议在提交 5 秒后再发起，避免无谓的 <code>submitted</code> 命中。批量任务优先用 <code>/v1/tasks/batch</code>。
         </Tip>
       </Section>
 
@@ -767,8 +834,11 @@ for chunk in stream:
             { q: '支持流式输出（Streaming）吗？', a: '支持。在请求参数中设置 stream: true 即可开启流式输出，实时接收生成内容。具体示例见上方「流式输出」代码。' },
             { q: '令牌泄露了怎么办？', a: '立即进入「API 令牌」页面删除已泄露的令牌，然后重新创建一个新令牌。删除后旧令牌立即失效。' },
             { q: '目前支持哪些模型？', a: `灵镜 AI 已全面接入 Anthropic、OpenAI、Google、DeepSeek、阿里云等厂商的 ${models.length} 款主流模型（Claude Sonnet 4.6、GPT-4o、Gemini 2.5 Pro、DeepSeek V3/R1、o3、Qwen Max 等），所有模型即开即用，一份额度通用全部渠道；后续新模型发布后会持续加入，可在「模型广场」页面查看实时列表与价格。` },
-            { q: '图像生成（gpt-image-2 / nano-banana）为什么是异步的？', a: '图像模型单张耗时 20–60 秒，远超 HTTP 网关空闲超时；因此采用异步任务 —— 提交后拿 task_id，再轮询 /v1/tasks/{task_id}。轮询间隔建议 3 秒，首次查询建议在提交 5 秒后再发起。任务失败或主动取消时预扣额度会自动退还。' },
+            { q: '图像生成走同步还是异步？', a: '默认同步 —— 一次 POST /v1/images/generations 阻塞到出图，直接返回标准 OpenAI 格式 {"data":[{"url":"..."}]}，OpenAI SDK client.images.generate() 开箱即用。服务端等待默认 300s，超时自动降级为异步响应 {"data":[{"task_id":"...", "status":"processing"}]}（HTTP 202），此时客户端接着 poll /v1/tasks/{task_id} 即可，不会 504。想直接进入异步模式（拿 task_id 后自主 poll），请求体加 "async": true。' },
+            { q: '如何做图生图（img2img）？', a: '两种方式：① POST /v1/images/generations 加 image_urls 字段（数组元素可以是公网 URL 或 data:image/png;base64,... 格式的 data URI，最多 16 张）；② POST /v1/images/edits 官方 multipart 协议（OpenAI SDK client.images.edit() 直接兼容）。服务端不落盘，收到的文件会在内存中转 base64 转发上游。' },
+            { q: '客户端 timeout 应该设多长？', a: '推荐 timeout ≥ 300 秒。apimart 图像模型 p95 60–120 秒；文生图 4k 分辨率可能 400 秒+。低于 300 秒会导致连接被客户端主动断开、看不到已完成的图。Python SDK 用 OpenAI(timeout=360)；Node 用 timeout: 360_000；curl 用 --max-time 360。' },
             { q: '生成的图片 URL 能保存多久？', a: '图片 URL 默认 24 小时内有效（response 里 expires_at 字段是准确的过期时间戳）。生产环境建议拿到图后立即下载或转存到自家 OSS / CDN，不要直接把上游 URL 返回给前端。' },
+            { q: 'nano-banana 和 gpt-image-2 有什么区别？', a: 'nano-banana 是 gemini-2.5-flash-image 的别名，走 Google Gemini 官方协议：速度快（10–30 秒）、固定 1024×1024、不支持 resolution 参数、图生图能力弱于 gpt-image-2。gpt-image-2 走 apimart 协议：速度慢（60–450 秒）、支持 1k/2k/4k 分辨率档位、图生图效果更好、支持局部重绘。快速草稿 / 头像用 nano-banana，最终商用高清出图用 gpt-image-2。' },
             { q: '调用时报错 401 是什么原因？', a: '401 表示认证失败，请检查：1）令牌是否正确填写；2）令牌是否已被删除；3）请求头格式是否为 Authorization: Bearer sk-xxx。' },
             { q: '调用时报错 429 是什么原因？', a: '429 表示请求频率超限，请稍等片刻后重试，或联系客服提升限额。' },
           ].map((item, i) => (

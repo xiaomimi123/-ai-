@@ -67,10 +67,109 @@ export default function ModelDetailPage() {
     stream: `from openai import OpenAI\n\nclient = OpenAI(\n    api_key="sk-你的令牌",\n    base_url="${BASE_URL}"\n)\n\nstream = client.chat.completions.create(\n    model="${model.model_id}",\n    messages=[{"role": "user", "content": "你好！"}],\n    stream=True\n)\n\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end="", flush=True)`,
   }
 
+  // 是否支持 apimart 独有的 resolution 分辨率档位。
+  // nano-banana / gemini-2.5-flash-image 走 Gemini 官方协议，固定 1024×1024。
+  const modelIdLower = model.model_id.toLowerCase()
+  const isGeminiImage = modelIdLower.includes('nano-banana') || modelIdLower.includes('flash-image')
+  const resolutionLine = isGeminiImage ? '' : ',\n    "resolution": "1k"'
+  const resolutionLinePy = isGeminiImage ? '' : ',\n        "resolution": "1k",'
+  const resolutionLineJs = isGeminiImage ? '' : "\n    resolution: '1k',"
+
+  // 图像模型样例走"同步默认"，一次调用直接拿到图片 URL；OpenAI SDK 开箱即用。
+  // 如果需要 task_id / 自主轮询，见文档 "3. 显式异步模式"（本页不再重复）。
   const imageCodes: Record<string, string> = {
-    python: `import time\nimport requests\n\nAPI_KEY = "sk-你的令牌"\nBASE = "${BASE_URL}"\n\n# 1. 提交异步任务\nresp = requests.post(\n    f"{BASE}/images/generations",\n    headers={"Authorization": f"Bearer {API_KEY}"},\n    json={\n        "model": "${model.model_id}",\n        "prompt": "一只橘猫坐在窗台上看夕阳",\n        "size": "16:9",\n        "resolution": "1k",\n        "n": 1,\n    },\n)\ntask_id = resp.json()["data"][0]["task_id"]\nprint("task_id:", task_id)\n\n# 2. 轮询任务状态（约 20-60 秒完成）\nwhile True:\n    res = requests.get(\n        f"{BASE}/tasks/{task_id}",\n        headers={"Authorization": f"Bearer {API_KEY}"},\n    ).json()\n    print("status:", res["status"], "progress:", res.get("progress"))\n    if res["status"] in ("completed", "failed", "canceled"):\n        break\n    time.sleep(3)\n\n# 3. 取图片 URL\nif res["status"] == "completed":\n    image_url = res["result"]["raw"]["data"]["result"]["images"][0]["url"][0]\n    print("Image URL:", image_url)\nelse:\n    print("Task ended:", res.get("error"))`,
-    nodejs: `const API_KEY = "sk-你的令牌";\nconst BASE = "${BASE_URL}";\n\nasync function generate(prompt) {\n  // 1. 提交异步任务\n  const submit = await fetch(\`\${BASE}/images/generations\`, {\n    method: "POST",\n    headers: {\n      "Authorization": \`Bearer \${API_KEY}\`,\n      "Content-Type": "application/json",\n    },\n    body: JSON.stringify({\n      model: "${model.model_id}",\n      prompt,\n      size: "16:9",\n      resolution: "1k",\n      n: 1,\n    }),\n  });\n  const { data } = await submit.json();\n  const taskId = data[0].task_id;\n  console.log("task_id:", taskId);\n\n  // 2. 轮询任务状态\n  while (true) {\n    const r = await fetch(\`\${BASE}/tasks/\${taskId}\`, {\n      headers: { "Authorization": \`Bearer \${API_KEY}\` },\n    });\n    const res = await r.json();\n    console.log("status:", res.status, "progress:", res.progress);\n    if (res.status === "completed") {\n      return res.result.raw.data.result.images[0].url[0];\n    }\n    if (res.status === "failed" || res.status === "canceled") {\n      throw new Error(res.error?.message || \`task \${res.status}\`);\n    }\n    await new Promise(r => setTimeout(r, 3000));\n  }\n}\n\ngenerate("一只橘猫坐在窗台上看夕阳").then(console.log).catch(console.error);`,
-    curl: `# 1. 提交异步任务\nTASK=$(curl -s -X POST ${BASE_URL}/images/generations \\\n  -H "Authorization: Bearer sk-你的令牌" \\\n  -H "Content-Type: application/json" \\\n  -d '{\n    "model": "${model.model_id}",\n    "prompt": "一只橘猫坐在窗台上看夕阳",\n    "size": "16:9",\n    "resolution": "1k",\n    "n": 1\n  }')\nTASK_ID=$(echo "$TASK" | grep -oE '"task_id":"[^"]+"' | head -1 | cut -d'"' -f4)\necho "task_id: $TASK_ID"\n\n# 2. 轮询任务状态\nwhile true; do\n  RES=$(curl -s ${BASE_URL}/tasks/$TASK_ID \\\n    -H "Authorization: Bearer sk-你的令牌")\n  STATUS=$(echo "$RES" | grep -oE '"status":"[^"]+"' | head -1 | cut -d'"' -f4)\n  echo "status: $STATUS"\n  if [ "$STATUS" = "completed" ] || [ "$STATUS" = "failed" ]; then\n    echo "$RES"\n    break\n  fi\n  sleep 3\ndone`,
+    python: `# 完全兼容 OpenAI SDK —— 一次调用拿到图片 URL
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-你的令牌",
+    base_url="${BASE_URL}",
+    timeout=360,  # 图像 p95 60-120 秒，建议 timeout ≥ 300
+)
+
+# ─── 文生图 ───
+resp = client.images.generate(
+    model="${model.model_id}",
+    prompt="一只橘猫坐在窗台上看夕阳，水彩画风格",
+    n=1,
+    size="16:9",${resolutionLinePy ? '\n    extra_body={' + resolutionLinePy + '\n    },' : ''}
+)
+print(resp.data[0].url)
+
+# ─── 图生图（image_urls，最多 16 张参考图，支持 URL 或 base64 data URI）───
+resp2 = client.images.generate(
+    model="${model.model_id}",
+    prompt="把这张改成动漫风格",
+    extra_body={
+        "image_urls": ["https://example.com/source.png"],${resolutionLinePy ? '\n        "resolution": "2k",' : ''}
+    },
+)
+print(resp2.data[0].url)
+
+# ─── 官方 multipart 图生图（client.images.edit）───
+with open("input.png", "rb") as f:
+    r = client.images.edit(
+        model="${model.model_id}",
+        image=f,
+        prompt="turn into anime",${resolutionLine ? `\n        extra_body={"resolution": "2k"},` : ''}
+    )
+print(r.data[0].url)`,
+    nodejs: `// 完全兼容 OpenAI SDK —— 一次调用拿到图片 URL
+import OpenAI from 'openai'
+
+const client = new OpenAI({
+  apiKey: 'sk-你的令牌',
+  baseURL: '${BASE_URL}',
+  timeout: 360_000,  // 图像 p95 60-120 秒，建议 timeout ≥ 300s
+})
+
+// ─── 文生图 ───
+const resp = await client.images.generate({
+  model: '${model.model_id}',
+  prompt: '一只橘猫坐在窗台上看夕阳，水彩画风格',
+  n: 1,
+  size: '16:9',${resolutionLineJs}
+} as any)
+console.log(resp.data[0].url)
+
+// ─── 图生图（image_urls）───
+const resp2 = await client.images.generate({
+  model: '${model.model_id}',
+  prompt: '把这张改成动漫风格',
+  image_urls: ['https://example.com/source.png'],${isGeminiImage ? '' : "\n  resolution: '2k',"}
+} as any)
+console.log(resp2.data[0].url)`,
+    curl: `# 文生图（sync，一次拿到 URL）
+curl ${BASE_URL}/images/generations \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  -H "Content-Type: application/json" \\
+  --max-time 360 \\
+  -d '{
+    "model": "${model.model_id}",
+    "prompt": "一只橘猫坐在窗台上看夕阳",
+    "n": 1,
+    "size": "16:9"${resolutionLine}
+  }'
+# → {"created":..., "data":[{"url":"https://..."}]}
+
+# 图生图（image_urls 支持公网 URL 或 data:image/...;base64,... data URI）
+curl ${BASE_URL}/images/generations \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  -H "Content-Type: application/json" \\
+  --max-time 360 \\
+  -d '{
+    "model": "${model.model_id}",
+    "prompt": "把这张改成动漫风格",
+    "image_urls": ["https://example.com/source.png"]${isGeminiImage ? '' : ',\n    "resolution": "2k"'}
+  }'
+
+# 官方 multipart 图生图（OpenAI SDK client.images.edit 走这里）
+curl ${BASE_URL}/images/edits \\
+  -H "Authorization: Bearer sk-你的令牌" \\
+  --max-time 360 \\
+  -F "model=${model.model_id}" \\
+  -F "prompt=turn into anime" \\${isGeminiImage ? '' : '\n  -F "resolution=2k" \\'}
+  -F "image=@input.png"`,
   }
 
   const codes: Record<string, string> = isImage ? imageCodes : chatCodes
