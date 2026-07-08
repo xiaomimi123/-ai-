@@ -16,7 +16,9 @@ services:
       - ENABLE_TASK_SYSTEM=${ENABLE_TASK_SYSTEM:-false}
       - TASK_WORKER_INTERVAL=${TASK_WORKER_INTERVAL:-5s}
       - TASK_WORKER_BATCH_SIZE=${TASK_WORKER_BATCH_SIZE:-50}
-      - TASK_TIMEOUT_MINUTES=${TASK_TIMEOUT_MINUTES:-10}
+      # apimart 多参考图（3+ 张）实测 p95 > 10 min，10 min 会触发 worker
+      # timeout；客户方大量使用多图 img2img 场景把默认拉到 20 min。
+      - TASK_TIMEOUT_MINUTES=${TASK_TIMEOUT_MINUTES:-20}
       - TASK_RETENTION_DAYS=${TASK_RETENTION_DAYS:-30}
       # ⚠️ apimart 的 gpt-image-1 / gpt-image-1.5 走 sync 内联 b64_json
       # 响应，HTTP 请求本身就要跑 30-450s。180s 覆盖 p95。默认 30s 会挂。
