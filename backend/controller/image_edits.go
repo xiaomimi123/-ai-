@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -29,13 +31,13 @@ const maxEditsFileSize = 20 * 1024 * 1024
 // imageEditsForm 多部分表单解析后的结构。data URI 已经 base64 编码，
 // 可以直接塞进下游 JSON 而不需再动。
 type imageEditsForm struct {
-	Model        string
-	Prompt       string
-	N            int
-	Size         string
-	Resolution   string // apimart 的 1k / 2k / 4k 分辨率档位
-	ImageDataURI string
-	MaskDataURI  string
+	Model         string
+	Prompt        string
+	N             int
+	Size          string
+	Resolution    string // apimart 的 1k / 2k / 4k 分辨率档位
+	ImageDataURIs []string
+	MaskDataURI   string
 }
 
 // parseImageEditsMultipart 从 multipart/form-data 请求里抽出编辑用的所有字段。
@@ -66,7 +68,7 @@ func parseImageEditsMultipart(c *gin.Context) (*imageEditsForm, error) {
 	size := c.PostForm("size")
 	resolution := c.PostForm("resolution") // 1k/2k/4k，可选
 
-	imageDataURI, err := readMultipartFileAsDataURI(c, "image")
+	imageDataURIs, err := readAllImageFilesAsDataURIs(c)
 	if err != nil {
 		return nil, err
 	}
@@ -76,14 +78,105 @@ func parseImageEditsMultipart(c *gin.Context) (*imageEditsForm, error) {
 	// TODO(F+1): 增加 warning log。目前静默是为了让老客户端不带 mask 也能过。
 
 	return &imageEditsForm{
-		Model:        model,
-		Prompt:       prompt,
-		N:            n,
-		Size:         size,
-		Resolution:   resolution,
-		ImageDataURI: imageDataURI,
-		MaskDataURI:  maskDataURI,
+		Model:         model,
+		Prompt:        prompt,
+		N:             n,
+		Size:          size,
+		Resolution:    resolution,
+		ImageDataURIs: imageDataURIs,
+		MaskDataURI:   maskDataURI,
 	}, nil
+}
+
+// readAllImageFilesAsDataURIs 收集 multipart form 里所有参考图字段，
+// 转成 data URI slice 返回。兼容以下字段名（OpenAI SDK + 常见客户端）：
+//
+//   - image           OpenAI 官方单图字段
+//   - image[]         OpenAI SDK 当 image=[f1,f2,...] 传 list 时用的字段名
+//   - image[0]/[1]…   Google/OpenAPI codegen 常见 indexed 变体
+//
+// 至少要有一张图，否则返回错误（供上层 400）。上限跟 apimart 保持一致
+// 最多 16 张（参见 apimart docs）。
+//
+// Fix ⑥（2026-07-08）：老版本只查 field="image" 单字段，客户传 image[]
+// 时报 "missing image file: http: no such file"。
+func readAllImageFilesAsDataURIs(c *gin.Context) ([]string, error) {
+	mf := c.Request.MultipartForm
+	if mf == nil {
+		if err := c.Request.ParseMultipartForm(maxEditsFileSize + 5<<20); err != nil {
+			return nil, errors.New("parse multipart: " + err.Error())
+		}
+		mf = c.Request.MultipartForm
+	}
+
+	// 优先级：image[N] indexed → image[] list → image singular。
+	// 三者组合出现的极端情况按顺序拼接，去重靠客户端约束。
+	type hit struct {
+		field string
+		fh    *multipart.FileHeader
+		order int // 展示顺序：indexed 用 N；bracket-list 用 -1 保留 map 顺序；single 用 0
+	}
+	var hits []hit
+	for name, fhs := range mf.File {
+		switch {
+		case name == "image" || name == "image[]":
+			for _, fh := range fhs {
+				hits = append(hits, hit{name, fh, 0})
+			}
+		case strings.HasPrefix(name, "image[") && strings.HasSuffix(name, "]"):
+			// image[0], image[1] … 抽 index
+			idxStr := name[len("image[") : len(name)-1]
+			idx, err := strconv.Atoi(idxStr)
+			if err != nil {
+				continue // image[abc] 之类非数字 index 忽略
+			}
+			for _, fh := range fhs {
+				hits = append(hits, hit{name, fh, idx + 1}) // +1 让 indexed 排在 image/image[] 之后
+			}
+		case strings.HasPrefix(name, "image_"):
+			// image_0, image_1 … 数字后缀也接
+			idxStr := name[len("image_"):]
+			idx, err := strconv.Atoi(idxStr)
+			if err != nil {
+				continue
+			}
+			for _, fh := range fhs {
+				hits = append(hits, hit{name, fh, idx + 1})
+			}
+		}
+	}
+
+	if len(hits) == 0 {
+		return nil, errors.New("missing image file: no field named image, image[], image[N] or image_N found in multipart form")
+	}
+
+	// 按 order 升序排稳定；image/image[]（order=0）先，然后 image[0]<image[1]<…
+	sort.SliceStable(hits, func(i, j int) bool { return hits[i].order < hits[j].order })
+
+	if len(hits) > 16 {
+		return nil, errors.New("too many reference images: max 16 supported by upstream")
+	}
+
+	uris := make([]string, 0, len(hits))
+	for _, h := range hits {
+		if h.fh.Size > maxEditsFileSize {
+			return nil, errors.New(h.field + " file exceeds " + strconv.Itoa(maxEditsFileSize/1024/1024) + " MB")
+		}
+		f, err := h.fh.Open()
+		if err != nil {
+			return nil, errors.New("open " + h.field + ": " + err.Error())
+		}
+		buf, err := io.ReadAll(io.LimitReader(f, maxEditsFileSize+1))
+		_ = f.Close()
+		if err != nil {
+			return nil, errors.New("read " + h.field + ": " + err.Error())
+		}
+		if int64(len(buf)) > maxEditsFileSize {
+			return nil, errors.New(h.field + " file exceeds " + strconv.Itoa(maxEditsFileSize/1024/1024) + " MB")
+		}
+		uris = append(uris, fileBytesToDataURI(buf, h.fh.Filename))
+	}
+	return uris, nil
 }
 
 // readMultipartFileAsDataURI 找到指定 field 的第一个文件，读全部字节，
@@ -131,12 +224,13 @@ func fileBytesToDataURI(data []byte, filename string) string {
 // marshalImageEditsAsGenerations 把 imageEditsForm 序列化成
 // /v1/images/generations 的 JSON 请求体。下游 apimart / Gemini 分支已经
 // 认 image_urls 和 mask_url 两个字段，所以这里是简单直接的透传。
+// image_urls 数组顺序 = 客户端 multipart 里参考图字段的解析顺序。
 func marshalImageEditsAsGenerations(form *imageEditsForm) []byte {
 	body := map[string]interface{}{
 		"model":      form.Model,
 		"prompt":     form.Prompt,
 		"n":          form.N,
-		"image_urls": []string{form.ImageDataURI},
+		"image_urls": form.ImageDataURIs,
 	}
 	if form.Size != "" {
 		body["size"] = form.Size
