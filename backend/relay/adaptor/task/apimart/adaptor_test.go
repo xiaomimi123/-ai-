@@ -406,6 +406,66 @@ func TestApiMart_E2E_submit_then_poll_to_completed(t *testing.T) {
 // Fix ④: apimart 对 gpt-image-1 / gpt-image-1.5 直接返回内联 b64_json
 // （OpenAI 官方 DALL-E 风格的 sync 响应），不发 task_id。这时 DoRequest
 // 必须 return 空 taskID + valid raw + nil err，让上层短路走 sync 响应。
+// Fix ⑦: apimart 的 gemini 系模型（gemini-3.1-flash-image-preview 等）
+// 只接受 aspect ratio 格式（"1:1", "16:9", "auto"），传像素格式
+// "1024x1024" 会在生成阶段报错 "This aspect_ratio is not within the range
+// of allowed options"。gpt-image-2 两种都接受。我们在 BuildRequestBody 里
+// 按模型家族翻译。
+func TestNormalizeSizeForModel_geminiTranslatesPixels(t *testing.T) {
+	Convey("gemini-3.1 pixel sizes → aspect ratios", t, func() {
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1024x1024"), ShouldEqual, "1:1")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1792x1024"), ShouldEqual, "16:9")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1024x1792"), ShouldEqual, "9:16")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1536x1024"), ShouldEqual, "3:2")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1024x1536"), ShouldEqual, "2:3")
+	})
+
+	Convey("gemini family: nano-banana, gemini-2.5-flash-image, imagen", t, func() {
+		So(normalizeSizeForModel("nano-banana", "1024x1024"), ShouldEqual, "1:1")
+		So(normalizeSizeForModel("gemini-2.5-flash-image-preview", "1024x1024"), ShouldEqual, "1:1")
+		So(normalizeSizeForModel("imagen-4.0-apimart", "1024x1024"), ShouldEqual, "1:1")
+	})
+
+	Convey("gemini family: passing already-ratio-format size preserves it", t, func() {
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1:1"), ShouldEqual, "1:1")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "16:9"), ShouldEqual, "16:9")
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "auto"), ShouldEqual, "auto")
+	})
+
+	Convey("gemini family: empty size passes through as empty", t, func() {
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", ""), ShouldEqual, "")
+	})
+
+	Convey("gemini family: uncommon pixel ratio falls back to closest allowed", t, func() {
+		// 1080x1920 = 9:16 (0.5625)
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "1080x1920"), ShouldEqual, "9:16")
+		// 512x512 = 1:1
+		So(normalizeSizeForModel("gemini-3.1-flash-image-preview", "512x512"), ShouldEqual, "1:1")
+	})
+
+	Convey("non-gemini models pass size through UNCHANGED", t, func() {
+		// gpt-image-2 / flux / gpt-image-1.5 都接受像素格式，我们不干预
+		So(normalizeSizeForModel("gpt-image-2", "1024x1024"), ShouldEqual, "1024x1024")
+		So(normalizeSizeForModel("gpt-image-2", "16:9"), ShouldEqual, "16:9")
+		So(normalizeSizeForModel("flux-2-pro", "1024x1024"), ShouldEqual, "1024x1024")
+		So(normalizeSizeForModel("gpt-image-1.5", "1024x1024"), ShouldEqual, "1024x1024")
+	})
+}
+
+func TestBuildRequestBody_appliesSizeNormalization(t *testing.T) {
+	Convey("gemini-3.1 with pixel size in info → JSON body has ratio", t, func() {
+		a := &Adaptor{}
+		info := newInfo()
+		info.UpstreamModelName = "gemini-3.1-flash-image-preview"
+		info.Size = "1024x1024"
+		body, err := a.BuildRequestBody(info)
+		So(err, ShouldBeNil)
+		var req SubmitRequest
+		So(json.Unmarshal(body, &req), ShouldBeNil)
+		So(req.Size, ShouldEqual, "1:1")
+	})
+}
+
 func TestDoRequest_syncResponseWithB64Json(t *testing.T) {
 	Convey("DoRequest recognizes inline b64_json sync response", t, func() {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

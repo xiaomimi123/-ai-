@@ -106,7 +106,7 @@ func (a *Adaptor) BuildRequestBody(info *common.TaskRelayInfo) ([]byte, error) {
 		Model:      model,
 		Prompt:     info.Prompt,
 		N:          n,
-		Size:       info.Size,
+		Size:       normalizeSizeForModel(model, info.Size),
 		Resolution: info.Resolution,
 		ImageURLs:  info.ImageURLs,
 		MaskURL:    info.MaskURL,
