@@ -4,12 +4,12 @@ import {
   Shield, Activity, Layers, Clock, Image as ImageIcon,
 } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
+import { runtimeConfig } from '../runtimeConfig'
 
-// ⚠️ 必须用 api 子域名（DNS 灰云直连），不要用主域名 aitoken.homes：
-// - api.aitoken.homes：DNS 直连，无中间超时上限
-// - aitoken.homes：CF 橙云代理，100s Cloudflare 硬超时会导致图像 sync
-//   出图 (60-300s) 全部 524
-const BASE_URL = 'https://api.aitoken.homes/v1'
+// API 基址：优先用部署配置的独立 API 域名，否则用当前站点同源。
+// 部署在 CDN 代理后面时建议单独配 API 子域名直连——多数 CDN 对
+// 响应首字节有硬超时（Cloudflare 免费版 100s），长耗时的图像生成会被截断。
+const BASE_URL = (runtimeConfig.apiBaseUrl || window.location.origin) + '/v1'
 
 function CodeBlock({ code, language = 'bash' }: { code: string; language?: string }) {
   const [copied, setCopied] = useState(false)
@@ -289,16 +289,17 @@ for chunk in stream:
         ))}
       </div>
 
-      {/* ⚠️ URL 使用警告 */}
-      <div style={{
-        background: '#fef3c7', borderLeft: '3px solid #f59e0b',
-        borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#7c2d12',
-        marginBottom: 20, lineHeight: 1.7,
-      }}>
-        <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ API 请务必使用 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 3, color: '#7c2d12' }}>api.aitoken.homes</code> 子域，不要用主域名</div>
-        主域名 <code>aitoken.homes</code> 走 Cloudflare 代理，有 <b>100 秒硬超时</b>。图像生成、长上下文对话等耗时超过 100s 的请求会返回 <code>HTTP 524</code>（Cloudflare timeout）。<br/>
-        api 子域名是 DNS 直连，无中间层超时，长请求（图像 sync 出图 60-300s / 流式对话）都稳定工作。
-      </div>
+      {/* ⚠️ URL 使用警告：仅当配置了独立 API 域名且与当前 origin 不同时才显示 */}
+      {runtimeConfig.apiBaseUrl && runtimeConfig.apiBaseUrl !== window.location.origin && (
+        <div style={{
+          background: '#fef3c7', borderLeft: '3px solid #f59e0b',
+          borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#7c2d12',
+          marginBottom: 20, lineHeight: 1.7,
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ API 请务必使用 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 3, color: '#7c2d12' }}>{new URL(runtimeConfig.apiBaseUrl).host}</code> 这个地址</div>
+          站点主域名可能经过 CDN 代理，存在响应超时上限。图像生成、长上下文对话等耗时请求请使用上述 API 地址，避免被中间层截断。<br/>
+        </div>
+      )}
 
       {/* 稳定性保障（4 个指标卡） */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 28 }}>
@@ -856,7 +857,7 @@ for chunk in stream:
             { q: 'nano-banana 和 gpt-image-2 有什么区别？', a: 'nano-banana 是 gemini-2.5-flash-image 的别名，走 Google Gemini 官方协议：速度快（10–30 秒）、固定 1024×1024、不支持 resolution 参数、图生图能力弱于 gpt-image-2。gpt-image-2 走 apimart 协议：速度慢（60–450 秒）、支持 1k/2k/4k 分辨率档位、图生图效果更好、支持局部重绘。快速草稿 / 头像用 nano-banana，最终商用高清出图用 gpt-image-2。' },
             { q: '调用时报错 401 是什么原因？', a: '401 表示认证失败，请检查：1）令牌是否正确填写；2）令牌是否已被删除；3）请求头格式是否为 Authorization: Bearer sk-xxx。' },
             { q: '调用时报错 429 是什么原因？', a: '429 表示请求频率超限，请稍等片刻后重试，或联系客服提升限额。' },
-            { q: '报错 HTTP 524 或 "error code: 524" 是什么？怎么修？', a: '524 是 Cloudflare 的"origin timeout"，含义是"CF 等你服务超过 100 秒没等到响应头就放弃了"。原因是你用了主域名 aitoken.homes 而不是 api.aitoken.homes。主域名走 CF 代理，100 秒硬超时。图像生成 sync 模式动辄 30-300 秒，必然踩到。修法：把 base_url 从 https://aitoken.homes/v1 改成 https://api.aitoken.homes/v1，api 子域名 DNS 直连绕过 CF，无超时问题。' },
+            { q: '报错 HTTP 524 或 "error code: 524" 是什么？怎么修？', a: '524 是 CDN 层的 origin timeout，含义是"CDN 等后端超过其超时上限仍未收到响应头就放弃了"（Cloudflare 免费版为 100 秒）。图像生成 sync 模式动辄 30-300 秒，容易踩到。修法：把 base_url 换成本页顶部显示的 API 地址——它直连后端、绕过 CDN，没有这个限制。如果你自建部署且未使用 CDN，则不会遇到此问题。' },
             { q: 'OpenAI SDK 怎么做图生图（传参考图）？', a: 'client.images.generate() 官方没有 image 参数，直接传 image_url 或 image 字段都不识别。要用 extra_body：client.images.generate(model="gpt-image-2", prompt="...", extra_body={"image_urls":["https://..."]}). 或者用 client.images.edit(image=open("f.png","rb"), prompt="...", model="gpt-image-2") 走官方 multipart 协议。字段名注意 image_urls 是复数带 s，最多 16 张参考图，支持公网 URL 或 data:image/png;base64,... 格式的 data URI。' },
           ].map((item, i) => (
             <div key={i} style={{ borderBottom: '1px solid var(--border)', paddingBottom: 16 }}>

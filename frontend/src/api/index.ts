@@ -1,8 +1,8 @@
 import axios from 'axios'
+import { runtimeConfig } from '../runtimeConfig'
 
-// 生产填 https://api.aitoken.homes（绕 CF 直连后端，保证 SSE 流式 + 大文件上传）
-// dev 留空走 vite 代理（vite.config.ts 已配 /api → localhost:3000）
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+// 空 = 同源 /api（nginx 反代）；非空 = 独立 API 域名
+const API_BASE = runtimeConfig.apiBaseUrl
 
 // 给 fetch 调用拼接 base 用（axios 已经通过 baseURL 自动拼）
 export const apiUrl = (path: string) => API_BASE + path

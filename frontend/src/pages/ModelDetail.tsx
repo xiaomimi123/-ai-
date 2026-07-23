@@ -4,6 +4,7 @@ import { ArrowLeft, Copy, Check } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
 import { apiUrl } from '../api'
 import { isImageModel } from '../utils/modelPricing'
+import { runtimeConfig } from '../runtimeConfig'
 
 interface ModelPrice {
   id: number
@@ -40,8 +41,7 @@ export default function ModelDetailPage() {
   const [model, setModel] = useState<ModelPrice | null>(null)
   const [activeTab, setActiveTab] = useState('python')
   const [loading, setLoading] = useState(true)
-  // 给用户文档展示用：API 调用走 api 子域名（绕 CF，保流式 + 高速）
-  const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'https://api.aitoken.homes').replace(/\/$/, '') + '/v1'
+  const BASE_URL = (runtimeConfig.apiBaseUrl || window.location.origin) + '/v1'
 
   useEffect(() => {
     fetch(apiUrl('/api/lingjing/model-prices')).then(r => r.json()).then(r => {

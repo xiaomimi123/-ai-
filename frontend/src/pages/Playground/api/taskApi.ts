@@ -4,11 +4,10 @@
 //
 // 注意：业务侧的 /v1/images/generations 与 /v1/tasks/* 仍然保留给第三方 SDK 走 Bearer Token。
 // 广场（前端）不能直接命中那批路由，因为它们走 TokenAuth；我们用 session-auth 镜像版本。
-//
-// API_BASE 与 src/api/index.ts 共享：
-//   prod: VITE_API_BASE_URL（直连 api.aitoken.homes，绕 CF 保 SSE）
-//   dev : 留空走 vite 代理
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+import { runtimeConfig } from '../../../runtimeConfig'
+
+// 空 = 同源 /api；非空 = 独立 API 域名（用于绕开 CDN 超时限制）
+const API_BASE = runtimeConfig.apiBaseUrl
 const BASE = '/api/lingjing/playground'
 
 export interface TaskSubmitPayload {
