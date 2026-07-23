@@ -5,6 +5,9 @@ dist/
 # Environment
 .env
 *.env.local
+frontend/.env.production
+admin/.env.production
+gitleaks-report.json
 
 # Build artifacts
 backend/lingjing-api

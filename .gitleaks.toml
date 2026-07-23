@@ -1,0 +1,12 @@
+# gitleaks 配置。基线：2026-07-23 全历史扫描（243 commits）确认无真实密钥泄漏。
+# 以下 allowlist 全部是人工逐条核实过的误报，不是"扫不干净就加白名单"。
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "实施计划文档中的测试常量与示例值（非真实凭据）"
+paths = ['''docs/superpowers/plans/.*\.md''']
+
+[[allowlists]]
+description = "API 文档中给用户看的令牌占位符 sk-你的令牌"
+regexes = ['''sk-(你的令牌|xxx|your-token)''']

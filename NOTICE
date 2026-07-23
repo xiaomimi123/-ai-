@@ -1,0 +1,10 @@
+本项目基于 One API（https://github.com/songquanpeng/one-api）二次开发。
+
+One API
+Copyright (c) 2023 JustSong
+Licensed under the MIT License.
+
+本项目在其基础上新增了用户前台、管理后台、套餐与订单、分销、
+异步任务系统、模型广场等功能，同样以 MIT License 发布。
+Go 模块路径保留为 github.com/songquanpeng/one-api，以减少与上游
+同步时的改动量，不代表上游对本项目的背书。
