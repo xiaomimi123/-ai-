@@ -179,6 +179,7 @@ services:
       - BASE_DOMAIN=${BASE_DOMAIN:-localhost}
       - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-30M}
       - NGINX_PROXY_READ_TIMEOUT=${NGINX_PROXY_READ_TIMEOUT:-320}
+      - SSL_MODE=${SSL_MODE:-none}
     volumes:
       - frontend-dist:/var/www/frontend:ro
       - admin-dist:/var/www/admin:ro
@@ -201,6 +202,21 @@ services:
       options:
         max-size: "50m"
         max-file: "3"
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: ai-platform-certbot
+    profiles: ["letsencrypt"]
+    volumes:
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    # 每 12 小时检查一次续期。首次签发需手动执行 docker compose run 命令，
+    # 见 docs/deployment.md
+    entrypoint: >
+      sh -c "trap exit TERM;
+      while :; do certbot renew --webroot -w /var/www/certbot --quiet; sleep 12h & wait $${!}; done"
+    networks:
+      - api-net
 
 networks:
   api-net:
