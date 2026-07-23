@@ -32,7 +32,7 @@ export default function TopupPage() {
   const [qrPayUrl, setQrPayUrl] = useState('')     // PC 端二维码内容（支付跳转 URL）
   const [qrAmount, setQrAmount] = useState(0)     // 二维码弹窗展示的金额
   const [user, setUser] = useState<any>(null)
-  const [payConfig, setPayConfig] = useState({ alipay_enabled: false, wxpay_enabled: false, redeem_enabled: true })
+  const [payConfig, setPayConfig] = useState({ alipay_enabled: false, wxpay_enabled: false, redeem_enabled: true, enabled: false })
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // 启动订单状态轮询（每 2s 查一次，最多 150 次 = 5 分钟）
@@ -70,6 +70,7 @@ export default function TopupPage() {
           alipay_enabled: !!cfg.alipay_enabled,
           wxpay_enabled: !!cfg.wxpay_enabled,
           redeem_enabled: cfg.redeem_enabled !== false,
+          enabled: !!cfg.enabled,
         })
         // 若默认选中的支付宝未开通但微信开通，自动切到微信；反之亦然
         if (!cfg.alipay_enabled && cfg.wxpay_enabled) setPayType('wxpay')
@@ -151,6 +152,8 @@ export default function TopupPage() {
   const curAmount = payMode === 'plan' ? (selectedPlan?.price || 0) : (parseFloat(customAmount) || 0)
   const curQuota = payMode === 'plan' ? ((selectedPlan?.quota || 0) + (selectedPlan?.bonus_quota || 0)) : Math.floor(curAmount * 500000)
   const balance = ((user?.quota || 0) / 500000).toFixed(2)
+  // 在线支付是否可用：优先用后端 enabled 字段，fallback 到单个渠道判断
+  const onlinePayAvailable = payConfig.enabled || payConfig.alipay_enabled || payConfig.wxpay_enabled
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -336,6 +339,15 @@ export default function TopupPage() {
             {loading ? <><Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />处理中...</> : `${payType === 'alipay' ? '支付宝' : '微信'}支付 ¥${curAmount.toFixed(2)}`}
           </button>
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 10 }}>点击后跳转到收银台完成支付</div>
+        </div>
+      )}
+
+      {/* 在线支付未开通提示 */}
+      {!onlinePayAvailable && payConfig.redeem_enabled && (
+        <div style={{ background: 'var(--warning-bg)', borderRadius: 10, padding: '16px 20px', display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 20, borderLeft: '3px solid var(--warning)' }}>
+          <div style={{ fontSize: 13, color: 'var(--warning)' }}>
+            本站尚未开通在线支付。如需充值,请联系管理员获取兑换码。
+          </div>
         </div>
       )}
 
