@@ -5,6 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/songquanpeng/one-api/model"
+	"github.com/songquanpeng/one-api/payment"
+	_ "github.com/songquanpeng/one-api/payment/hupijiao" // 注册 hupijiao provider（init 中 payment.Register）
 )
 
 // GetPaymentConfig 管理员读取支付配置（虎皮椒支付宝渠道 + 微信渠道，两套独立）
@@ -87,6 +89,9 @@ func GetPublicPaymentConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
+			// enabled: 是否有任一支付渠道已配置好商户参数。全部未配置时（开箱默认状态），
+			// 前台应隐藏在线充值入口，只保留兑换码充值。
+			"enabled":        payment.AnyConfigured(),
 			"alipay_enabled": alipayOn,
 			"wxpay_enabled":  wxOn,
 			"epay_enabled":   alipayOn || wxOn, // 兼容老前端：只要有一个开通就算支付可用

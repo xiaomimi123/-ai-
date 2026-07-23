@@ -2,16 +2,9 @@ package controller
 
 import (
 	crand "crypto/rand"
-	"crypto/md5"
-	"crypto/subtle"
-	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -20,50 +13,14 @@ import (
 	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
+	"github.com/songquanpeng/one-api/payment"
+	_ "github.com/songquanpeng/one-api/payment/hupijiao" // 注册 hupijiao provider（init 中 payment.Register）
 	"gorm.io/gorm"
 )
 
-// errOrderAlreadyPaid 用于 HupijiaoNotify / AdminCompleteOrder 的事务内部
+// errOrderAlreadyPaid 用于 PayNotify / AdminCompleteOrder 的事务内部
 // 当条件 UPDATE 匹配 0 行（订单已被并发处理）时标记为"已处理"，不抛错不回滚新加额度
 var errOrderAlreadyPaid = errors.New("order already paid")
-
-// hupijiaoSign 虎皮椒 MD5 签名（官方 v1.1 规则）
-// 规则：
-//  1. 排除 hash 字段和所有空值参数
-//  2. 剩下的 key 按 ASCII 升序
-//  3. 按 "k1=v1&k2=v2..." 拼接 URL query 格式（值**不做** URL encode，原样拼）
-//  4. 末尾直接拼上 AppSecret（注意：不是 "&key=AppSecret"，是直接 + AppSecret）
-//  5. MD5 小写即为 hash
-func hupijiaoSign(params map[string]string, secret string) string {
-	keys := make([]string, 0, len(params))
-	for k, v := range params {
-		if k == "hash" || v == "" {
-			continue
-		}
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
-	}
-	raw := strings.Join(parts, "&") + secret
-	sum := md5.Sum([]byte(raw))
-	return hex.EncodeToString(sum[:])
-}
-
-// hupijiaoNonce 生成 nonce_str（32 位十六进制随机串，crypto/rand 不可预测）
-func hupijiaoNonce() string {
-	b := make([]byte, 16)
-	if _, err := crand.Read(b); err != nil {
-		// crypto/rand 几乎不会失败；兜底用时间戳至少保证有值
-		ts := time.Now().UnixNano()
-		for i := range b {
-			b[i] = byte(ts >> (i % 8))
-		}
-	}
-	return hex.EncodeToString(b)
-}
 
 // randSuffix 返回 n 位随机数字串（crypto/rand，订单号防猜测/冲突用）
 func randSuffix(n int) string {
@@ -83,17 +40,15 @@ func randSuffix(n int) string {
 	return string(out)
 }
 
-// 虎皮椒下单接口默认网关（若管理员没填就用这个）
-const hupijiaoDefaultGateway = "https://api.xunhupay.com"
+// providerName 当前唯一内置的支付渠道标识。后续新增渠道时，
+// 这里可以改为按管理员配置或按 pay_type 动态选择。
+const providerName = "hupijiao"
 
-// httpClientHupijiao 独立 http client，设 10s 超时防挂住支付创建接口
-var httpClientHupijiao = &http.Client{Timeout: 10 * time.Second}
-
-// CreatePayOrder 创建支付订单（对接虎皮椒官方 API v1.1）
-// 流程：本地创建 pending 订单 → POST 到 {gateway}/payment/do.html →
-// 拿 JSON 里的 url 或 url_qrcode 回给前端跳转。
-// 一个 appid/appsecret 对应商户配置的单一渠道（微信 or 支付宝），前端传的 pay_type
-// 仅用于展示 / 记录，真正的渠道由虎皮椒后台应用决定。
+// CreatePayOrder 创建支付订单
+// 流程：本地创建 pending 订单 → 委托 Provider.CreatePayment 向支付平台下单 →
+// 拿到跳转地址回给前端。
+// provider 特有的下单请求（构造参数、签名、HTTP 调用、解析响应）已迁入
+// payment/hupijiao；这里只负责订单业务逻辑（幂等前置校验、金额/套餐换算、建单）。
 func CreatePayOrder(c *gin.Context) {
 	userId := c.GetInt("id")
 
@@ -155,9 +110,12 @@ func CreatePayOrder(c *gin.Context) {
 		return
 	}
 
-	// 按支付类型读对应渠道配置（支付宝和微信在虎皮椒后台是两个独立应用 / AppID）
-	gateway, appid, appsecret, enabled := model.GetHupijiaoChannel(req.PayType)
-	if !enabled || appid == "" || appsecret == "" {
+	p, ok := payment.Get(providerName)
+	if !ok {
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付渠道未配置"})
+		return
+	}
+	if !p.Configured(req.PayType) {
 		channelName := "支付宝"
 		if req.PayType == "wxpay" {
 			channelName = "微信"
@@ -165,10 +123,6 @@ func CreatePayOrder(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": channelName + "支付未开通，请联系管理员"})
 		return
 	}
-	if gateway == "" {
-		gateway = hupijiaoDefaultGateway
-	}
-	gateway = strings.TrimRight(gateway, "/")
 
 	// 订单号：LJ + unix + userId + 6 位随机数字，crypto/rand 降低同秒并发冲突和可预测性
 	orderNo := fmt.Sprintf("LJ%d%d%s", time.Now().Unix(), userId, randSuffix(6))
@@ -199,114 +153,20 @@ func CreatePayOrder(c *gin.Context) {
 		apiAddr = serverAddr
 	}
 
-	siteName := model.GetOptionValue("site_name")
-	if siteName == "" {
-		siteName = config.SystemName
-	}
-
-	// 虎皮椒下单参数
-	params := map[string]string{
-		"version":        "1.1",
-		"lang":           "zh-cn",
-		"appid":          appid,
-		"trade_order_id": orderNo,
-		"total_fee":      fmt.Sprintf("%.2f", amount),
-		"title":          orderName,
-		"time":           fmt.Sprintf("%d", time.Now().Unix()),
-		"notify_url":     apiAddr + "/api/lingjing/pay/notify/hupijiao",
-		"return_url":     serverAddr + "/topup?order=" + orderNo,
-		"nonce_str":      hupijiaoNonce(),
-		"wap_name":       siteName,
-		"wap_url":        serverAddr,
-	}
-	// 微信支付始终传 type=WAP（虎皮椒 / dpweixin 微信渠道有些版本不接受空 type 会 502；
-	// WAP 模式扫码后支付页是 H5，PC 扫码和移动端都兼容）
-	if req.PayType == "wxpay" {
-		params["type"] = "WAP"
-	}
-	params["hash"] = hupijiaoSign(params, appsecret)
-
-	// POST form 到虎皮椒
-	form := url.Values{}
-	for k, v := range params {
-		form.Set(k, v)
-	}
-	// 容错：管理员可能填域名（https://api.xxx.com）或完整接口（https://api.xxx.com/payment/do.html）
-	endpoint := gateway
-	if !strings.HasSuffix(endpoint, "/payment/do.html") {
-		endpoint = endpoint + "/payment/do.html"
-	}
-
-	// 排查参数差异时需要的日志：打印本次下单请求（hash 脱敏）
-	debugParams := make(map[string]string, len(params))
-	for k, v := range params {
-		if k == "hash" {
-			debugParams[k] = "***"
-		} else {
-			debugParams[k] = v
-		}
-	}
-	logger.SysLog(fmt.Sprintf("hupijiao create order request: endpoint=%s payType=%s params=%v", endpoint, req.PayType, debugParams))
-
-	// 加 User-Agent，避免某些网关拒绝默认 Go-http-client/1.1
-	httpReq, _ := http.NewRequest("POST", endpoint, strings.NewReader(form.Encode()))
-	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", "one-api-platform/1.0")
-	resp, err := httpClientHupijiao.Do(httpReq)
+	payUrl, err := p.CreatePayment(payment.CreateRequest{
+		OrderNo:   orderNo,
+		Amount:    amount,
+		OrderName: orderName,
+		PayType:   req.PayType,
+		NotifyURL: apiAddr + "/api/lingjing/pay/notify/" + p.Name(),
+		ReturnURL: serverAddr + "/topup?order=" + orderNo,
+	})
 	if err != nil {
-		logger.SysError("hupijiao create order: POST failed: " + err.Error())
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关请求失败，请稍后重试"})
-		return
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	bodyStr := string(body)
-	bodySnippet := bodyStr
-	if len(bodySnippet) > 500 {
-		bodySnippet = bodySnippet[:500] + "...(truncated)"
-	}
-
-	var apiResp struct {
-		OpenId    int             `json:"openid"`
-		UrlQrCode string          `json:"url_qrcode"`
-		Url       string          `json:"url"`
-		ErrCode   json.RawMessage `json:"errcode"` // 虎皮椒 errcode 可能是 int 或 string，用 RawMessage 兼容
-		ErrMsg    string          `json:"errmsg"`
-		Hash      string          `json:"hash"`
-	}
-	if err := json.Unmarshal(body, &apiResp); err != nil {
-		logger.SysError(fmt.Sprintf("hupijiao create order: parse response failed: %s, httpStatus=%d body=%s", err.Error(), resp.StatusCode, bodyStr))
-		// 把原始 body 回传到前端方便排查第三方兼容网关的协议差异
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": fmt.Sprintf("支付网关返回异常 (HTTP %d): %s", resp.StatusCode, bodySnippet),
-		})
+		c.JSON(http.StatusOK, gin.H{"success": false, "message": err.Error()})
 		return
 	}
 
-	// errcode 兼容 0 / "0" 两种写法
-	errCodeStr := strings.Trim(string(apiResp.ErrCode), `"`)
-	if errCodeStr != "" && errCodeStr != "0" {
-		logger.SysError(fmt.Sprintf("hupijiao create order: errcode=%s errmsg=%s body=%s", errCodeStr, apiResp.ErrMsg, bodyStr))
-		msg := apiResp.ErrMsg
-		if msg == "" {
-			msg = "支付下单失败"
-		}
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付下单失败（错误码 " + errCodeStr + "）：" + msg})
-		return
-	}
-
-	payUrl := apiResp.Url
-	if payUrl == "" {
-		payUrl = apiResp.UrlQrCode
-	}
-	if payUrl == "" {
-		logger.SysError("hupijiao create order: empty url, body=" + bodyStr)
-		c.JSON(http.StatusOK, gin.H{"success": false, "message": "支付网关未返回跳转地址：" + bodySnippet})
-		return
-	}
-
-	logger.SysLog(fmt.Sprintf("hupijiao create order: user=%d order=%s amount=%.2f type=%s", userId, orderNo, amount, req.PayType))
+	logger.SysLog(fmt.Sprintf("create pay order: user=%d order=%s amount=%.2f type=%s provider=%s", userId, orderNo, amount, req.PayType, p.Name()))
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -355,91 +215,58 @@ func GetPayOrderStatus(c *gin.Context) {
 	})
 }
 
-// HupijiaoNotify 虎皮椒异步回调（POST form）
-// 虎皮椒要求成功响应 body 为纯文本 "success"，非此值会被重试
-// 安全关键：必须验 MD5 hash；不验任何人都能 POST 假 notify 刷余额
-func HupijiaoNotify(c *gin.Context) {
-	// 收集所有参数（form 优先、query 兜底）
-	params := map[string]string{}
-	for k, v := range c.Request.URL.Query() {
-		if len(v) > 0 {
-			params[k] = v[0]
-		}
+// PayNotify 处理支付回调。provider 特有的解析与验签委托给 Provider 实现，
+// 订单幂等、金额校验、加余额、佣金、通知统一在此处理——
+// 这样新增支付渠道时不可能绕过这些校验。
+// 安全关键：VerifyNotify 内部必须验签；不验任何人都能 POST 假 notify 刷余额
+func PayNotify(c *gin.Context) {
+	name := c.Param("provider")
+	if name == "" {
+		name = providerName // 旧路径 /notify/hupijiao 兼容（理论上不会走到，因为通配路由必匹配 :provider）
 	}
-	_ = c.Request.ParseForm()
-	for k, v := range c.Request.PostForm {
-		if len(v) > 0 {
-			params[k] = v[0]
-		}
-	}
-
-	orderNo := params["trade_order_id"]
-	tradeNo := params["transaction_id"]
-	if tradeNo == "" {
-		tradeNo = params["open_order_id"]
-	}
-	totalFee := params["total_fee"]
-	status := params["status"]
-	hash := params["hash"]
-
-	// 按订单的 payment_method 选验签 key（支付宝、微信两个渠道的 AppSecret 不一样）
-	// 先读订单，再选 key；订单不存在时两套 key 都试一下（兜底历史订单）
-	var orderForSign model.Order
-	var payType string
-	if orderNo != "" {
-		if err := model.DB.Select("id", "order_no", "payment_method").Where("order_no = ?", orderNo).First(&orderForSign).Error; err == nil {
-			payType = orderForSign.PaymentMethod
-		}
-	}
-	_, _, appsecret, _ := model.GetHupijiaoChannel(payType)
-	if appsecret == "" {
-		logger.SysError("hupijiao notify: AppSecret not configured for payType=" + payType)
+	p, ok := payment.Get(name)
+	if !ok {
+		logger.SysError("pay notify: unknown provider " + name)
 		c.String(http.StatusOK, "fail")
 		return
 	}
 
-	expected := hupijiaoSign(params, appsecret)
-	// 恒时比较防 timing attack（同时用 ToLower 容忍大小写差异）
-	if subtle.ConstantTimeCompare([]byte(strings.ToLower(expected)), []byte(strings.ToLower(hash))) != 1 {
-		logger.SysError(fmt.Sprintf("hupijiao notify: hash verify failed, order=%s trade=%s amount=%s expect=%s got=%s",
-			orderNo, tradeNo, totalFee, expected, hash))
-		if orderNo != "" {
-			model.DB.Model(&model.Order{}).Where("order_no = ? AND status = 0", orderNo).
-				Update("remark", gorm.Expr("CONCAT(IFNULL(remark, ''), ?)",
-					fmt.Sprintf(" | [验签失败 %s] trade=%s amount=%s", time.Now().Format("01-02 15:04"), tradeNo, totalFee)))
-		}
-		c.String(http.StatusOK, "fail")
+	res, err := p.VerifyNotify(c)
+	if err != nil {
+		logger.SysError("pay notify: verify failed provider=" + name + " err=" + err.Error())
+		c.String(http.StatusOK, p.FailResponse())
 		return
 	}
 
-	logger.SysLog(fmt.Sprintf("hupijiao notify: order=%s status=%s trade=%s amount=%s (sign verified)", orderNo, status, tradeNo, totalFee))
-
-	// 虎皮椒支付成功状态码为 OD
-	if status != "OD" {
-		c.String(http.StatusOK, "success")
+	// 非成功终态：回 success 让平台停止重推，但不动订单
+	if !res.Paid {
+		c.String(http.StatusOK, p.SuccessResponse())
 		return
 	}
+
+	orderNo := res.OrderNo
+	tradeNo := res.TradeNo
+	paidAmount := res.PaidAmount
 
 	var order model.Order
 	if err := model.DB.Where("order_no = ?", orderNo).First(&order).Error; err != nil {
-		logger.SysError("hupijiao notify: order not found: " + orderNo)
-		c.String(http.StatusOK, "fail")
+		logger.SysError("pay notify: order not found: " + orderNo)
+		c.String(http.StatusOK, p.FailResponse())
 		return
 	}
 
 	// 金额校验：防恶意篡改 total_fee 参数伪造小额支付换大额订单
-	paidAmount, _ := strconv.ParseFloat(totalFee, 64)
 	if paidAmount < order.Amount-0.01 {
-		logger.SysError(fmt.Sprintf("hupijiao notify: amount mismatch, paid=%.2f expected=%.2f order=%s",
+		logger.SysError(fmt.Sprintf("pay notify: amount mismatch, paid=%.2f expected=%.2f order=%s",
 			paidAmount, order.Amount, orderNo))
-		c.String(http.StatusOK, "fail")
+		c.String(http.StatusOK, p.FailResponse())
 		return
 	}
 
 	// 事务：**条件 UPDATE** 防并发双倍加额度
 	// 两个并发 notify 同时进来时，只有第一条能让 UPDATE 影响 1 行；第二条匹配 0 行 → errOrderAlreadyPaid
-	// 若订单已被孤儿清理任务误取消（status=2）但虎皮椒才 notify 过来，救回为 status=1 并加额度
-	err := model.DB.Transaction(func(tx *gorm.DB) error {
+	// 若订单已被孤儿清理任务误取消（status=2）但支付平台才 notify 过来，救回为 status=1 并加额度
+	err = model.DB.Transaction(func(tx *gorm.DB) error {
 		res := tx.Model(&model.Order{}).
 			Where("order_no = ? AND status = 0", orderNo).
 			Updates(map[string]interface{}{
@@ -460,14 +287,14 @@ func HupijiaoNotify(c *gin.Context) {
 				// 已完成：幂等返回
 				return errOrderAlreadyPaid
 			}
-			// status=2：cleanup 误杀，虎皮椒确认支付成功 → 救回
+			// status=2：cleanup 误杀，支付平台确认支付成功 → 救回
 			rescue := tx.Model(&model.Order{}).
 				Where("order_no = ? AND status = 2", orderNo).
 				Updates(map[string]interface{}{
 					"status":   1,
 					"trade_no": tradeNo,
 					"paid_at":  time.Now().Unix(),
-					"remark":   gorm.Expr("CONCAT(IFNULL(remark, ''), ?)", " | [晚到回调救回] 虎皮椒 notify 晚于取消超时"),
+					"remark":   gorm.Expr("CONCAT(IFNULL(remark, ''), ?)", " | [晚到回调救回] notify 晚于取消超时"),
 				})
 			if rescue.Error != nil {
 				return rescue.Error
@@ -476,7 +303,7 @@ func HupijiaoNotify(c *gin.Context) {
 				// 并发再次变化（几乎不可能）→ 幂等
 				return errOrderAlreadyPaid
 			}
-			logger.SysLog(fmt.Sprintf("hupijiao notify: rescued cancelled order=%s (cleanup misfire)", orderNo))
+			logger.SysLog(fmt.Sprintf("pay notify: rescued cancelled order=%s (cleanup misfire)", orderNo))
 		}
 		if err := tx.Model(&model.User{}).Where("id = ?", order.UserId).
 			Update("quota", gorm.Expr("quota + ?", order.Quota)).Error; err != nil {
@@ -485,13 +312,13 @@ func HupijiaoNotify(c *gin.Context) {
 		return nil
 	})
 	if errors.Is(err, errOrderAlreadyPaid) {
-		// 幂等：对虎皮椒返回 success 让它停止重试
-		c.String(http.StatusOK, "success")
+		// 幂等：对支付平台返回 success 让它停止重试
+		c.String(http.StatusOK, p.SuccessResponse())
 		return
 	}
 	if err != nil {
-		logger.SysError("hupijiao notify: transaction failed: " + err.Error())
-		c.String(http.StatusOK, "fail")
+		logger.SysError("pay notify: transaction failed: " + err.Error())
+		c.String(http.StatusOK, p.FailResponse())
 		return
 	}
 
@@ -506,9 +333,9 @@ func HupijiaoNotify(c *gin.Context) {
 		"topup_success",
 	)
 
-	logger.SysLog(fmt.Sprintf("hupijiao payment success: user=%d order=%s amount=%.2f quota=%d",
-		order.UserId, orderNo, order.Amount, order.Quota))
-	c.String(http.StatusOK, "success")
+	logger.SysLog(fmt.Sprintf("pay notify: payment success: user=%d order=%s amount=%.2f quota=%d provider=%s",
+		order.UserId, orderNo, order.Amount, order.Quota, name))
+	c.String(http.StatusOK, p.SuccessResponse())
 }
 
 // AdminManualTopup 管理员手动补单

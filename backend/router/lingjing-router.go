@@ -17,9 +17,13 @@ func SetLingjingRouter(router *gin.Engine) {
 		public.GET("/config", controller.GetLingjingConfig)
 		public.GET("/pay/config", controller.GetPublicPaymentConfig)
 
-		// 虎皮椒支付异步回调（官方是 POST form，GET 兜底以防某些场景）
-		public.POST("/pay/notify/hupijiao", controller.HupijiaoNotify)
-		public.GET("/pay/notify/hupijiao", controller.HupijiaoNotify)
+		// 支付异步回调（官方是 POST form，GET 兜底以防某些场景）。
+		// 通配路由：旧 URL /pay/notify/hupijiao 命中此路由且 provider="hupijiao"，
+		// 与改造前行为一致——虎皮椒商户后台无需改配置。
+		// 注意：gin 路由树不允许同层级同时存在静态段 "hupijiao" 和通配段 ":provider"，会 panic，
+		// 所以这里不能再额外注册 "/pay/notify/hupijiao" 静态路由。
+		public.POST("/pay/notify/:provider", controller.PayNotify)
+		public.GET("/pay/notify/:provider", controller.PayNotify)
 	}
 
 	// ===== 用户接口 =====

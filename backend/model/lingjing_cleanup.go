@@ -27,7 +27,7 @@ func CancelStalePendingOrders(olderThan time.Duration) (int64, error) {
 // 设计：
 //   - olderThan 建议 30min，虎皮椒官方扫码订单有效期一般 ≤ 30min
 //   - tickEvery 建议 5min，兼顾实时性和 DB 压力
-//   - 万一虎皮椒晚于 30min 才 notify，HupijiaoNotify 里有"救回 status=2"逻辑兜底
+//   - 万一支付平台晚于 30min 才 notify，PayNotify 里有"救回 status=2"逻辑兜底
 func CleanupPendingOrdersLoop(olderThan, tickEvery time.Duration) {
 	logger.SysLog(fmt.Sprintf("order cleanup loop started: cancel pending > %v, tick every %v", olderThan, tickEvery))
 	// 启动先跑一次，避免重启后要等第一次 tick
