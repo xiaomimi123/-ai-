@@ -1,0 +1,21 @@
+# 本地开发用。启用方式：
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+# compose 会自动合并此文件，无需额外 -f 参数。
+#
+# 作用：暴露数据库与后端端口供本机直连调试；前端 / admin 建议直接跑
+# npm run dev（走 vite proxy 到 localhost:3000），不用容器。
+
+services:
+  mysql:
+    ports:
+      - "3306:3306"
+
+  redis:
+    ports:
+      - "6379:6379"
+
+  backend:
+    ports:
+      - "3000:3000"
+    environment:
+      - GIN_MODE=debug

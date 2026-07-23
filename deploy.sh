@@ -3,55 +3,73 @@ set -e
 
 GREEN='\033[0;32m'
 RED='\033[0;31m'
+YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log() { echo -e "${GREEN}[✓]${NC} $1"; }
-err() { echo -e "${RED}[✗]${NC} $1"; exit 1; }
+log()  { echo -e "${GREEN}[✓]${NC} $1"; }
+warn() { echo -e "${YELLOW}[!]${NC} $1"; }
+err()  { echo -e "${RED}[✗]${NC} $1"; exit 1; }
 
-DEPLOY_DIR="/root/lingjing-ai"
-FRONTEND_DIST="/var/www/api-platform/frontend"
-ADMIN_DIST="/var/www/api-platform/admin"
+# 部署目录 = 本脚本所在目录，不再写死路径
+DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$DEPLOY_DIR"
 
 echo ""
-echo "🚀 灵镜AI 一键部署"
+echo "🚀 一键部署"
 echo "================================"
 
-# Step 1: 拉取代码
-log "Step 1/6: 拉取最新代码..."
-cd $DEPLOY_DIR
-git pull origin main || err "拉取失败"
+[ -f .env ] || err ".env 不存在。请先执行：cp .env.example .env 并按注释填写"
 
-# Step 2: 构建自研后端 Docker 镜像
-log "Step 2/6: 构建后端镜像（首次约5分钟）..."
-docker build -t lingjing-api:latest $DEPLOY_DIR/backend/ || err "后端构建失败"
-log "后端镜像构建完成"
+# shellcheck disable=SC1091
+set -a; . ./.env; set +a
 
-# Step 3: 重启后端服务
-log "Step 3/6: 重启后端服务..."
-cd $DEPLOY_DIR/one-api
-docker compose up -d --remove-orphans || err "后端启动失败"
-log "后端已启动"
+if grep -q "CHANGE_ME_" .env; then
+  err ".env 中仍有 CHANGE_ME_ 占位符未填写：$(grep -n 'CHANGE_ME_' .env | cut -d: -f1 | tr '\n' ' ')行"
+fi
 
-# Step 4: 构建前台
-log "Step 4/6: 构建用户前台..."
-docker run --rm -v $DEPLOY_DIR/frontend:/app -w /app node:20-alpine sh -c "npm install --silent 2>/dev/null && npm run build" || err "前台构建失败"
-mkdir -p $FRONTEND_DIST && rm -rf $FRONTEND_DIST/* && cp -r $DEPLOY_DIR/frontend/dist/* $FRONTEND_DIST/
-log "前台完成"
+log "Step 1/4: 拉取最新代码"
+if [ -d .git ]; then
+  git pull --ff-only || warn "git pull 失败（本地有改动？），继续用当前代码部署"
+else
+  warn "非 git 仓库，跳过拉取"
+fi
 
-# Step 5: 构建后台
-log "Step 5/6: 构建管理后台..."
-docker run --rm -v $DEPLOY_DIR/admin:/app -w /app node:20-alpine sh -c "npm install --silent 2>/dev/null && npm run build" || err "后台构建失败"
-mkdir -p $ADMIN_DIST && rm -rf $ADMIN_DIST/* && cp -r $DEPLOY_DIR/admin/dist/* $ADMIN_DIST/
-log "后台完成"
+log "Step 2/4: 构建镜像"
+docker compose build || err "镜像构建失败"
 
-# Step 6: 验证
-log "Step 6/6: 验证服务..."
-sleep 15
-echo -n "  后端 API: "; curl -sf --max-time 5 http://localhost:3000/api/status > /dev/null && echo -e "${GREEN}正常${NC}" || echo -e "${RED}异常${NC}"
-echo -n "  灵镜扩展: "; curl -sf --max-time 5 http://localhost:3000/api/lingjing/plans > /dev/null && echo -e "${GREEN}正常${NC}" || echo -e "${RED}异常${NC}"
-echo -n "  Nginx:    "; curl -sf --max-time 5 http://localhost > /dev/null && echo -e "${GREEN}正常${NC}" || echo -e "${RED}异常${NC}"
+log "Step 3/4: 启动服务"
+docker compose up -d --remove-orphans || err "服务启动失败"
+
+log "Step 4/4: 健康检查"
+PORT="${HTTP_PORT:-80}"
+for i in $(seq 1 30); do
+  if curl -sf --max-time 5 "http://localhost:${PORT}/api/status" > /dev/null 2>&1; then
+    break
+  fi
+  sleep 3
+done
+
+check() {
+  printf "  %-14s" "$1:"
+  if curl -sf --max-time 10 "$2" > /dev/null 2>&1; then
+    echo -e "${GREEN}正常${NC}"
+  else
+    echo -e "${RED}异常${NC}"
+    FAILED=1
+  fi
+}
+
+FAILED=0
+check "后端 API"  "http://localhost:${PORT}/api/status"
+check "站点前台"  "http://localhost:${PORT}/"
+check "运行时配置" "http://localhost:${PORT}/config.js"
 
 echo ""
-echo -e "${GREEN}🎉 部署完成！${NC}"
-echo "  前台: https://aitoken.homes"
-echo "  后台: https://admin.aitoken.homes"
+if [ "$FAILED" = "1" ]; then
+  echo -e "${RED}部分服务异常，请查看日志：docker compose logs --tail=100${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}🎉 部署完成${NC}"
+echo "  前台: ${SITE_URL}"
+echo "  后台: ${SITE_URL/:\/\//://admin.}"
