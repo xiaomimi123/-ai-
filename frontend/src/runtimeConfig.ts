@@ -26,13 +26,19 @@ const DEFAULTS: RuntimeConfig = {
   contactUrl: '',
 }
 
-// entrypoint 用 sed 替换 __XXX__ 占位符。若某个环境变量为空，
-// 占位符会原样留在 config.js 里，此时应视为"未配置"而不是字面量值。
 function clean(v: unknown): string {
   if (typeof v !== 'string') return ''
-  const s = v.trim()
-  if (s.startsWith('__') && s.endsWith('__')) return ''
-  return s
+  return v.trim()
+}
+
+/** 安全地从 URL 取主机名。解析失败（例如部署者漏填 scheme）时回落到原字符串，
+ *  避免因一个配置笔误导致整页崩溃。 */
+export function displayHost(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return url
+  }
 }
 
 export function readRuntimeConfig(

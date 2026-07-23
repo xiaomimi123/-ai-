@@ -4,7 +4,7 @@ import {
   Shield, Activity, Layers, Clock, Image as ImageIcon,
 } from 'lucide-react'
 import ModelIcon from '../components/ModelIcon'
-import { runtimeConfig } from '../runtimeConfig'
+import { runtimeConfig, displayHost } from '../runtimeConfig'
 
 // API 基址：优先用部署配置的独立 API 域名，否则用当前站点同源。
 // 部署在 CDN 代理后面时建议单独配 API 子域名直连——多数 CDN 对
@@ -296,7 +296,7 @@ for chunk in stream:
           borderRadius: 8, padding: '12px 14px', fontSize: 13, color: '#7c2d12',
           marginBottom: 20, lineHeight: 1.7,
         }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ API 请务必使用 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 3, color: '#7c2d12' }}>{new URL(runtimeConfig.apiBaseUrl).host}</code> 这个地址</div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>⚠️ API 请务必使用 <code style={{ background: '#fff', padding: '1px 6px', borderRadius: 3, color: '#7c2d12' }}>{displayHost(runtimeConfig.apiBaseUrl)}</code> 这个地址</div>
           站点主域名可能经过 CDN 代理，存在响应超时上限。图像生成、长上下文对话等耗时请求请使用上述 API 地址，避免被中间层截断。<br/>
         </div>
       )}
