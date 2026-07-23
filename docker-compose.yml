@@ -122,6 +122,20 @@ services:
       - BRAND_CONTACT_URL=${BRAND_CONTACT_URL:-}
     volumes:
       - frontend-dist:/usr/share/nginx/html
+    # entrypoint（40-generate-config.sh）每次启动都会 rm -rf 共享卷再重新 cp 构建产物、
+    # 最后生成 config.js；nginx 服务只读挂载同一个卷对外提供服务。
+    # 没有这个 healthcheck，nginx 的 depends_on 只能等到本容器"进程已启动"，
+    # 等不到 rm+cp 跑完，会有窗口期共享卷是空的，用户请求拿到 403——
+    # 且不止首次冷启动，每次 up -d / restart 都会重新触发这个窗口。
+    # 用 config.js 判定：它是 entrypoint 里最后写的文件，存在即代表整个流程跑完；
+    # 同时查 index.html 是防"卷里残留上次的 config.js，但这次 cp 还没跑完"的误判。
+    # 检查本身只是两个 test -f，很轻，interval 可以比 mysql/redis 短。
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /usr/share/nginx/html/index.html && test -f /usr/share/nginx/html/config.js"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       - api-net
 
@@ -141,6 +155,14 @@ services:
       - BRAND_CONTACT_URL=${BRAND_CONTACT_URL:-}
     volumes:
       - admin-dist:/usr/share/nginx/html
+    # 原因同 frontend 服务：entrypoint 每次启动都 rm -rf 共享卷再重新 cp，
+    # config.js 是最后写入的文件，存在即代表本次同步已完成。
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /usr/share/nginx/html/index.html && test -f /usr/share/nginx/html/config.js"]
+      interval: 3s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       - api-net
 
@@ -163,9 +185,15 @@ services:
       - certbot-www:/var/www/certbot
       - certbot-conf:/etc/letsencrypt
     depends_on:
-      - backend
-      - frontend
-      - admin
+      # backend 没有 healthcheck，保持 service_started（等价于原来的列表形式，不改语义）。
+      backend:
+        condition: service_started
+      # frontend/admin 必须等 healthcheck 变 healthy（即共享卷里 config.js 已生成）
+      # 才能启动 nginx，否则会读到 rm -rf 之后、cp 完成之前的空目录，返回 403。
+      frontend:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
     networks:
       - api-net
     logging:
