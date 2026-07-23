@@ -51,17 +51,48 @@ func TestValidateRejectsShortSecret(t *testing.T) {
 	})
 }
 
-func TestValidateRejectsMissingDSN(t *testing.T) {
+func TestValidateAllowsMissingDSNForSQLiteFallback(t *testing.T) {
 	withEnv(t, map[string]string{
 		"SESSION_SECRET": "0123456789abcdef0123456789abcdef",
 		"SQL_DSN":        "",
 	}, func() {
+		if err := Validate(); err != nil {
+			t.Fatalf("空 SQL_DSN 应被放行（回退 SQLite），实际报错: %v", err)
+		}
+	})
+}
+
+func TestValidateRejectsDSNPlaceholder(t *testing.T) {
+	withEnv(t, map[string]string{
+		"SESSION_SECRET": "0123456789abcdef0123456789abcdef",
+		"SQL_DSN":        "root:CHANGE_ME_MYSQL_PASSWORD@tcp(mysql:3306)/oneapi",
+	}, func() {
 		err := Validate()
 		if err == nil {
-			t.Fatal("缺失 SQL_DSN 应该被拒绝")
+			t.Fatal("SQL_DSN 含占位符应该被拒绝")
 		}
 		if !strings.Contains(err.Error(), "SQL_DSN") {
 			t.Fatalf("错误信息应指明 SQL_DSN，实际: %v", err)
+		}
+	})
+}
+
+func TestDSNWarningsNotifiesSQLiteFallback(t *testing.T) {
+	withEnv(t, map[string]string{
+		"SQL_DSN": "",
+	}, func() {
+		warns := DSNWarnings()
+		if len(warns) == 0 {
+			t.Fatal("空 SQL_DSN 应产生 SQLite 提示，实际没有任何警告")
+		}
+		found := false
+		for _, w := range warns {
+			if strings.Contains(w, "SQLite") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("警告内容应提及 SQLite，实际: %v", warns)
 		}
 	})
 }

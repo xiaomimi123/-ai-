@@ -30,11 +30,11 @@ func Validate() error {
 		problems = append(problems, fmt.Sprintf("SESSION_SECRET 太短（%d 字符），至少需要 %d 字符", len(secret), minSessionSecretLen))
 	}
 
+	// SQL_DSN 为空是合法状态：One API 原生支持不设 SQL_DSN 时自动回退到 SQLite
+	// （见 model.openSQLite()），这是开源项目最低摩擦的部署路径，不应拦截启动。
+	// 只有非空的 DSN 才需要检查是否还残留占位符。
 	dsn := os.Getenv("SQL_DSN")
-	switch {
-	case dsn == "":
-		problems = append(problems, "SQL_DSN 未设置。docker compose 部署下它由 compose 拼装，请检查 .env 的 MYSQL_PASSWORD 是否已填")
-	case strings.Contains(dsn, placeholderPrefix):
+	if dsn != "" && strings.Contains(dsn, placeholderPrefix) {
 		problems = append(problems, "SQL_DSN 中含占位符（通常是 MYSQL_PASSWORD 没改），请填写真实数据库密码")
 	}
 
@@ -44,11 +44,15 @@ func Validate() error {
 	return fmt.Errorf("配置自检未通过：\n  - %s", strings.Join(problems, "\n  - "))
 }
 
-// DSNWarnings 返回 DSN 的非致命问题。这些不阻止启动，但会导致中文乱码
-// 或时间字段解析异常，值得在日志里显眼提示。
+// DSNWarnings 返回 DSN 相关的非致命提示。这些不阻止启动：
+// 一部分是"配置了 MySQL 但参数不全"会导致中文乱码或时间字段解析异常，
+// 另一部分是"根本没配置 MySQL"——提醒部署者这是不是他想要的。
 func DSNWarnings() []string {
 	dsn := os.Getenv("SQL_DSN")
-	if dsn == "" || !strings.Contains(dsn, "@tcp(") {
+	if dsn == "" {
+		return []string{"未设置 SQL_DSN，将使用 SQLite（数据存于本地文件）。生产环境或多实例部署请配置 MySQL。"}
+	}
+	if !strings.Contains(dsn, "@tcp(") {
 		return nil
 	}
 	var warns []string
