@@ -46,6 +46,13 @@ func main() {
 		logger.SysLog("running in debug mode")
 	}
 
+	if err := config.Validate(); err != nil {
+		logger.FatalLog(err.Error())
+	}
+	for _, w := range config.DSNWarnings() {
+		logger.SysError("[配置警告] " + w)
+	}
+
 	// Initialize SQL Database
 	model.InitDB()
 	model.InitLogDB()
@@ -155,8 +162,8 @@ func main() {
 	server.Use(middleware.Language())
 	middleware.SetUpLogger(server)
 	// Initialize session store
-	// COOKIE_DOMAIN 用于跨子域共享 session（生产填 .aitoken.homes，
-	// 让 aitoken.homes / api.aitoken.homes / admin.aitoken.homes 共用登录态）
+	// COOKIE_DOMAIN 用于跨子域共享 session（生产填 .example.com，
+	// 让 example.com / api.example.com / admin.example.com 共用登录态）
 	// 留空则走默认行为（写到当前 host），本地开发不受影响
 	store := cookie.NewStore([]byte(config.SessionSecret))
 	sessionOptions := sessions.Options{

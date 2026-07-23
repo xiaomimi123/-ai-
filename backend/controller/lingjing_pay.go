@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/songquanpeng/one-api/common/config"
 	"github.com/songquanpeng/one-api/common/logger"
 	"github.com/songquanpeng/one-api/model"
 	"gorm.io/gorm"
@@ -138,7 +139,7 @@ func CreatePayOrder(c *gin.Context) {
 		}
 		amount = plan.Price
 		quota = int64(plan.Quota) + int64(plan.BonusQuota)
-		orderName = "灵镜AI-" + plan.Name
+		orderName = config.SystemName + "-" + plan.Name
 		planId = plan.Id
 	} else if req.Amount >= 10.0 {
 		// 上限防前端传入异常大的金额污染订单表 / 虎皮椒被拒
@@ -148,7 +149,7 @@ func CreatePayOrder(c *gin.Context) {
 		}
 		amount = req.Amount
 		quota = int64(amount * 500000)
-		orderName = fmt.Sprintf("灵镜AI-充值¥%.0f", amount)
+		orderName = fmt.Sprintf("%s-充值¥%.0f", config.SystemName, amount)
 	} else {
 		c.JSON(http.StatusOK, gin.H{"success": false, "message": "最低充值 ¥10.00"})
 		return
@@ -189,7 +190,7 @@ func CreatePayOrder(c *gin.Context) {
 
 	serverAddr := strings.TrimRight(model.GetOptionValue("ServerAddress"), "/")
 	if serverAddr == "" {
-		serverAddr = "https://aitoken.homes"
+		serverAddr = strings.TrimRight(config.ServerAddress, "/")
 	}
 	// notify_url 走独立域名直连（绕开 CF，避免 WAF/缓冲拦截支付回调）
 	// 未配置 ApiServerAddress 时降级到 ServerAddress，向后兼容
@@ -250,7 +251,7 @@ func CreatePayOrder(c *gin.Context) {
 	// 加 User-Agent，避免某些网关拒绝默认 Go-http-client/1.1
 	httpReq, _ := http.NewRequest("POST", endpoint, strings.NewReader(form.Encode()))
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	httpReq.Header.Set("User-Agent", "lingjing-ai/1.0 (+https://aitoken.homes)")
+	httpReq.Header.Set("User-Agent", "one-api-platform/1.0")
 	resp, err := httpClientHupijiao.Do(httpReq)
 	if err != nil {
 		logger.SysError("hupijiao create order: POST failed: " + err.Error())
@@ -501,7 +502,7 @@ func HupijiaoNotify(c *gin.Context) {
 	model.CreateUserNotification(
 		order.UserId,
 		"充值成功",
-		fmt.Sprintf("¥%.2f 已到账，获得 $%.2f 额度。感谢使用灵镜 AI！", order.Amount, float64(order.Quota)/500000.0),
+		fmt.Sprintf("¥%.2f 已到账，获得 $%.2f 额度。感谢使用 %s！", order.Amount, float64(order.Quota)/500000.0, config.SystemName),
 		"topup_success",
 	)
 

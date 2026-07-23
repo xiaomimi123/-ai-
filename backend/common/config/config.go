@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 )
 
-var SystemName = "灵镜AI"
-var ServerAddress = "https://aitoken.homes"
+var SystemName = env.String("SYSTEM_NAME", "AI API Platform")
+var ServerAddress = env.String("SERVER_ADDRESS", "http://localhost:3000")
 var Footer = ""
 var Logo = ""
 var TopUpLink = ""
@@ -103,7 +103,7 @@ var PreConsumedQuota int64 = 500
 var ApproximateTokenEnabled = false
 var RetryTimes = 0
 
-var RootUserEmail = "admin@aitoken.homes"
+var RootUserEmail = env.String("ROOT_USER_EMAIL", "admin@example.com")
 
 var IsMasterNode = os.Getenv("NODE_TYPE") != "slave"
 
