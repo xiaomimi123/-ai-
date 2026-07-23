@@ -201,7 +201,7 @@ func CreatePayOrder(c *gin.Context) {
 
 	siteName := model.GetOptionValue("site_name")
 	if siteName == "" {
-		siteName = "灵镜 AI"
+		siteName = config.SystemName
 	}
 
 	// 虎皮椒下单参数
