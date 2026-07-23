@@ -4,8 +4,12 @@
 useDefault = true
 
 [[allowlists]]
-description = "实施计划文档中的测试常量与示例值（非真实凭据）"
-paths = ['''docs/superpowers/plans/.*\.md''']
+description = "实施计划文档中的 Go 单测固定常量（2026-07-23 人工核实，非真实凭据）"
+regexes = ['''0123456789abcdef0123456789abcdef''']
+
+[[allowlists]]
+description = "实施计划验收步骤中的一次性测试密码（2026-07-23 人工核实，非真实凭据）"
+regexes = ['''acceptpw123456''']
 
 [[allowlists]]
 description = "API 文档中给用户看的令牌占位符 sk-你的令牌"
