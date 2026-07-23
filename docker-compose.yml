@@ -1,0 +1,116 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    image: lingjing-api:latest
+    container_name: ai-platform-backend
+    restart: always
+    environment:
+      # 数据库 DSN：utf8mb4 / parseTime / loc 三件套缺一不可
+      - SQL_DSN=root:${MYSQL_PASSWORD}@tcp(mysql:3306)/oneapi?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_CONN_STRING=redis://redis:6379
+      - SESSION_SECRET=${SESSION_SECRET}
+      - TZ=${TZ:-Asia/Shanghai}
+      - COOKIE_DOMAIN=${COOKIE_DOMAIN:-}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
+      - CORS_FALLBACK_OPEN=${CORS_FALLBACK_OPEN:-false}
+      - SYSTEM_NAME=${SITE_NAME:-AI API Platform}
+      - SERVER_ADDRESS=${SITE_URL}
+      - ROOT_USER_EMAIL=${ROOT_USER_EMAIL:-admin@example.com}
+      - STREAM_NORMALIZER=${STREAM_NORMALIZER:-on}
+      # 异步任务系统
+      - ENABLE_TASK_SYSTEM=${ENABLE_TASK_SYSTEM:-false}
+      - TASK_WORKER_INTERVAL=${TASK_WORKER_INTERVAL:-5s}
+      - TASK_WORKER_BATCH_SIZE=${TASK_WORKER_BATCH_SIZE:-50}
+      - TASK_TIMEOUT_MINUTES=${TASK_TIMEOUT_MINUTES:-20}
+      - TASK_RETENTION_DAYS=${TASK_RETENTION_DAYS:-30}
+      - TASK_UPSTREAM_HTTP_TIMEOUT=${TASK_UPSTREAM_HTTP_TIMEOUT:-180s}
+      - TASK_MAX_FETCH_ERRORS=${TASK_MAX_FETCH_ERRORS:-5}
+      - TASK_SYNC_WAIT_SECONDS=${TASK_SYNC_WAIT_SECONDS:-300}
+      - TASK_SYNC_POLL_INTERVAL_SECONDS=${TASK_SYNC_POLL_INTERVAL_SECONDS:-2}
+    volumes:
+      - backend-data:/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - api-net
+    # 防 Go 服务异常泄漏吃光整机资源
+    mem_limit: 4g
+    mem_reservation: 512m
+    cpus: "2.0"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  mysql:
+    image: mysql:8.0
+    container_name: ai-platform-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: oneapi
+      MYSQL_CHARACTER_SET_SERVER: utf8mb4
+      MYSQL_COLLATION_SERVER: utf8mb4_unicode_ci
+    # max_connections=500：AI 调用 hold 连接久，默认 151 不够
+    # innodb_buffer_pool_size=2G：热点表常驻内存，避免磁盘 IO 成瓶颈
+    command:
+      - --max-connections=500
+      - --innodb-buffer-pool-size=2G
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --slow-query-log=1
+      - --slow-query-log-file=/var/lib/mysql/slow.log
+      - --long-query-time=1
+    volumes:
+      - ${MYSQL_DATA_PATH:-mysql-data}:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-net
+    mem_limit: 3g
+    mem_reservation: 1g
+    cpus: "1.5"
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - ${REDIS_DATA_PATH:-redis-data}:/data
+    networks:
+      - api-net
+    mem_limit: 512m
+    cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "2"
+
+networks:
+  api-net:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  redis-data:
+  backend-data:
