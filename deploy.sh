@@ -20,8 +20,12 @@ echo "================================"
 
 [ -f .env ] || err ".env 不存在。请先执行：cp .env.example .env 并按注释填写"
 
-# shellcheck disable=SC1091
-set -a; . ./.env; set +a
+# 不用 source .env——含空格的值（如 SITE_NAME="AI API Platform"）会让
+# source 报 command not found。docker compose 会用自己的解析器读 .env，
+# deploy.sh 只需要下面两个变量，用 grep 单独取，更稳。
+read_env() { grep -E "^$1=" .env | tail -n1 | cut -d= -f2- | sed 's/^["'"'"']//;s/["'"'"']$//'; }
+HTTP_PORT="$(read_env HTTP_PORT)"
+SITE_URL="$(read_env SITE_URL)"
 
 if grep -q "CHANGE_ME_" .env; then
   err ".env 中仍有 CHANGE_ME_ 占位符未填写：$(grep -n 'CHANGE_ME_' .env | cut -d: -f1 | tr '\n' ' ')行"
