@@ -151,9 +151,10 @@ MYSQL_DATA_PATH=/opt/old-deploy/mysql-data
 表现就是登录后一刷新就掉线。
 
 **前端报跨域错误（CORS）**
-`CORS_ALLOWED_ORIGINS` 漏了某个来源域名。它是精确匹配 + `*.example.com` 通配的白名单，
-`localhost`/`127.0.0.1` 恒定放行不用列。紧急情况下可临时设 `CORS_FALLBACK_OPEN=true` 退回
-"任意 origin + 带凭证" 恢复访问，但这会牺牲安全性，**排查清楚后必须改回 `false`**。
+标准同源部署中 CORS 不会触发（前端和 API 同源）。若后端被跨域访问，检查 `CORS_ALLOWED_ORIGINS` 是否包含该来源。
+它是精确匹配 + `*.example.com` 通配的白名单；localhost/127.0.0.1 仅在调试模式（`GIN_MODE=debug`）自动放行，
+生产部署需显式列出。紧急情况下可临时设 `CORS_FALLBACK_OPEN=true` 退回"任意 origin + 带凭证" 恢复访问，
+但这会牺牲安全性，**排查清楚后必须改回 `false`**。
 
 **上传图片报 413**
 `MAX_UPLOAD_SIZE` 太小或没设置（nginx 默认 1M）。默认值 `30M` 一般够用，参考图更多或更大时再调高。

@@ -34,7 +34,7 @@
 | `BASE_DOMAIN` | 否 | `localhost` | 主域名（不含协议）。nginx 用它匹配 `admin.${BASE_DOMAIN}` 路由到管理后台，未匹配的 Host 落到用户前台。 |
 | `PUBLIC_API_BASE_URL` | 否 | 空 | 前端调用后端的基址。留空 = 走同源 `/api`（推荐）。仅当把 API 放在独立子域名（例如绕开 CDN 超时限制，见 [deployment.md](deployment.md#5-放在-cdn-或外层反代后面)）时才填。 |
 | `COOKIE_DOMAIN` | 否 | 空 | 跨子域共享登录态。单域名部署留空；多子域部署填 `.example.com`（**注意前导点**）。 |
-| `CORS_ALLOWED_ORIGINS` | 否 | `http://localhost` | CORS 白名单，逗号分隔，支持 `*.example.com` 子域通配。`localhost`/`127.0.0.1` 恒定放行，无需列出。只影响非 `/v1/*` 路径——`/v1/*`（OpenAI 兼容接口）对所有 origin 开放，因为它靠 Bearer token 鉴权，不依赖 cookie。 |
+| `CORS_ALLOWED_ORIGINS` | 否 | `http://localhost` | CORS 白名单，逗号分隔，支持 `*.example.com` 子域通配。在标准的单域名同源部署中，前端和 `/api` 同源，CORS 完全不会触发。但如若后端被跨域访问（如独立前端开发服务、非标准端口等），localhost/127.0.0.1 仅在 `GIN_MODE=debug` 时自动放行；生产环境需显式加入本环境变量。只影响非 `/v1/*` 路径——`/v1/*`（OpenAI 兼容接口）对所有 origin 开放，因为它靠 Bearer token 鉴权，不依赖 cookie。 |
 | `HTTP_PORT` | 否 | `80` | nginx 对外 HTTP 端口。 |
 | `HTTPS_PORT` | 否 | `443` | nginx 对外 HTTPS 端口。仅 `SSL_MODE=letsencrypt` 时有实际监听。 |
 
@@ -89,14 +89,19 @@
 
 ## 两个必须知道的坑
 
-### `SITE_NAME` / `SITE_URL` / `ROOT_USER_EMAIL` 首次生效后，改 `.env` 不一定有用
+### `SITE_NAME` / `SITE_URL` 首次生效后，改 `.env` 不一定有用
 
-后端把这三项分别映射为内部的 `SYSTEM_NAME`、`SERVER_ADDRESS`、`ROOT_USER_EMAIL`，它们的运行时值来自
+后端把这两项分别映射为内部的 `SYSTEM_NAME`、`SERVER_ADDRESS`，它们的运行时值来自
 `options` 表 + 环境变量兜底：启动时先把环境变量值写进内存里的默认值，再用数据库 `options` 表里的同名
 记录覆盖（如果存在）。也就是说 **env 只提供"首次启动、数据库里还没有这条记录"时的默认值**——
 一旦管理后台的系统设置里保存过一次这些字段（或它们已被写入 `options` 表），之后改 `.env` 并
-`docker compose up -d` 不会再生效。要改一个已经跑起来的站点的这三项，请去管理后台的系统设置里改，
+`docker compose up -d` 不会再生效。要改一个已经跑起来的站点的这两项，请去管理后台的系统设置里改，
 不要指望改 `.env` 就能覆盖。
+
+### `ROOT_USER_EMAIL` 是纯环境变量，无法通过管理后台改
+
+与 `SYSTEM_NAME`/`SERVER_ADDRESS` 不同，`ROOT_USER_EMAIL` 不走 `options` 表，也没有管理后台设置页面。
+它完全由 `.env` 文件（或容器启动时的环境变量）决定。改了 `.env` 并重启后端容器，新值立即生效，不依赖数据库。
 
 ### 新增环境变量必须同时改两处
 
