@@ -24,7 +24,7 @@ export default function LoginPage() {
       if (role < ADMIN_MIN_ROLE) {
         // 立刻清 session，避免登录态残留可以被 AdminLayout 检测到
         await authApi.logout().catch(() => {})
-        setError('该账号无后台权限，请前往 https://aitoken.homes 用户前台登录')
+        setError('该账号无后台权限，请前往用户前台登录')
         return
       }
       // 代理跳代理首页，admin/root 跳总览

@@ -184,7 +184,7 @@ export default function SettingsPage() {
           </div>
           <div className="form-group">
             <label className="form-label">服务器地址</label>
-            <input value={opts.ServerAddress || ''} onChange={e => setOpt('ServerAddress', e.target.value)} placeholder="https://aitoken.homes" />
+            <input value={opts.ServerAddress || ''} onChange={e => setOpt('ServerAddress', e.target.value)} placeholder="https://example.com" />
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>用于生成邀请链接和支付回调地址</div>
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -297,7 +297,7 @@ export default function SettingsPage() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label">发件人地址</label>
-            <input value={opts.SMTPFrom || ''} onChange={e => setOpt('SMTPFrom', e.target.value)} placeholder="noreply@aitoken.homes" />
+            <input value={opts.SMTPFrom || ''} onChange={e => setOpt('SMTPFrom', e.target.value)} placeholder="noreply@example.com" />
           </div>
         </div>
 

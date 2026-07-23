@@ -3,6 +3,7 @@ import { Save, CreditCard, AlertCircle, CheckCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import axios from 'axios'
 import { PageHeader } from '../components/PageHeader'
+import { runtimeConfig } from '../runtimeConfig'
 
 const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
 
@@ -185,7 +186,7 @@ function ChannelCard(props: {
           <div className="alert alert-success" style={{ marginBottom: 0 }}>
             <div style={{ marginBottom: 4 }}><strong>异步回调地址</strong>（填到虎皮椒后台）：</div>
             <code style={{ background: 'var(--accent-light)', padding: '2px 6px', borderRadius: 4, display: 'inline-block', wordBreak: 'break-all' }}>
-              https://aitoken.homes/api/lingjing/pay/notify/hupijiao
+              {(runtimeConfig.apiBaseUrl || window.location.origin) + '/api/lingjing/pay/notify/hupijiao'}
             </code>
           </div>
         </div>

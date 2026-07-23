@@ -1,6 +1,7 @@
 import axios from 'axios'
+import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 // 不再用 Bearer token，改用 cookie session（One API 原生认证方式）
 http.interceptors.response.use(res => res, err => {
