@@ -87,12 +87,12 @@ func TestDSNWarningsNotifiesSQLiteFallback(t *testing.T) {
 		}
 		found := false
 		for _, w := range warns {
-			if strings.Contains(w, "SQLite") {
+			if w.Level == "INFO" && strings.Contains(w.Message, "SQLite") {
 				found = true
 			}
 		}
 		if !found {
-			t.Fatalf("警告内容应提及 SQLite，实际: %v", warns)
+			t.Fatalf("应该产生 INFO 级提示且内容提及 SQLite，实际: %v", warns)
 		}
 	})
 }
@@ -113,8 +113,18 @@ func TestValidateWarnsOnMissingUtf8mb4(t *testing.T) {
 		"SESSION_SECRET": "0123456789abcdef0123456789abcdef",
 		"SQL_DSN":        "root:pw@tcp(mysql:3306)/oneapi",
 	}, func() {
-		if got := DSNWarnings(); len(got) == 0 {
+		warns := DSNWarnings()
+		if len(warns) == 0 {
 			t.Fatal("缺 charset=utf8mb4 的 DSN 应产生警告")
+		}
+		found := false
+		for _, w := range warns {
+			if w.Level == "WARN" && strings.Contains(w.Message, "utf8mb4") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("应该产生关于 utf8mb4 的 WARN 级警告，实际: %v", warns)
 		}
 	})
 }

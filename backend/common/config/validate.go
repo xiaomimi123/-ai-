@@ -6,6 +6,12 @@ import (
 	"strings"
 )
 
+// DSNWarning 表示一条 DSN 相关的提示或警告，包含日志级别。
+type DSNWarning struct {
+	Level   string // "INFO" 表示信息级（如 SQLite 回退通知），"WARN" 表示真正的警告
+	Message string // 提示或警告的内容
+}
+
 // placeholderPrefix 是 .env.example 里所有待填值的统一前缀。
 // 带着它启动说明用户直接复制了模板没有改，必须拦下来——
 // 否则会出现"服务起来了但 session 全员共享同一个 secret"这类难以诊断的问题。
@@ -47,23 +53,26 @@ func Validate() error {
 // DSNWarnings 返回 DSN 相关的非致命提示。这些不阻止启动：
 // 一部分是"配置了 MySQL 但参数不全"会导致中文乱码或时间字段解析异常，
 // 另一部分是"根本没配置 MySQL"——提醒部署者这是不是他想要的。
-func DSNWarnings() []string {
+// 返回值自带日志级别：Level="INFO" 是通知（如 SQLite 回退），Level="WARN" 是配置缺陷。
+func DSNWarnings() []DSNWarning {
 	dsn := os.Getenv("SQL_DSN")
 	if dsn == "" {
-		return []string{"未设置 SQL_DSN，将使用 SQLite（数据存于本地文件）。生产环境或多实例部署请配置 MySQL。"}
+		return []DSNWarning{
+			{Level: "INFO", Message: "未设置 SQL_DSN，将使用 SQLite（数据存于本地文件）。生产环境或多实例部署请配置 MySQL。"},
+		}
 	}
 	if !strings.Contains(dsn, "@tcp(") {
 		return nil
 	}
-	var warns []string
+	var warns []DSNWarning
 	if !strings.Contains(dsn, "charset=utf8mb4") {
-		warns = append(warns, "SQL_DSN 缺少 charset=utf8mb4，中文与 emoji 会乱码")
+		warns = append(warns, DSNWarning{Level: "WARN", Message: "SQL_DSN 缺少 charset=utf8mb4，中文与 emoji 会乱码"})
 	}
 	if !strings.Contains(dsn, "parseTime=True") {
-		warns = append(warns, "SQL_DSN 缺少 parseTime=True，时间字段可能解析失败")
+		warns = append(warns, DSNWarning{Level: "WARN", Message: "SQL_DSN 缺少 parseTime=True，时间字段可能解析失败"})
 	}
 	if !strings.Contains(dsn, "loc=Local") {
-		warns = append(warns, "SQL_DSN 缺少 loc=Local，时间会按 UTC 解读")
+		warns = append(warns, DSNWarning{Level: "WARN", Message: "SQL_DSN 缺少 loc=Local，时间会按 UTC 解读"})
 	}
 	return warns
 }

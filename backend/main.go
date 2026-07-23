@@ -50,7 +50,11 @@ func main() {
 		logger.FatalLog(err.Error())
 	}
 	for _, w := range config.DSNWarnings() {
-		logger.SysError("[配置警告] " + w)
+		if w.Level == "INFO" {
+			logger.SysLog("[配置信息] " + w.Message)
+		} else {
+			logger.SysError("[配置警告] " + w.Message)
+		}
 	}
 
 	// Initialize SQL Database
