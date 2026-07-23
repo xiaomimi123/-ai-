@@ -29,7 +29,7 @@ services:
       - TASK_SYNC_WAIT_SECONDS=${TASK_SYNC_WAIT_SECONDS:-300}
       - TASK_SYNC_POLL_INTERVAL_SECONDS=${TASK_SYNC_POLL_INTERVAL_SECONDS:-2}
     volumes:
-      - backend-data:/data
+      - ${BACKEND_DATA_PATH:-backend-data}:/data
     depends_on:
       mysql:
         condition: service_healthy
