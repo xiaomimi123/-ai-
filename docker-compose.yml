@@ -106,6 +106,74 @@ services:
         max-size: "20m"
         max-file: "2"
 
+  frontend:
+    build:
+      context: ./frontend
+    image: ai-platform-frontend:latest
+    container_name: ai-platform-frontend
+    restart: always
+    environment:
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-}
+      - SITE_NAME=${SITE_NAME:-AI API Platform}
+      - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
+      - BRAND_PRIMARY_COLOR=${BRAND_PRIMARY_COLOR:-#2ECC71}
+      - BRAND_FOOTER_TEXT=${BRAND_FOOTER_TEXT:-}
+      - BRAND_ICP_NUMBER=${BRAND_ICP_NUMBER:-}
+      - BRAND_CONTACT_URL=${BRAND_CONTACT_URL:-}
+    volumes:
+      - frontend-dist:/usr/share/nginx/html
+    networks:
+      - api-net
+
+  admin:
+    build:
+      context: ./admin
+    image: ai-platform-admin:latest
+    container_name: ai-platform-admin
+    restart: always
+    environment:
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-}
+      - SITE_NAME=${SITE_NAME:-AI API Platform}
+      - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
+      - BRAND_PRIMARY_COLOR=${BRAND_PRIMARY_COLOR:-#2ECC71}
+      - BRAND_FOOTER_TEXT=${BRAND_FOOTER_TEXT:-}
+      - BRAND_ICP_NUMBER=${BRAND_ICP_NUMBER:-}
+      - BRAND_CONTACT_URL=${BRAND_CONTACT_URL:-}
+    volumes:
+      - admin-dist:/usr/share/nginx/html
+    networks:
+      - api-net
+
+  nginx:
+    build:
+      context: ./nginx
+    image: ai-platform-nginx:latest
+    container_name: ai-platform-nginx
+    restart: always
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      - BASE_DOMAIN=${BASE_DOMAIN:-localhost}
+      - MAX_UPLOAD_SIZE=${MAX_UPLOAD_SIZE:-30M}
+      - NGINX_PROXY_READ_TIMEOUT=${NGINX_PROXY_READ_TIMEOUT:-320}
+    volumes:
+      - frontend-dist:/var/www/frontend:ro
+      - admin-dist:/var/www/admin:ro
+      - certbot-www:/var/www/certbot
+      - certbot-conf:/etc/letsencrypt
+    depends_on:
+      - backend
+      - frontend
+      - admin
+    networks:
+      - api-net
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "3"
+
 networks:
   api-net:
     driver: bridge
@@ -114,3 +182,7 @@ volumes:
   mysql-data:
   redis-data:
   backend-data:
+  frontend-dist:
+  admin-dist:
+  certbot-www:
+  certbot-conf:

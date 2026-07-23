@@ -1,0 +1,105 @@
+# 由 envsubst 从 nginx/templates/site.conf.template 生成，勿直接编辑容器内文件。
+
+upstream backend_upstream {
+    server backend:3000;
+}
+
+# --- 公共反代配置片段 ---
+# 注意：SSE 流式对话要求关闭 proxy_buffering，否则前端拿不到增量 token
+
+# 管理后台
+server {
+    listen 80;
+    server_name admin.${BASE_DOMAIN};
+
+    root /var/www/admin;
+    index index.html;
+
+    client_max_body_size ${MAX_UPLOAD_SIZE};
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # index.html 与 config.js 必须每次问最新：
+    # 否则用户拿到的旧 index.html 会引用旧 hash 的 JS，永远拉不到新版前端
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires off;
+    }
+    location = /config.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires off;
+    }
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /api/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout ${NGINX_PROXY_READ_TIMEOUT}s;
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+    }
+}
+
+# 用户前台（兜底 default_server，未匹配的 Host 都走这里）
+server {
+    listen 80 default_server;
+    server_name _;
+
+    root /var/www/frontend;
+    index index.html;
+
+    # 图生图 multipart 上传体积可达 20+ MB；nginx 默认 1M 会返回 413
+    client_max_body_size ${MAX_UPLOAD_SIZE};
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location = /index.html {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires off;
+    }
+    location = /config.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        expires off;
+    }
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location /api/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout ${NGINX_PROXY_READ_TIMEOUT}s;
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+    }
+
+    # OpenAI 兼容接口。图像生成 sync 模式单次请求可能跑数分钟，
+    # 超时必须与后端 TASK_SYNC_WAIT_SECONDS 匹配
+    location /v1/ {
+        proxy_pass http://backend_upstream;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout ${NGINX_PROXY_READ_TIMEOUT}s;
+        proxy_buffering off;
+        proxy_cache off;
+        chunked_transfer_encoding on;
+    }
+}
