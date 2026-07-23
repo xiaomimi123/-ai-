@@ -46,10 +46,12 @@ func ParseAllowedOrigins(raw string) []string {
 }
 
 // originAllowed 判断 origin 是否命中白名单。
-// localhost / 127.0.0.1 恒定放行，供本地开发使用。
-func originAllowed(origin string, allowed []string) bool {
-	if strings.HasPrefix(origin, "http://localhost:") ||
-		strings.HasPrefix(origin, "http://127.0.0.1:") {
+// allowLocalhost 为 true 时（非生产环境）额外放行 localhost / 127.0.0.1，供本地开发使用；
+// 生产环境下 localhost 不再豁免——本机上任意页面都可能是被入侵的本地服务，
+// 需要放行的话请显式写进 CORS_ALLOWED_ORIGINS。
+func originAllowed(origin string, allowed []string, allowLocalhost bool) bool {
+	if allowLocalhost && (strings.HasPrefix(origin, "http://localhost:") ||
+		strings.HasPrefix(origin, "http://127.0.0.1:")) {
 		return true
 	}
 	for _, a := range allowed {
@@ -73,8 +75,11 @@ func strictCORS() gin.HandlerFunc {
 	// withCredentials=true 时浏览器禁止 Access-Control-Allow-Origin: *，
 	// 必须按请求 Origin 动态返回具体值
 	allowed := ParseAllowedOrigins(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	// 与 main.go 判断 gin 运行模式的方式保持一致：GIN_MODE 未设为 "debug" 即视为生产环境。
+	// 生产环境下不再无条件放行 localhost（本机上任意页面都可能是被入侵的本地服务）。
+	allowLocalhost := os.Getenv("GIN_MODE") == gin.DebugMode
 	config.AllowOriginFunc = func(origin string) bool {
-		return originAllowed(origin, allowed)
+		return originAllowed(origin, allowed, allowLocalhost)
 	}
 	config.AllowCredentials = true
 	config.AllowMethods = corsMethods()
