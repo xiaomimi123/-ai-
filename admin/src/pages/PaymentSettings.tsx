@@ -5,7 +5,7 @@ import axios from 'axios'
 import { PageHeader } from '../components/PageHeader'
 import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 interface PayConfig {
   // 支付宝

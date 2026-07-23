@@ -4,7 +4,10 @@
 //
 // 注意：admin 主体使用 axios（src/api/index.ts），这里按 Task H1 规范用独立 fetch 客户端隔离，
 // 避免和全局 401→/login 拦截器耦合（任务管理需要更细粒度的错误展示）。
+import { runtimeConfig } from '../../../runtimeConfig'
 
+// 空 = 同源 /api；非空 = 独立 API 域名（用于绕开 CDN 超时限制）
+const API_BASE = runtimeConfig.apiBaseUrl
 const BASE = '/api/admin/tasks'
 
 // 后端返回的任务行（与 model.Task 字段对齐；仅列出 H2 大概率会用到的）
@@ -51,7 +54,7 @@ export type AdminTaskListParams = {
 }
 
 async function http<T = unknown>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(BASE + path, {
+  const res = await fetch(API_BASE + BASE + path, {
     method,
     credentials: 'include', // Cookie session：禁用 Bearer
     headers: { 'Content-Type': 'application/json' },

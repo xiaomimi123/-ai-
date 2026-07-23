@@ -4,8 +4,9 @@ import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { Activity, TrendingUp, CreditCard, Key, Zap, ArrowRight, AlertTriangle, AlertCircle } from 'lucide-react'
 import { authApi } from '../api'
 import axios from 'axios'
+import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 // 森林绿系调色板
 const COLORS = ['#2ECC71', '#0D1F14', '#16a34a', '#84cc16', '#14b8a6', '#10b981', '#65a30d', '#059669']
 

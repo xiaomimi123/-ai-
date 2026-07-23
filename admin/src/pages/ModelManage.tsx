@@ -8,8 +8,9 @@ import { StatCard } from '../components/StatCard'
 import { SearchInput } from '../components/SearchInput'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyCard } from '../components/EmptyCard'
+import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 // 图像模型识别：与 ModelPrices.tsx / frontend modelPricing.ts 保持一致
 // 优先按 tags 判断；若该模型未在「模型价格」页配置 tags（空字符串），用模型名兜底

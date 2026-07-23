@@ -4,8 +4,9 @@ import { Users, Activity, TrendingUp, DollarSign, Server, Zap, BarChart2 } from 
 import axios from 'axios'
 import { StatCard } from '../components/StatCard'
 import { PageHeader } from '../components/PageHeader'
+import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 export default function OverviewPage() {
   const [stats, setStats] = useState<any>(null)

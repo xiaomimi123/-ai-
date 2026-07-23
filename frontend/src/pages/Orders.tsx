@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { Receipt } from 'lucide-react'
 import axios from 'axios'
 import Pagination from '../components/Pagination'
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+import { runtimeConfig } from '../runtimeConfig'
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 interface Order {
   id: number

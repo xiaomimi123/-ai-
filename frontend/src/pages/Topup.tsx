@@ -3,6 +3,7 @@ import { CreditCard, Gift, Tag, CheckCircle, Loader2, X } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { redeemApi, payApi, authApi } from '../api'
 import axios from 'axios'
+import { runtimeConfig } from '../runtimeConfig'
 
 // PC 端 vs 移动端：PC 渲染二维码让用户手机扫；移动端直接跳转唤起支付 App
 const isMobile = () => /android|iphone|ipad|ipod|mobile|micromessenger/i.test(navigator.userAgent)
@@ -12,7 +13,7 @@ const isWechatBrowser = () => /micromessenger/i.test(navigator.userAgent)
 // pending 订单号 localStorage key（移动端支付完成后可能不回跳本站，下次访问时补查状态）
 const PENDING_ORDER_KEY = 'lingjing_pending_order'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 interface Plan { id: number; name: string; price: number; quota: number; bonus_quota: number; description: string; is_available: boolean }
 

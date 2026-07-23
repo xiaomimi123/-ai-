@@ -7,6 +7,7 @@ import { PageHeader } from '../components/PageHeader'
 import { StatCard } from '../components/StatCard'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyCard } from '../components/EmptyCard'
+import { runtimeConfig } from '../runtimeConfig'
 
 const ROLES = [
   { value: 1,   label: '普通用户' },
@@ -217,7 +218,7 @@ export default function UsersPage() {
     }
     try {
       // One API 没有管理员创建用户的接口，用注册接口
-      const r = await (await fetch('/api/user/register', {
+      const r = await (await fetch(runtimeConfig.apiBaseUrl + '/api/user/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

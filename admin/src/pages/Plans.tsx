@@ -5,8 +5,9 @@ import axios from 'axios'
 import { PageHeader } from '../components/PageHeader'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { EmptyCard } from '../components/EmptyCard'
+import { runtimeConfig } from '../runtimeConfig'
 
-const http = axios.create({ baseURL: '', withCredentials: true, timeout: 15000 })
+const http = axios.create({ baseURL: runtimeConfig.apiBaseUrl, withCredentials: true, timeout: 15000 })
 
 interface Plan { id: number; name: string; description: string; price: number; quota: number; bonus_quota: number; is_available: boolean; sort_order: number }
 
