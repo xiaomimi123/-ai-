@@ -16,7 +16,6 @@ set -e
 # 不再写死路径；BACKUP_DIR 可用环境变量覆盖，默认放在仓库外的固定目录。
 COMPOSE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-/root/lingjing-backups}"
-MYSQL_CONTAINER="ai-platform-mysql"
 DB_NAME="oneapi"
 KEEP_COUNT=14   # 保留最近 N 份
 
@@ -38,7 +37,7 @@ fi
 
 # ===== 备份 =====
 echo "[$(date '+%F %T')] 开始备份 $DB_NAME → $OUTFILE"
-docker exec "$MYSQL_CONTAINER" mysqldump \
+docker compose -f "$COMPOSE_DIR/docker-compose.yml" exec -T mysql mysqldump \
   -uroot -p"$MYSQL_PWD" \
   --single-transaction \
   --quick \

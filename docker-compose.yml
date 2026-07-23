@@ -3,7 +3,6 @@ services:
     build:
       context: ./backend
     image: lingjing-api:latest
-    container_name: ai-platform-backend
     restart: always
     environment:
       # 数据库 DSN：utf8mb4 / parseTime / loc 三件套缺一不可
@@ -49,7 +48,6 @@ services:
 
   mysql:
     image: mysql:8.0
-    container_name: ai-platform-mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_PASSWORD}
@@ -86,7 +84,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: ai-platform-redis
     restart: always
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
@@ -110,7 +107,6 @@ services:
     build:
       context: ./frontend
     image: ai-platform-frontend:latest
-    container_name: ai-platform-frontend
     restart: always
     environment:
       - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-}
@@ -143,7 +139,6 @@ services:
     build:
       context: ./admin
     image: ai-platform-admin:latest
-    container_name: ai-platform-admin
     restart: always
     environment:
       - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-}
@@ -170,7 +165,6 @@ services:
     build:
       context: ./nginx
     image: ai-platform-nginx:latest
-    container_name: ai-platform-nginx
     restart: always
     ports:
       - "${HTTP_PORT:-80}:80"
@@ -205,7 +199,6 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    container_name: ai-platform-certbot
     profiles: ["letsencrypt"]
     volumes:
       - certbot-www:/var/www/certbot
