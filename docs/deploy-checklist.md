@@ -3,6 +3,22 @@
 本清单以 **IP / 纯 HTTP 快速试跑**（`SSL_MODE=none`）为主线，帮助你在一台全新服务器上从零把站点跑起来并验证可用。
 正式上域名 + HTTPS 的完整说明见 [deployment.md](deployment.md) 第 3–5 节，切换方式在文末「上生产」一节。
 
+## 最简：一键脚本（Ubuntu 全新机，推荐先试这个）
+
+在服务器上（`git` 若没装先 `sudo apt-get update && sudo apt-get install -y git`）：
+
+```bash
+git clone https://github.com/xiaomimi123/-ai-.git lingjing-ai
+cd lingjing-ai
+sudo bash bootstrap.sh
+```
+
+`bootstrap.sh` 会自动：装 Docker → 探测公网 IP → 用 `<IP>.nip.io` 免配 DNS → 随机生成 MySQL 密码/会话密钥写进 `.env` → 构建并起站。结束后按提示访问 `http://<IP>.nip.io`（后台 `http://admin.<IP>.nip.io`，`root`/`123456`）。**记得去云控制台安全组放行 80 端口。**
+
+想手动逐步来 / 了解每步在做什么，看下面的分阶段清单。
+
+---
+
 > 约定：下文 `mysite.test` 是**示例主机名**，请换成你自己的名字；`<服务器IP>` 换成服务器公网 IP。
 
 ## 阶段 0 — 先把代码放到服务器
