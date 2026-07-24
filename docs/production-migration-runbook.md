@@ -97,7 +97,7 @@ grep -cE "^(MYSQL_PASSWORD|SESSION_SECRET)=" /root/lingjing-ai/one-api/.env
 | `MAX_UPLOAD_SIZE` | `30M` | 现 `nginx/api-platform.conf` 主域名 `client_max_body_size 30M`（api 子域名现值是 `0` 即不限，新栈全局只有一个 `MAX_UPLOAD_SIZE`，取更严格的 30M；api 子域名走 Step 3 自建的 server 块可以按需单独放宽） |
 | `NGINX_PROXY_READ_TIMEOUT` | `320` | ≥ `TASK_SYNC_WAIT_SECONDS`(300) + 20，`docs/deployment.md` 第 6 节有此约束的详细说明 |
 | 全部 `TASK_*`（`ENABLE_TASK_SYSTEM`、`TASK_WORKER_INTERVAL`、`TASK_WORKER_BATCH_SIZE`、`TASK_TIMEOUT_MINUTES`、`TASK_RETENTION_DAYS`、`TASK_UPSTREAM_HTTP_TIMEOUT`、`TASK_MAX_FETCH_ERRORS`、`TASK_SYNC_WAIT_SECONDS`、`TASK_SYNC_POLL_INTERVAL_SECONDS`） | 逐项照抄 `one-api/docker-compose.yml`（本仓库已核实的现值见下） | **勿用 `.env.example` 的默认值**——本仓库 `one-api/docker-compose.yml` 里这些值已经是踩过坑后调过的生产值（例如 `TASK_UPSTREAM_HTTP_TIMEOUT=180s`、`TASK_TIMEOUT_MINUTES=20`），如果 Step 1 现场输出与此不同，以现场输出为准 |
-| `ROOT_USER_EMAIL` | 不需要特别设置，保持默认 | 只在数据库无任何用户时才会用来创建初始管理员；零迁移场景下 DB 已有真实管理员账号，这个变量不生效 |
+| `ROOT_USER_EMAIL` | 不需要特别设置，保持默认 | 纯环境变量，不走 `options` 表，无管理后台设置页；用作系统告警邮件的收件人兜底值。改 `.env` 后重启后端容器，新值立即生效，不依赖数据库 |
 
 **本仓库已核实的 `TASK_*` 现值（`one-api/docker-compose.yml`）：**
 
@@ -387,6 +387,8 @@ webroot 目录（bind mount 进容器），否则下次续期会失败。这一�
   ```
 - [ ] **`abilities` 表路由正常，各模型能匹配到渠道**
   ```bash
+  # 先从 .env 读取 MYSQL_PASSWORD
+  MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2-)
   sudo docker compose exec mysql mysql -uroot -p"$MYSQL_PASSWORD" oneapi \
     -e "SELECT COUNT(*) FROM abilities WHERE enabled=1;"
   # 应为非零且与迁移前记录数量一致；再用上面 /v1/chat/completions 的真实调用
@@ -423,6 +425,8 @@ Step 1 确认的**同一批**宿主机目录，回滚只是换回旧的容器编
 的数据恢复：
 
 ```bash
+# 先从 .env 读取 MYSQL_PASSWORD
+MYSQL_PASSWORD=$(grep -E '^MYSQL_PASSWORD=' .env | head -1 | cut -d= -f2-)
 gunzip -c /root/lingjing-backups/oneapi-<TIMESTAMP>.sql.gz | \
   sudo docker compose exec -T mysql mysql -uroot -p"$MYSQL_PASSWORD" oneapi
 ```
