@@ -50,6 +50,7 @@ cp .env.example .env
 
 ## 部署
 
+- [新服务器部署清单](docs/deploy-checklist.md) —— 从零到跑通的分步勾选清单（IP/HTTP 试跑主线）
 - [完整部署指南](docs/deployment.md) —— HTTPS 三种模式、域名规划、反代与 CDN 注意事项
 - [配置参考](docs/configuration.md) —— 全量环境变量
 - [接入支付渠道](docs/payment-provider.md) —— 默认不启用在线支付，只有兑换码
