@@ -12,5 +12,9 @@ description = "实施计划验收步骤中的一次性测试密码（2026-07-23 
 regexes = ['''acceptpw123456''']
 
 [[allowlists]]
+description = "验收记录文档中一次性测试用户的登录密码（2026-07-24 人工核实，测试实例已销毁，非真实凭据）"
+regexes = ['''AcceptPW123456''']
+
+[[allowlists]]
 description = "API 文档中给用户看的令牌占位符 sk-你的令牌"
 regexes = ['''sk-(你的令牌|xxx|your-token)''']
