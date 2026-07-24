@@ -36,7 +36,7 @@
 | `COOKIE_DOMAIN` | 否 | 空 | 跨子域共享登录态。单域名部署留空；多子域部署填 `.example.com`（**注意前导点**）。 |
 | `CORS_ALLOWED_ORIGINS` | 否 | `http://localhost` | CORS 白名单，逗号分隔，支持 `*.example.com` 子域通配。在标准的单域名同源部署中，前端和 `/api` 同源，CORS 完全不会触发。但如若后端被跨域访问（如独立前端开发服务、非标准端口等），localhost/127.0.0.1 仅在 `GIN_MODE=debug` 时自动放行；生产环境需显式加入本环境变量。只影响非 `/v1/*` 路径——`/v1/*`（OpenAI 兼容接口）对所有 origin 开放，因为它靠 Bearer token 鉴权，不依赖 cookie。 |
 | `HTTP_PORT` | 否 | `80` | nginx 对外 HTTP 端口。 |
-| `HTTPS_PORT` | 否 | `443` | nginx 对外 HTTPS 端口。仅 `SSL_MODE=letsencrypt` 时有实际监听。 |
+| `HTTPS_PORT` | 否 | `443` | nginx 对外 HTTPS 端口。端口无条件发布（无论 `SSL_MODE` 为何值），必须是空闲的或改为其他可用端口，否则启动失败。 |
 
 ## HTTPS
 

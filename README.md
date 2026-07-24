@@ -28,6 +28,8 @@ cp .env.example .env
 ./deploy.sh
 ```
 
+若主机的 80 或 443 端口已被占用，需在 `.env` 中设置 `HTTP_PORT` 和 `HTTPS_PORT` 为空闲端口再运行 `./deploy.sh`（nginx 会无条件监听这两个端口，即使 `SSL_MODE=none`）。
+
 浏览器打开 `http://localhost`（或你配置的域名）。
 
 首次启动、数据库里还没有任何用户时，后端会自动创建内置管理员账号

@@ -25,6 +25,8 @@ sed -i '' "s|^SESSION_SECRET=.*|SESSION_SECRET=$(openssl rand -base64 32)|" .env
 ./deploy.sh
 ```
 
+**若主机 80 或 443 端口已被占用，需要先设置 `HTTP_PORT` 和 `HTTPS_PORT`：** nginx 无条件监听这两个端口，即使 `SSL_MODE=none` 也会尝试绑定 443。编辑 `.env` 设置为空闲端口（例如 `HTTP_PORT=8080 HTTPS_PORT=8443`），再运行 `./deploy.sh`。
+
 `deploy.sh` 会依次：检查 `.env` 里没有残留的 `CHANGE_ME_` 占位符 → `git pull`（非 git 仓库会跳过）→
 `docker compose build` → `docker compose up -d` → 轮询 `/api/status` 做健康检查。
 
@@ -168,3 +170,9 @@ CDN 自己的超时上限可能比 nginx 更短，需要参考第 5 节把长耗
 去管理后台确认渠道状态为"已启用"且模型列表里包含你请求的模型名；如果是用 SQL 直接写
 `channels` 表建的渠道，别忘了同步写 `abilities` 表，否则界面上渠道存在但路由不到（详见
 [docs/upgrade.md](upgrade.md)）。
+
+**`Bind for 0.0.0.0:443 failed: port is already allocated` / 部署脚本第一次运行就失败**
+主机的 80 或 443 端口已被占用。nginx 会无条件尝试监听 `HTTPS_PORT`（默认 443）和 `HTTP_PORT`（默认 80），
+即使 `SSL_MODE=none` 也不例外——nginx 的 docker-compose 配置里这两个端口是硬写的。
+解决方案：编辑 `.env`，将 `HTTP_PORT` 和/或 `HTTPS_PORT` 改为空闲端口（如 `HTTP_PORT=8080`、`HTTPS_PORT=8443`），
+再次运行 `./deploy.sh`。
